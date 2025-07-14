@@ -31,32 +31,39 @@
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
-
   };
 
-  outputs = inputs@{ self, nix-darwin, nixpkgs, home-manager, nix-homebrew, homebrew-bundle, homebrew-core, homebrew-cask }: {
-    darwinConfigurations = {
-      "Mayurs-MacBook-Pro" = nix-darwin.lib.darwinSystem {
-        system = "aarch64-darwin";
-        modules = [ ./macos.nix
-                    home-manager.darwinModules.home-manager
-                    nix-homebrew.darwinModules.nix-homebrew
-                    {
-                      nix-homebrew = {
-                        user = "msaxena";
-                        enable = true;
-                        taps = {
-                          "homebrew/homebrew-core" = homebrew-core;
-                          "homebrew/homebrew-cask" = homebrew-cask;
-                          "homebrew/homebrew-bundle" = homebrew-bundle;
-                        };
-                        mutableTaps = false;
-                        autoMigrate = true;
-                      };
-                    }
-                    ./msaxena.nix
-                  ];
+  outputs = inputs @ {
+    self,
+    nix-darwin,
+    nixpkgs,
+    ...
+  }: let
+    inherit (self) outputs;
+
+    systems = ["x86_64-linux" "aarch64-darwin"];
+    forAllSystems = nixpkgs.lib.genAttrs systems;
+
+    mkNixOSConfig = path:
+      nixpkgs.lib.nixosSystem {
+        specialArgs = {inherit inputs outputs;};
+        modules = [path];
       };
+
+    mkDarwinConfig = path:
+      nix-darwin.lib.darwinSystem {
+        specialArgs = {inherit inputs outputs;};
+        modules = [path];
+      };
+  in {
+    formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra);
+
+    darwinConfigurations = {
+      "Mayurs-MacBook-Pro" = mkDarwinConfig ./hosts/Mayurs-MacBook-Pro.nix;
+    };
+
+    nixosConfigurations = {
+      "nixos-test" = mkNixOSConfig ./hosts/nixos-test.nix;
     };
   };
 }

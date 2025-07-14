@@ -1,0 +1,7 @@
+{modulesPath, ...}: {
+  imports = [(modulesPath + "/virtualisation/proxmox-lxc.nix")];
+  proxmoxLXC = {
+    manageNetwork = false;
+    manageHostName = false;
+  };
+}
