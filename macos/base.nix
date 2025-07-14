@@ -32,14 +32,14 @@
   # Turn on the firewall
   networking.applicationFirewall.enable = true;
 
-  users.users.msaxena = {
-    name = "msaxena";
-    home = "/Users/msaxena";
+  users.users.${vars.userName} = {
+    name = vars.userName;
+    home = "/Users/${vars.userName}";
   };
 
   system = {
     stateVersion = 6;
-    primaryUser = "msaxena";
+    primaryUser = vars.userName;
     defaults = {
       NSGlobalDomain = {
         AppleInterfaceStyleSwitchesAutomatically = true;

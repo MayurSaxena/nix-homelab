@@ -6,7 +6,7 @@
   imports = [inputs.nix-homebrew.darwinModules.nix-homebrew];
 
   nix-homebrew = {
-    user = "msaxena";
+    user = vars.userName;
     enable = true;
     taps = {
       "homebrew/homebrew-core" = inputs.homebrew-core;

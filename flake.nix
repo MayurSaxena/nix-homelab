@@ -1,5 +1,5 @@
 {
-  description = "Nix flakes for my home network (macOS and nixOS)";
+  description = "Nix flakes for my home network.";
 
   inputs = {
     # Use the nixpkgs-unstable branch
@@ -40,19 +40,20 @@
     ...
   }: let
     inherit (self) outputs;
+    vars = import ./variables.nix;
 
     systems = ["x86_64-linux" "aarch64-darwin"];
     forAllSystems = nixpkgs.lib.genAttrs systems;
 
     mkNixOSConfig = path:
       nixpkgs.lib.nixosSystem {
-        specialArgs = {inherit inputs outputs;};
+        specialArgs = {inherit inputs outputs vars;};
         modules = [path];
       };
 
     mkDarwinConfig = path:
       nix-darwin.lib.darwinSystem {
-        specialArgs = {inherit inputs outputs;};
+        specialArgs = {inherit inputs outputs vars;};
         modules = [path];
       };
   in {

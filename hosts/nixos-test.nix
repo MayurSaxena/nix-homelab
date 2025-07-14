@@ -16,7 +16,7 @@
     extraSpecialArgs = {inherit inputs outputs vars;};
     useGlobalPkgs = true;
     useUserPackages = true;
-    users.msaxena = {
+    users.${vars.userName} = {
       imports = [./../home-manager/base.nix];
     };
   };

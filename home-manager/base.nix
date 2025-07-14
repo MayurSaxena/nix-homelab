@@ -6,10 +6,10 @@
 }: {
   home = {
     stateVersion = "25.05";
-    username = "msaxena";
+    username = vars.userName;
     homeDirectory = lib.mkMerge [
-      (lib.mkIf pkgs.stdenv.isLinux "/home/msaxena")
-      (lib.mkIf pkgs.stdenv.isDarwin "/Users/msaxena")
+      (lib.mkIf pkgs.stdenv.isLinux "/home/${vars.userName}")
+      (lib.mkIf pkgs.stdenv.isDarwin "/Users/${vars.userName}")
     ];
 
     shellAliases = {

@@ -18,9 +18,9 @@
   };
 
   users.mutableUsers = false;
-  users.users.msaxena = {
+  users.users.${vars.userName} = {
     isNormalUser = true;
-    description = "msaxena";
+    description = vars.userName;
     extraGroups = ["networkmanager" "wheel"];
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMDUuPzOBdRwbr6st5HJ4MveSMM6QvrjRzqF5FVLfS5 msaxena@Mayurs-MacBook-Pro.local"
