@@ -7,17 +7,20 @@
   imports = [
     ./../nixos/base.nix
     ./../base-configurations/proxmox-lxc.nix
-    inputs.home-manager.nixosModules.home-manager
+    #./../services/netbox.nix
+    # inputs.home-manager.nixosModules.home-manager
   ];
+
+  sops.secrets."nixos-test/test" = {};
 
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
-  home-manager = {
-    extraSpecialArgs = {inherit inputs outputs vars;};
-    useGlobalPkgs = true;
-    useUserPackages = true;
-    users.${vars.userName} = {
-      imports = [./../home-manager/base.nix];
-    };
-  };
+  # home-manager = {
+  #   extraSpecialArgs = {inherit inputs outputs vars;};
+  #   useGlobalPkgs = true;
+  #   useUserPackages = true;
+  #   # users.${vars.userName} = {
+  #   #   imports = [./../home-manager/base.nix];
+  #   # };
+  # };
 }

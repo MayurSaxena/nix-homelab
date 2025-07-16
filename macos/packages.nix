@@ -1,9 +1,16 @@
 {
   inputs,
   vars,
+  pkgs,
   ...
 }: {
   imports = [inputs.nix-homebrew.darwinModules.nix-homebrew];
+
+  environment.systemPackages = with pkgs; [
+    age
+    age-plugin-yubikey
+    sops
+  ];
 
   nix-homebrew = {
     user = vars.userName;

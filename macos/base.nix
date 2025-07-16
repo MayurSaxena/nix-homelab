@@ -37,6 +37,8 @@
     home = "/Users/${vars.userName}";
   };
 
+  programs.zsh.enable = true;
+
   system = {
     stateVersion = 6;
     primaryUser = vars.userName;
