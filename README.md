@@ -14,16 +14,16 @@ For other configurations like MacOS, it's nice to have a script for if I ever se
 
 ### What It Does
  - Enables lots of settings, such as:
-  - Touch ID and Watch ID sudo
-  - Menu bar widgets like clock and battery percentage
-  - Minimal Dock
-  - More powerful Finder
-  - Installs Homebrew and some GUI casks and apps from the App Store
-  - Command line tools I use often enough
-  - `zsh` aliases and theme
-  - Imports my ED25519 keypair from secrets
-  - TODO: SSH config
-  - TODO: Some prebaked `nix` dev shells (e.g. Python)
+   - Touch ID and Watch ID sudo
+   - Menu bar widgets like clock and battery percentage
+   - Minimal Dock
+   - More powerful Finder
+   - Installs Homebrew and some GUI casks and apps from the App Store
+   - Command line tools I use often enough
+   - `zsh` aliases and theme
+   - Imports my ED25519 keypair from secrets
+   - TODO: SSH config
+   - TODO: Some prebaked `nix` dev shells (e.g. Python)
   
 
 ## Deploying a new NixOS System
