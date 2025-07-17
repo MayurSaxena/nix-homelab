@@ -4,8 +4,8 @@ keys:
     - &msaxena-MBP ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMDUuPzOBdRwbr6st5HJ4MveSMM6QvrjRzqF5FVLfS5 msaxena@Mayurs-MacBook-Pro.local
   - &hosts:
     - &nixos-test age1xhgmlh9ke9xvqjwuuag00allje9ygrer6eemr52p5qlhgcw9jvysc27358
-creation_rules:
-  - path_regex: secrets/[^/]+(\.(yaml|json|env|ini|conf))?$
+creation_rules:         
+  - path_regex: secrets/common.yaml$
     key_groups:
       - age:
           - *msaxena-yubirock
@@ -16,3 +16,10 @@ creation_rules:
       - age:
           - *msaxena-yubirock
           - *msaxena-MBP
+  - path_regex: secrets/nixos-test.yaml$
+    key_groups:
+      - age:
+          - *msaxena-yubirock
+          - *msaxena-MBP
+          - *nixos-test
+          

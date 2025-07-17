@@ -83,11 +83,6 @@
     "com.apple.desktopservices".DSDontWriteUSBStores = true;
   };
 
-  # need this so that the launchd agent uses age-plugin-yubikey to decrypt the secrets using a yubikey
-  launchd.agents.sops-nix.config.EnvironmentVariables = lib.mkIf (pkgs.stdenv.isDarwin) {
-    PATH = "${pkgs.age-plugin-yubikey}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-  };
-
   # Graceful service starting on activation (ignored on Mac?)
   systemd.user.startServices = "sd-switch";
 
@@ -96,6 +91,10 @@
     # look for referenced secrets in the secrets file named after the user
     age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
     defaultSopsFile = ./../../secrets/msaxena.yaml;
+    # need this so that the launchd agent uses age-plugin-yubikey to decrypt the secrets using a yubikey
+    environment = lib.mkIf (pkgs.stdenv.isDarwin) {
+      PATH = "${pkgs.age-plugin-yubikey}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+    };
     # Secrets that need to be decrypted and made available.
     secrets = {
       "ssh-keys/mbp-ed25519" = {
