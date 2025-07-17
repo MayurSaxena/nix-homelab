@@ -11,11 +11,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    #Home-manager for user level configs (wonder if I really need this...)
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Homebrew manager and associated taps
     nix-homebrew = {
       url = "github:zhaofengli-wip/nix-homebrew";
     };
@@ -31,6 +33,8 @@
       url = "github:homebrew/homebrew-cask";
       flake = false;
     };
+
+    # Secrets management with sops-nix
     sops-nix = {
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -46,27 +50,34 @@
     inherit (self) outputs;
     vars = import ./variables.nix;
 
+    # All the systems I work on - which is 64 bit Linux (NixOS) and ARM64 Mac
     systems = ["x86_64-linux" "aarch64-darwin"];
+    # Generator construct
     forAllSystems = nixpkgs.lib.genAttrs systems;
 
+    # Helper function to simply make a NixOS config, passing in inputs, outputs and variables
     mkNixOSConfig = path:
       nixpkgs.lib.nixosSystem {
         specialArgs = {inherit inputs outputs vars;};
         modules = [path];
       };
 
+    # Helper function to simply make a Darwin (Mac) config, passing in inputs, outputs and variables
     mkDarwinConfig = path:
       nix-darwin.lib.darwinSystem {
         specialArgs = {inherit inputs outputs vars;};
         modules = [path];
       };
   in {
+    # so that we can use `nix fmt .` at the shell
     formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra);
 
+    # All Mac builds go here, where key is hostname and value is the config file
     darwinConfigurations = {
       "Mayurs-MacBook-Pro" = mkDarwinConfig ./hosts/Mayurs-MacBook-Pro.nix;
     };
 
+    # All NixOS builds go here, where key is hostname and value is the config file
     nixosConfigurations = {
       "nixos-test" = mkNixOSConfig ./hosts/nixos-test.nix;
     };

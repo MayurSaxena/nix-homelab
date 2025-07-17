@@ -1,0 +1,107 @@
+{
+  lib,
+  pkgs,
+  vars,
+  config,
+  ...
+}: {
+  home = rec {
+    stateVersion = "25.05";
+    username = "msaxena";
+    packages = with pkgs; [
+      curl
+      wget
+      jq
+      nerd-fonts.fira-code
+      nixos-rebuild
+      alejandra
+    ];
+
+    # Set the home directory differently based on platform
+    homeDirectory = lib.mkMerge [
+      (lib.mkIf pkgs.stdenv.isLinux "/home/${username}")
+      (lib.mkIf pkgs.stdenv.isDarwin "/Users/${username}")
+    ];
+
+    # Plaintext files that can be mirrored or set.
+    file = {
+      ".ssh/id_ed25519.pub" = {
+        enable = true;
+        source = ./../../assets/id_ed25519.pub;
+      };
+      ".config/sops/age/keys.txt" = {
+        enable = true;
+        source = ./../../assets/age_keys.txt;
+      };
+    };
+
+    # Environment variables to be set.
+    sessionVariables = lib.mkIf pkgs.stdenv.isDarwin {
+      SOPS_AGE_KEY_FILE = "$HOME/.config/sops/age/keys.txt";
+    };
+  };
+
+  # Individual program configurations
+  programs = {
+    zsh = {
+      enable = true;
+      enableCompletion = true;
+      autosuggestion.enable = true;
+      syntaxHighlighting.enable = true;
+      shellAliases = {
+        "ll" = "ls -al";
+        ".." = "cd ..";
+      };
+
+      oh-my-zsh = {
+        enable = true;
+        plugins = ["sudo"];
+      };
+    };
+
+    oh-my-posh = {
+      enable = true;
+      enableZshIntegration = true;
+      useTheme = "aliens";
+    };
+
+    ssh = {
+      enable = true;
+      package = pkgs.openssh;
+    };
+
+    git = {
+      enable = true;
+      userEmail = "me@mayursaxena.com";
+      userName = "Mayur Saxena";
+    };
+  };
+
+  # Because DS_Store files on Mac are annoying
+  targets.darwin.defaults = lib.mkIf (pkgs.stdenv.isDarwin) {
+    "com.apple.desktopservices".DSDontWriteNetworkStores = true;
+    "com.apple.desktopservices".DSDontWriteUSBStores = true;
+  };
+
+  # need this so that the launchd agent uses age-plugin-yubikey to decrypt the secrets using a yubikey
+  launchd.agents.sops-nix.config.EnvironmentVariables = lib.mkIf (pkgs.stdenv.isDarwin) {
+    PATH = "${pkgs.age-plugin-yubikey}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+  };
+
+  # Graceful service starting on activation (ignored on Mac?)
+  systemd.user.startServices = "sd-switch";
+
+  sops = {
+    # the age key file can be found at the following path
+    # look for referenced secrets in the secrets file named after the user
+    age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+    defaultSopsFile = ./../../secrets/msaxena.yaml;
+    # Secrets that need to be decrypted and made available.
+    secrets = {
+      "ssh-keys/mbp-ed25519" = {
+        mode = "0600";
+        path = "${config.home.homeDirectory}/.ssh/id_ed25519";
+      };
+    };
+  };
+}

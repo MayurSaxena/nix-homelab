@@ -7,30 +7,24 @@
 }: {
   imports = [
     inputs.home-manager.darwinModules.home-manager
-    ./../macos/base.nix
+    ./../modules/macos/base.nix # Apply the system wide default config
   ];
 
+  # Set the platform for this host
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "aarch64-darwin";
+
+  # Use home-manager to manage the user configs
   home-manager = {
     extraSpecialArgs = {inherit inputs outputs vars;};
     useGlobalPkgs = true;
     useUserPackages = true;
-    sharedModules = [inputs.sops-nix.homeManagerModules.sops];
+    sharedModules = [inputs.sops-nix.homeManagerModules.sops]; # for secret management
+
+    # Configure the msaxena user
     users.msaxena = {
       imports = [
-        ./../home-manager/base.nix
-        ./../home-manager/git.nix
-        ./../home-manager/ssh.nix
-        /../home-manager/zsh.nix
+        ./../modules/home-manager/msaxena.nix
       ];
-      sops = {
-        age.keyFile = "/Users/msaxena/.config/sops/age/keys.txt";
-        defaultSopsFile = ./../secrets/msaxena.yaml;
-      };
-      # need this so that the launchd agent uses age-plugin-yubikey to decrypt the secrets using a yubikey
-      launchd.agents.sops-nix.config.EnvironmentVariables = {
-        PATH = "${pkgs.age-plugin-yubikey}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-      };
     };
   };
 }
