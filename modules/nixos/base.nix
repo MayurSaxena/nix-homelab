@@ -24,6 +24,15 @@
       trusted-users = ["root" "@wheel"];
     };
   };
+
+  # Every day around 4AM so that I wake up to a nice surprise if it breaks.
+  system.autoUpgrade = {
+    enable = true;
+    dates = "*-*-* 04:00:00";
+    randomizedDelaySec = "30min";
+    flake = "github:MayurSaxena/nix-homelab";
+  };
+
   # enable the firewall
   networking.firewall.enable = true;
 
