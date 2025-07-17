@@ -12,6 +12,20 @@ For other configurations like MacOS, it's nice to have a script for if I ever se
   - `sudo nix run nix-darwin/master#darwin-rebuild -- switch` TODO: Put the git thing somewhere in here.
 - One of the YubiKeys must be plugged in so that we can get our secrets decrypted.
 
+### What It Does
+ - Enables lots of settings, such as:
+  - Touch ID and Watch ID sudo
+  - Menu bar widgets like clock and battery percentage
+  - Minimal Dock
+  - More powerful Finder
+  - Installs Homebrew and some GUI casks and apps from the App Store
+  - Command line tools I use often enough
+  - `zsh` aliases and theme
+  - Imports my ED25519 keypair from secrets
+  - TODO: SSH config
+  - TODO: Some prebaked `nix` dev shells (e.g. Python)
+  
+
 ## Deploying a new NixOS System
 
 - Boot up a new box (probably on Proxmox as an LXC)
@@ -25,3 +39,14 @@ For other configurations like MacOS, it's nice to have a script for if I ever se
 - Push to Github.
 - Run the command to run the flake.
 - TODO: `nixos-rebuild switch --flake ...`?
+
+### What The Base Image Does
+ - Enables the firewall
+ - Adds my Yubikeys as authorized keys for root via SSH
+ - Adds a password in case I never have my Yubikeys (for use through Proxmox console)
+ - Enables SSH but disallows root password logins
+ - Shell aliases
+ - Auto update
+   - TODO: Need to find a way to update the Flake lock (maybe Github action)
+
+TODO: Can we get impermanence on Proxmox LXC?
