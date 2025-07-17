@@ -48,7 +48,6 @@
     ...
   }: let
     inherit (self) outputs;
-    vars = import ./variables.nix;
 
     # All the systems I work on - which is 64 bit Linux (NixOS) and ARM64 Mac
     systems = ["x86_64-linux" "aarch64-darwin"];
@@ -58,14 +57,14 @@
     # Helper function to simply make a NixOS config, passing in inputs, outputs and variables
     mkNixOSConfig = path:
       nixpkgs.lib.nixosSystem {
-        specialArgs = {inherit inputs outputs vars;};
+        specialArgs = {inherit inputs outputs;};
         modules = [path];
       };
 
     # Helper function to simply make a Darwin (Mac) config, passing in inputs, outputs and variables
     mkDarwinConfig = path:
       nix-darwin.lib.darwinSystem {
-        specialArgs = {inherit inputs outputs vars;};
+        specialArgs = {inherit inputs outputs;};
         modules = [path];
       };
   in {

@@ -2,7 +2,6 @@
   inputs,
   outputs,
   pkgs,
-  vars,
   ...
 }: {
   imports = [
@@ -15,7 +14,7 @@
 
   # Use home-manager to manage the user configs
   home-manager = {
-    extraSpecialArgs = {inherit inputs outputs vars;};
+    extraSpecialArgs = {inherit inputs outputs;};
     useGlobalPkgs = true;
     useUserPackages = true;
     sharedModules = [inputs.sops-nix.homeManagerModules.sops]; # for secret management

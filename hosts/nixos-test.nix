@@ -1,7 +1,6 @@
 {
   inputs,
   outputs,
-  vars,
   config,
   ...
 }: {

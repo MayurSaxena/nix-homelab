@@ -2,7 +2,6 @@
   inputs,
   config,
   pkgs,
-  vars,
   ...
 }: {
   imports = [
@@ -46,8 +45,8 @@
   users.users.root = {
     hashedPasswordFile = config.sops.secrets."passwords/root".path;
     openssh.authorizedKeys.keys = [
-      vars.yubiRockSSHKey
-      vars.yubiBlackSSHKey
+      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBKp4APmkFKNrZiS2yYZsKOgkik5XehIbqU+Li2tsFwVAAAABHNzaDo= YubiRock"
+      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIPRoNwOsZ2aVCvntOlrVKxVku+kXu8UigYvpEblIYqooAAAABHNzaDo= YubiBlack"
     ];
   };
   # system wide packages

@@ -1,6 +1,5 @@
 {
   pkgs,
-  vars,
   ...
 }: {
   # By default on any new Mac install things in macos/packages.nix at the system level
