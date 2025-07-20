@@ -28,7 +28,7 @@
   # Every day around 4AM so that I wake up to a nice surprise if it breaks.
   system.autoUpgrade = {
     enable = true;
-    dates = "*-*-* 04:00:00";
+    dates = "*-*-* 18:00:00 UTC";
     randomizedDelaySec = "30min";
     flake = "github:MayurSaxena/nix-homelab";
   };
