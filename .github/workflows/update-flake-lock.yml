@@ -1,0 +1,30 @@
+---
+name: Update flake.lock
+on:
+  schedule:
+    # 5PM UTC --> 3AM AEST
+    - cron: 0 17 * * *
+  workflow_dispatch:
+jobs:
+  build:
+  # On a Ubuntu machine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 #checkout the repo
+        with:
+          fetch-depth: 0
+      # Install nix with flake support
+      - uses: cachix/install-nix-action@v31
+      # Run the update which will change flake.lock
+      - run: nix flake update
+      # Detect changed file and commit back up
+      - uses: stefanzweifel/git-auto-commit-action@v6
+        with:
+          commit_message: "Auto-update flake.lock"
+          commit_user_name: Flake Bot
+          commit_options: --no-verify --signoff
+          commit_author: Flake Bot <actions@github.com>
+          branch: main
+          file_pattern: flake.lock
+          skip_dirty_check: false
+          skip_fetch: true
