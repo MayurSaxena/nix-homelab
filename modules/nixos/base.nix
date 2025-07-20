@@ -62,6 +62,9 @@
   };
   # system wide packages
   environment.systemPackages = with pkgs; [
+    age
+    age-plugin-yubikey
+    sops
     git
   ];
 
