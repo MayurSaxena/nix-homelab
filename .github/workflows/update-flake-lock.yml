@@ -2,7 +2,8 @@
 name: Update flake.lock
 on:
   schedule:
-    - cron: 0 18 * * *
+    # 5PM UTC --> 3AM AEST
+    - cron: 0 17 * * *
   workflow_dispatch:
 jobs:
   build:
