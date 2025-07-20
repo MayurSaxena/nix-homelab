@@ -80,6 +80,7 @@
     nixosConfigurations = {
       "base-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox.nix;
       "nixos-test" = mkNixOSConfig ./hosts/nixos-test.nix;
+      "dns-test" = mkNixOSConfig ./hosts/nixos-test.nix;
     };
   };
 }
