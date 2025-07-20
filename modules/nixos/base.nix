@@ -43,7 +43,7 @@
 
   sops = {
     defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
-    age.sshKeyPaths = [/etc/ssh/ssh_host_ed25519_key];
+    age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
     validateSopsFiles = false;
     secrets."passwords/root" = {
       sopsFile = ./../../secrets/common.yaml;
