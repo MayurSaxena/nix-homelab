@@ -25,7 +25,9 @@
     };
   };
 
-  # Every day around 4AM so that I wake up to a nice surprise if it breaks.
+  time.timeZone = "Australia/Canberra";
+
+  # Every day around 4AM AEST so that I wake up to a nice surprise if it breaks.
   system.autoUpgrade = {
     enable = true;
     dates = "*-*-* 18:00:00 UTC";
