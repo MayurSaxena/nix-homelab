@@ -41,20 +41,20 @@
   # not even sure if this does anything
   security.pam.sshAgentAuth.enable = true;
 
-  # sops = {
-  #   defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
-  #   secrets."passwords/root" = {
-  #     sopsFile = ./../../secrets/common.yaml;
-  #     neededForUsers = true;
-  #   };
-  # };
+  sops = {
+    defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
+    secrets."passwords/root" = {
+      sopsFile = ./../../secrets/common.yaml;
+      neededForUsers = true;
+    };
+  };
 
   # don't allow changes to users to persist
   users.mutableUsers = false;
 
   # Set root user login methods
   users.users.root = {
-    # hashedPasswordFile = config.sops.secrets."passwords/root".path;
+    hashedPasswordFile = config.sops.secrets."passwords/root".path;
     openssh.authorizedKeys.keys = [
       "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBKp4APmkFKNrZiS2yYZsKOgkik5XehIbqU+Li2tsFwVAAAABHNzaDo= YubiRock"
       "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIPRoNwOsZ2aVCvntOlrVKxVku+kXu8UigYvpEblIYqooAAAABHNzaDo= YubiBlack"
