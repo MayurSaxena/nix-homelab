@@ -5,6 +5,9 @@
     # Use the nixpkgs-unstable branch
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
+    # Impermanence module
+    impermanence.url = "github:nix-community/impermanence";
+
     # Use nix-darwin branch which uses nixpkgs-unstable
     nix-darwin = {
       url = "github:nix-darwin/nix-darwin/master";
@@ -80,7 +83,7 @@
     nixosConfigurations = {
       "base-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox.nix;
       "nixos-test" = mkNixOSConfig ./hosts/nixos-test.nix;
-      "dns-test" = mkNixOSConfig ./hosts/nixos-test.nix;
+      "dns-test" = mkNixOSConfig ./hosts/dns-test.nix;
     };
   };
 }
