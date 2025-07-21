@@ -4,7 +4,7 @@ keys:
     - &msaxena-yubiblack age1yubikey1qtz5nnzkpy943ynjywc3lntapsa9yx859gqsh05rkcyvnagtzhp76hq8g20
     - &msaxena-MBP ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMDUuPzOBdRwbr6st5HJ4MveSMM6QvrjRzqF5FVLfS5 msaxena@Mayurs-MacBook-Pro.local
   - &hosts:
-    - &nixos-test age1anwpsx6ljrluvmx0umyw9z76vsytkvxgtkg4hmgt4z08fu5mvgdsn8p3r5
+    - &nixos-test age16alk4hrrdvsjq5l34wlwfw25exwefnhmsflvcdyctrruyvekysasruzwp4
     - &dns-test age1s0v5u2j6g4ex6ayzaz5psq73zgvwscv5yacurzwvg36jf43raugs644x2g
 creation_rules:         
   - path_regex: secrets/common.yaml$
