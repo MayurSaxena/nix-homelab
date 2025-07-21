@@ -6,6 +6,7 @@
 }: {
   imports = [
     inputs.sops-nix.nixosModules.sops
+    inputs.impermanence.nixosModules.impermanence
   ];
 
   system.stateVersion = "25.05";
@@ -43,7 +44,7 @@
 
   sops = {
     defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
-    age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
+    age.sshKeyPaths = ["/persistent/etc/ssh/ssh_host_ed25519_key"];
     validateSopsFiles = false;
     secrets."passwords/root" = {
       sopsFile = ./../../secrets/common.yaml;
@@ -73,6 +74,21 @@
   environment.shellAliases = {
     ll = "ls -al";
     ".." = "cd ..";
+  };
+
+  environment.persistence."/persistent" = {
+    directories = [
+      "/var/log"
+      # inspo: https://github.com/nix-community/impermanence/issues/178
+      "/var/lib/nixos"
+    ];
+    files = [
+      "/etc/machine-id"
+      "/etc/ssh/ssh_host_ed25519_key.pub"
+      "/etc/ssh/ssh_host_ed25519_key"
+      "/etc/ssh/ssh_host_rsa_key.pub"
+      "/etc/ssh/ssh_host_rsa_key"
+    ];
   };
 
   # Configure SSH to be allowed through firewall, only allow key-based root access
