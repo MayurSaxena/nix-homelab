@@ -100,6 +100,8 @@ TODO: How much of this can we script?
 
 6. Re-enter a `pct` shell, run `. /etc/profile ; nixos-rebuild switch --flake github:MayurSaxena/nix-homelab`
 
+7. And now, you should be good to go with an impermanent set up. Test by creating a file somewhere (e.g. `/`) and rebooting.
+
 ### What The Base Image Does
  - Enables the firewall
  - Adds my Yubikeys as authorized keys for root via SSH
