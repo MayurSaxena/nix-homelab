@@ -7,6 +7,7 @@
   imports = [
     ./../modules/nixos/base.nix
     ./../modules/nixos/proxmox-lxc.nix
+    ./../modules/nixos/impermanence.nix
     #./../services/netbox.nix
   ];
   # Set system architecture for this host
