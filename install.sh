@@ -4,10 +4,9 @@ set -e -u -o pipefail
 
 if [ "$(uname)" == "Darwin" ]; then
   echo "do something..."
-  
+
 elif [ "$(uname)" == "Linux" ]; then
-  
-  source /etc/profile
+
   mkdir -vp /persistent/{etc/ssh,var/{lib/nixos,log}}
   systemctl start sshd-keygen.service
   mv /etc/ssh/ssh_host_* /persistent/etc/ssh/
