@@ -39,7 +39,7 @@
   networking.firewall.enable = true;
 
   # not even sure if this does anything
-  security.pam.sshAgentAuth.enable = true;
+  boot.loader.initScript.enable = true;
 
   sops = {
     defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
@@ -79,6 +79,7 @@
   services.openssh = {
     enable = true;
     openFirewall = true;
+    authorizedKeysInHomedir = false;
     settings = {
       PermitRootLogin = "prohibit-password";
     };

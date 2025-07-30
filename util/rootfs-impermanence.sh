@@ -28,10 +28,15 @@ rollback_to_blank() {
         log "ERROR: Rollback failed for '$dataset'."
       fi
     else
-      log "Snapshot '@blank' not found for '$dataset'. Skipping rollback."
+      log "Snapshot '@blank' not found for '$dataset'. Taking snapshot and skipping rollback."
+      if zfs snapshot "$snapshot" >/dev/null 2>&1; then
+        log "Snapshot succeeded for '$snapshot'."
+      else
+        log "ERROR: Snapshot failed for '$snapshot'."
+      fi
     fi
   else
-    log "Dataset '$dataset' does not exist. Skipping."
+    log "ERROR: Dataset '$dataset' does not exist. Skipping."
   fi
 }
 
