@@ -10,17 +10,17 @@
 
 #   systemd.tmpfiles.settings."persistent-var-log"."/persistent/var/log" = {d = {};};
 #   systemd.tmpfiles.settings."persistent-var-lib"."/persistent/var/lib" = {d = {};};
-#   services.openssh.hostKeys = [
-#     {
-#       bits = 4096;
-#       path = "/persistent/etc/ssh/ssh_host_rsa_key";
-#       type = "rsa";
-#     }
-#     {
-#       path = "/persistent/etc/ssh/ssh_host_ed25519_key";
-#       type = "ed25519";
-#     }
-#   ];
+  services.openssh.hostKeys = [
+    {
+      bits = 4096;
+      path = "/persistent/etc/ssh/ssh_host_rsa_key";
+      type = "rsa";
+    }
+    {
+      path = "/persistent/etc/ssh/ssh_host_ed25519_key";
+      type = "ed25519";
+    }
+  ];
 
   sops.age.sshKeyPaths = ["/persistent/etc/ssh/ssh_host_ed25519_key"];
 
