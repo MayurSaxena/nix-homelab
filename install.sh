@@ -3,7 +3,8 @@
 set -e -u -o pipefail
 
 if [ "$(uname)" == "Darwin" ]; then
-
+  echo "do something..."
+  
 elif [ "$(uname)" == "Linux" ]; then
   
   source /etc/profile
