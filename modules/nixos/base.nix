@@ -39,7 +39,7 @@
   networking.firewall.enable = true;
 
   # not even sure if this does anything
-  boot.loader.initScript.enable = true;
+  boot.loader.initScript.enable = false;
 
   sops = {
     defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
