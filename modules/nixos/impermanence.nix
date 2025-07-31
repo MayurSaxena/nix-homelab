@@ -8,8 +8,6 @@
     inputs.impermanence.nixosModules.impermanence
   ];
 
-#   systemd.tmpfiles.settings."persistent-var-log"."/persistent/var/log" = {d = {};};
-#   systemd.tmpfiles.settings."persistent-var-lib"."/persistent/var/lib" = {d = {};};
   services.openssh.hostKeys = [
     {
       bits = 4096;
