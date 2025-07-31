@@ -14,6 +14,7 @@
       nerd-fonts.fira-code
       nixos-rebuild
       alejandra
+      opentofu
     ];
 
     # Set the home directory differently based on platform
