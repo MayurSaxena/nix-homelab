@@ -38,9 +38,6 @@
   # enable the firewall
   networking.firewall.enable = true;
 
-  # not even sure if this does anything
-  boot.loader.initScript.enable = pkgs.lib.mkForce false;
-
   sops = {
     defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
     age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
