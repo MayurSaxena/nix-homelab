@@ -57,6 +57,12 @@
         enable = true;
         plugins = ["sudo"];
       };
+
+      direnv = {
+        enable = true;
+        enableZshIntegration = true;
+        nix-direnv.enable = true
+      }
     };
 
     oh-my-posh = {
