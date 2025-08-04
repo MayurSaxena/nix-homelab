@@ -82,7 +82,7 @@
     # All NixOS builds go here, where key is hostname and value is the config file
     nixosConfigurations = {
       "base-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox.nix;
-      "base-impermanent-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
+      "base-lxc-impermanent" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
     };
   };
 }
