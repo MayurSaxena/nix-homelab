@@ -1,0 +1,7 @@
+# Example .envrc file to be used with util/pve-auth.sh for ticket based auth to PVE API (allowing 2FA)
+# Copy this file to a new one called .envrc and modify accordingly
+
+export PROXMOX_VE_ENDPOINT="https://10.10.10.10:8006/"
+export PROXMOX_VE_INSECURE=true
+export PROXMOX_VE_USERNAME=root@pam
+export PROXMOX_VE_PASSWORD=<YOUR_PASSWORD_HERE>
