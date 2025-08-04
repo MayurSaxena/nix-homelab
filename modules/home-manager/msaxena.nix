@@ -15,6 +15,8 @@
       nixos-rebuild
       alejandra
       opentofu
+      starship
+      devenv
     ];
 
     # Set the home directory differently based on platform
@@ -52,11 +54,21 @@
         "ll" = "ls -al";
         ".." = "cd ..";
       };
+      initContent = ''
+        eval "$(ssh-agent -s)" &> /dev/null
+        ssh-add ~/.ssh/id_ed25519 &> /dev/null
+        ssh-add ~/.ssh/id_ed25519_sk &> /dev/null
+        ssh-add ~/.ssh/id_ed25519_sk2 &> /dev/null
+      '';
 
-      oh-my-zsh = {
-        enable = true;
-        plugins = ["sudo"];
-      };
+      # oh-my-zsh = {
+      #   enable = true;
+      #   plugins = ["sudo"];
+      # };
+    };
+
+    starship = {
+      enable = true;
     };
 
     direnv = {
@@ -65,11 +77,11 @@
       nix-direnv.enable = true;
     };
 
-    oh-my-posh = {
-      enable = true;
-      enableZshIntegration = true;
-      useTheme = "aliens";
-    };
+    # oh-my-posh = {
+    #   enable = true;
+    #   enableZshIntegration = true;
+    #   useTheme = "aliens";
+    # };
 
     ssh = {
       enable = true;

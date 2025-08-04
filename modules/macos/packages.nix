@@ -10,6 +10,7 @@
     age
     age-plugin-yubikey
     sops
+    openssh
   ];
 
   # Homebrew Installation Manager
