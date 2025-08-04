@@ -11,9 +11,10 @@ elif [ "$(uname)" == "Linux" ]; then
   mkdir -p /persistent/{etc/ssh,var/{lib/nixos,log}}
   # Generate SSH keys
   systemctl start sshd-keygen.service
+  sleep 2
   # Copy files to persistent locations - could move as well
-  mv /etc/ssh/ssh_host_* /persistent/etc/ssh/
-  mv /etc/machine-id /persistent/etc/
+  mv -f /etc/ssh/ssh_host_* /persistent/etc/ssh/
+  mv -f /etc/machine* /persistent/etc/
 
   # Copy current contents of folders (don't move so we don't break running things?)
   # Start with fresh logs though (could copy those as well I suppose)
