@@ -12,8 +12,8 @@ elif [ "$(uname)" == "Linux" ]; then
   # Generate SSH keys
   systemctl start sshd-keygen.service
   # Copy files to persistent locations - could move as well
-  cp /etc/ssh/ssh_host_* /persistent/etc/ssh/
-  cp /etc/machine-id /persistent/etc/
+  mv /etc/ssh/ssh_host_* /persistent/etc/ssh/
+  mv /etc/machine-id /persistent/etc/
 
   # Copy current contents of folders (don't move so we don't break running things?)
   # Start with fresh logs though (could copy those as well I suppose)
