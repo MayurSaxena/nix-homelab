@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &nixos-test2 age1ls8q2kj66kalfwsjyadnax4t5zkdz9ty5qn0swq23uy9g9ehhups4ynvq6
     - &msaxena-keys >-
       age1yubikey1qttjmkaf095gdjx7gd53440rely62smf2sk5t6w2wtmgn73cf84x5w5sm25,
       age1yubikey1qtz5nnzkpy943ynjywc3lntapsa9yx859gqsh05rkcyvnagtzhp76hq8g20,
