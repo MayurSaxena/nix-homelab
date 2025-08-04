@@ -1,33 +1,24 @@
 keys:
-  - &msaxena:
-    - &msaxena-yubirock age1yubikey1qttjmkaf095gdjx7gd53440rely62smf2sk5t6w2wtmgn73cf84x5w5sm25
-    - &msaxena-yubiblack age1yubikey1qtz5nnzkpy943ynjywc3lntapsa9yx859gqsh05rkcyvnagtzhp76hq8g20
-    - &msaxena-MBP ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMDUuPzOBdRwbr6st5HJ4MveSMM6QvrjRzqF5FVLfS5 msaxena@Mayurs-MacBook-Pro.local
-  - &hosts:
+  - &all-keys
+    - &msaxena-keys >-
+      age1yubikey1qttjmkaf095gdjx7gd53440rely62smf2sk5t6w2wtmgn73cf84x5w5sm25,
+      age1yubikey1qtz5nnzkpy943ynjywc3lntapsa9yx859gqsh05rkcyvnagtzhp76hq8g20,
+      age17meesgev7v9xu4xadt6e3qg03umvtzdthkzlv6zwg8rvp8jjedhstxc7gu
     - &nixos-test age13eag3vf8tct63e9pdh99tx9rmuyglru6mgvam03nn0rtswstdg3qauw4kl
     - &nixos-test2 age1px2hmwh5d9p0e7nmmpy30m688haygqmmpnsc9zqlw6tegrmgxppqwwl4r0
     - &dns-test age1s0v5u2j6g4ex6ayzaz5psq73zgvwscv5yacurzwvg36jf43raugs644x2g
+
 creation_rules:         
   - path_regex: secrets/common.yaml$
     key_groups:
-      - age:
-          - *msaxena-yubirock
-          - *msaxena-yubiblack
-          - *msaxena-MBP
-          - *nixos-test
-          - *nixos-test2
-          - *dns-test
+      - age: *all-keys
+
   - path_regex: secrets/msaxena.yaml$
-    key_groups:
-      - age:
-          - *msaxena-yubirock
-          - *msaxena-yubiblack
-          - *msaxena-MBP
+    age: *msaxena-keys
+
   - path_regex: secrets/nixos-test.yaml$
     key_groups:
       - age:
-          - *msaxena-yubirock
-          - *msaxena-yubiblack
-          - *msaxena-MBP
-          - *nixos-test
+        - *msaxena-keys
+        - *nixos-test2
           
