@@ -16,13 +16,14 @@
     ];
   };
 
+  systemd.tmpfiles.rules = [
+    "d /persistent/var/lib/private 0700 root root"
+  ];
+
   environment.persistence."/persistent" = {
     directories = [
       {
         directory = "/var/lib/private/technitium-dns-server";
-        user = "technitium-dns-server";
-        group = "technitium-dns-server";
-        mode = "0755";
       }
     ];
   };
