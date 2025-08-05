@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &dns age16zj68pu38xh4lrpy653q7mcj85sevgslk3kr02k9495jd9ax0fgs952kzz
     - &msaxena-keys >-
       ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMDUuPzOBdRwbr6st5HJ4MveSMM6QvrjRzqF5FVLfS5 msaxena@Mayurs-MacBook-Pro.local,
       age1yubikey1qttjmkaf095gdjx7gd53440rely62smf2sk5t6w2wtmgn73cf84x5w5sm25,
