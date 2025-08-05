@@ -14,7 +14,6 @@
       53
       5380
     ];
-
   };
 
   environment.persistence."/persistent" = {
