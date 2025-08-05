@@ -83,6 +83,7 @@
     nixosConfigurations = {
       "base-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox.nix;
       "base-lxc-impermanent" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
+      "nixos-test-imp" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
     };
   };
 }
