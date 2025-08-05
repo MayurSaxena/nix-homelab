@@ -1,6 +1,5 @@
 keys:
   - &all-keys
-    - &nixos-test2 age15hxkapenk90ajpkwlx8espjpxzr3kj8lahhxwnprndj33zkm2p7qcge6vh
     - &msaxena-keys >-
       ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMDUuPzOBdRwbr6st5HJ4MveSMM6QvrjRzqF5FVLfS5 msaxena@Mayurs-MacBook-Pro.local,
       age1yubikey1qttjmkaf095gdjx7gd53440rely62smf2sk5t6w2wtmgn73cf84x5w5sm25,
