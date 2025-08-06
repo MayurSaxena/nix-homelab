@@ -5,6 +5,7 @@
   ...
 }: {
   imports = [
+    ./../modules/nixos/proxmox-lxc.nix
     ./../modules/nixos/remote-builds.nix
   ];
   # Set system architecture for this host

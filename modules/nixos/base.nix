@@ -8,7 +8,7 @@
     inputs.sops-nix.nixosModules.sops
   ];
 
-  system.stateVersion = "25.05";
+  system.stateVersion = "25.11";
   nixpkgs.config.allowUnfree = true;
   nix = {
     gc = {
