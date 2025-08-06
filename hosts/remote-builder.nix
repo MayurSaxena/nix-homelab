@@ -18,4 +18,8 @@
       ./../assets/remote-builder.pub
     ];
   };
+
+  nix.settings.trusted-users = [
+    "nixbuild"
+  ];
 }
