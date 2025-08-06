@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &dns2 age1gp99s6puxtgm2rs4t3egxdnyt8mxxxsgmj4d6jk5w4uksxdjusxqt8dhy0
     - &remote-builder age1lz3hvew4wmfz7s4ta2curnfh5yej99cqjrccxuvu7yuj2h9c9sksctcn2q
     - &dns age1vhs4zsxaxe25t2w5s7dgq9w22phqfhl0059rlmhl8drxzj5xhctss5fpm7
     - &msaxena-keys >-
