@@ -83,7 +83,7 @@
     nixosConfigurations = {
       "base-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox.nix;
       "base-lxc-impermanent" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
-      "base-imp-lowpower" = mkNixOSConfig ./hosts/base-lxc-proxmox-impermanent-lowpower.nix;
+      "base-imp-lowpower" = mkNixOSConfig ./hosts/base-lxc-impermanent-lowpower.nix;
       "nixos-test-imp" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
       "remote-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
       "dns" = mkNixOSConfig ./hosts/dns-server.nix;
