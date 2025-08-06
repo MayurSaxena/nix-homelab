@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &remote-builder age1jxunsrk02ff3sn3fk5nyjd6zyq5caxkrylaf3al57w6njalr0y2q5qsat8
     - &dns age1vhs4zsxaxe25t2w5s7dgq9w22phqfhl0059rlmhl8drxzj5xhctss5fpm7
     - &msaxena-keys >-
       ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMDUuPzOBdRwbr6st5HJ4MveSMM6QvrjRzqF5FVLfS5 msaxena@Mayurs-MacBook-Pro.local,
