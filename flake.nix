@@ -86,6 +86,7 @@
       "nixos-test-imp" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
       "remote-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
       "dns" = mkNixOSConfig ./hosts/dns-server.nix;
+      "dns2" = mkNixOSConfig ./hosts/dns-server.nix;
     };
   };
 }
