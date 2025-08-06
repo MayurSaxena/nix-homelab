@@ -11,11 +11,11 @@
   # Set system architecture for this host
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
-  services.openssh.extraConfig = "PermitEmptyPasswords yes";
-
   users.users.nixbuild = {
     createHome = true;
     isNormalUser = true;
-    hashedPassword = "";
+    openssh.authorizedKeys.keyFiles = [
+      ./../assets/remote-builder.pub
+    ]
   };
 }
