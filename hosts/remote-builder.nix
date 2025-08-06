@@ -16,6 +16,6 @@
     isNormalUser = true;
     openssh.authorizedKeys.keyFiles = [
       ./../assets/remote-builder.pub
-    ]
+    ];
   };
 }
