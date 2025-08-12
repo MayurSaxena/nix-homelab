@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4 #checkout the repo
         with:
-          fetch-depth: 0
+          fetch-depth: 1
       # Install nix with flake support
       - uses: cachix/install-nix-action@v31
       # Run the update which will change flake.lock
