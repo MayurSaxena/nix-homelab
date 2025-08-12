@@ -33,6 +33,7 @@
     dates = "*-*-* 18:00:00 UTC";
     randomizedDelaySec = "30min";
     flake = "github:MayurSaxena/nix-homelab";
+    flags = ["--refresh"];
   };
 
   # enable the firewall
@@ -42,18 +43,11 @@
     defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
     age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
     validateSopsFiles = false;
-    secrets."passwords/root" = {
-      sopsFile = ./../../secrets/common.yaml;
-      neededForUsers = true;
-    };
   };
-
   # don't allow changes to users to persist
   users.mutableUsers = false;
-
   # Set root user login methods
   users.users.root = {
-    hashedPasswordFile = config.sops.secrets."passwords/root".path;
     openssh.authorizedKeys.keys = [
       "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBKp4APmkFKNrZiS2yYZsKOgkik5XehIbqU+Li2tsFwVAAAABHNzaDo= YubiRock"
       "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIPRoNwOsZ2aVCvntOlrVKxVku+kXu8UigYvpEblIYqooAAAABHNzaDo= YubiBlack"
