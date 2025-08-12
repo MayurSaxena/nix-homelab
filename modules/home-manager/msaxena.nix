@@ -86,6 +86,7 @@
     ssh = {
       enable = true;
       package = pkgs.openssh;
+      extraConfig = "StrictHostKeyChecking accept-new";
     };
 
     git = {
