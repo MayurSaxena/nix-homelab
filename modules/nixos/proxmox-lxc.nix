@@ -10,6 +10,9 @@
     manageNetwork = false;
     manageHostName = false;
   };
+
+  services.resolved.enable = false;
+
   # make an LXC share group that can be used at any point
   users.groups.lxc_share = {
     name = "lxc_share";
