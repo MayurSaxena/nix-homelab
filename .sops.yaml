@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &dns age1njk33ndwmsw9ef807tzy2jpjl5pdd83n4aqrv80t66t48jpuyg2q8mlzsy
     - &dnstemp age1jp3vllpan0hdrsuvzfc2xyp6nx4ffwgygwd79aw76ngvgkkvna6q64a6tv
     - &nix-builder age1vm4mtvk26q5u4tjftnpfyw3zy6wna6lnxquw25vxqfmcpm7t0usschxw7m
     - &msaxena-keys >-
