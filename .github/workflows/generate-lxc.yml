@@ -2,8 +2,6 @@
 name: Generate LXC Images
 on:
     push:
-        branches:
-            - main
         tags:
             - prod
 permissions:
@@ -26,12 +24,27 @@ jobs:
                 run: |
                     nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc | {
                         read path
-                        echo "BUILD_PATH=$path" >> $GITHUB_ENV
+                        FILENAME="$(basename $path)"
+                        RELEASE_PATH="${{ github.workspace }}/$FILENAME"
+                        cp $path $RELEASE_PATH
+                        echo "RP1=$RELEASE_PATH" >> $GITHUB_ENV
+                    }
+            
+            -   name: Generate impermanent NixOS configuration
+                run: |
+                    nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-impermanent | {
+                        read path
+                        FILENAME="$(basename $path)"
+                        RELEASE_PATH="${{ github.workspace }}/impermanent-$FILENAME"
+                        cp $path $RELEASE_PATH
+                        echo "RP2=$RELEASE_PATH" >> $GITHUB_ENV
                     }
             
             -   name: Release
                 uses: softprops/action-gh-release@v2
                 if: github.ref_type == 'tag'
                 with:
-                    files: ${{ env.BUILD_PATH }}
+                    files: |
+                        ${{ env.RP1 }}
+                        ${{ env.RP2 }}
             

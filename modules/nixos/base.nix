@@ -69,10 +69,14 @@
   # Configure SSH to be allowed through firewall, only allow key-based root access
   services.openssh = {
     enable = true;
+    startWhenNeeded = false;
     openFirewall = true;
     authorizedKeysInHomedir = false;
     settings = {
       PermitRootLogin = "prohibit-password";
     };
   };
+
+  programs.ssh.extraConfig = "StrictHostKeyChecking=accept-new";
+  
 }
