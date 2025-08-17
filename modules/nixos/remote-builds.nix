@@ -12,10 +12,10 @@
   nix = {
     buildMachines = [
       {
-        hostName = "10.0.60.2";
+        hostName = "nix-builder.dev.home.mayursaxena.com";
         protocol = "ssh";
         system = "x86_64-linux";
-        sshUser = "nixbuild";
+        sshUser = "nix";
         sshKey = "/etc/remote-builder-key";
         maxJobs = 3;
         supportedFeatures = [
@@ -27,6 +27,10 @@
     ];
     distributedBuilds = true;
   };
+
+  nix.settings.substituters = [
+    "ssh://nix@nix-builder.dev.home.mayursaxena.com"
+  ];
 
   programs.ssh.extraConfig = "StrictHostKeyChecking=accept-new";
 }

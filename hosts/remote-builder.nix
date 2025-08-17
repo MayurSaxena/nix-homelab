@@ -11,7 +11,7 @@
   # Set system architecture for this host
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
-  users.users.nixbuild = {
+  users.users.nix = {
     createHome = true;
     isNormalUser = true;
     openssh.authorizedKeys.keyFiles = [
@@ -19,7 +19,12 @@
     ];
   };
 
+  nix.sshServe = {
+    enable = true;
+    trusted = true;
+  };
+
   nix.settings.trusted-users = [
-    "nixbuild"
+    "nix"
   ];
 }

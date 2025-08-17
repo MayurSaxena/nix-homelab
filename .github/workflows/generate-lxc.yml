@@ -20,7 +20,7 @@ jobs:
                 with:
                     github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-            -   name: Generate NixOS configuration
+            -   name: Generate standard NixOS configuration
                 run: |
                     nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc | {
                         read path
@@ -39,6 +39,26 @@ jobs:
                         cp $path $RELEASE_PATH
                         echo "RP2=$RELEASE_PATH" >> $GITHUB_ENV
                     }
+
+            -   name: Generate standard NixOS configuration with remote builder configured
+                run: |
+                    nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-remote | {
+                        read path
+                        FILENAME="$(basename $path)"
+                        RELEASE_PATH="${{ github.workspace }}/remote-$FILENAME"
+                        cp $path $RELEASE_PATH
+                        echo "RP3=$RELEASE_PATH" >> $GITHUB_ENV
+                    }
+
+            -   name: Generate impermanent NixOS configuration with remote builder configured
+                run: |
+                    nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-impermanent-remote | {
+                        read path
+                        FILENAME="$(basename $path)"
+                        RELEASE_PATH="${{ github.workspace }}/impermanent-remote-$FILENAME"
+                        cp $path $RELEASE_PATH
+                        echo "RP4=$RELEASE_PATH" >> $GITHUB_ENV
+                    }
             
             -   name: Release
                 uses: softprops/action-gh-release@v2
@@ -47,4 +67,6 @@ jobs:
                     files: |
                         ${{ env.RP1 }}
                         ${{ env.RP2 }}
+                        ${{ env.RP3 }}
+                        ${{ env.RP4 }}
             
