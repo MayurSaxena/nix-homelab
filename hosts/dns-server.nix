@@ -8,7 +8,7 @@
     ./../modules/nixos/base.nix
     ./../modules/nixos/proxmox-lxc.nix
     ./../modules/nixos/impermanence.nix
-    ./../modules/nixos/remote-builds.nix
+    ./../modules/nixos/root-password.nix
 
     ./../services/technitium-dns.nix
   ];
