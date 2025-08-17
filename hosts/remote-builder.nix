@@ -22,6 +22,10 @@
   nix.sshServe = {
     enable = true;
     trusted = true;
+    keys = [
+      builtins.readFile
+      ./../assets/remote-builder.pub
+    ];
   };
 
   nix.settings.trusted-users = [

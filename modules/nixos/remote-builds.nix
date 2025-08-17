@@ -29,7 +29,7 @@
   };
 
   nix.settings.substituters = [
-    "ssh://nix@nix-builder.dev.home.mayursaxena.com"
+    "ssh://nix@nix-builder.dev.home.mayursaxena.com?ssh-key=/etc/remote-builder-key"
   ];
 
   programs.ssh.extraConfig = "StrictHostKeyChecking=accept-new";
