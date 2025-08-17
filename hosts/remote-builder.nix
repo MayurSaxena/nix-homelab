@@ -23,8 +23,7 @@
     enable = true;
     trusted = true;
     keys = [
-      builtins.readFile
-      ./../assets/remote-builder.pub
+      (builtins.readFile ./../assets/remote-builder.pub)
     ];
   };
 
