@@ -12,6 +12,7 @@
   };
 
   services.resolved.enable = false;
+  networking.resolvconf.enable = false;
 
   # make an LXC share group that can be used at any point
   users.groups.lxc_share = {
