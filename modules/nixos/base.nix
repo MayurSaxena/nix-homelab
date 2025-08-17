@@ -78,5 +78,4 @@
   };
 
   programs.ssh.extraConfig = "StrictHostKeyChecking=accept-new";
-  
 }
