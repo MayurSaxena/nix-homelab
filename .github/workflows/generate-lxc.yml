@@ -65,9 +65,8 @@ jobs:
                 uses: softprops/action-gh-release@v2
                 if: github.ref_type == 'tag'
                 with:
+                    prerelease: ${{ github.ref_name != 'prod' }}
+                    preserve_order: false
                     files: |
-                        ${{ env.RP1 }}
-                        ${{ env.RP2 }}
-                        ${{ env.RP3 }}
-                        ${{ env.RP4 }}
+                        ${{ github.workspace }}/*.tar.xz
             
