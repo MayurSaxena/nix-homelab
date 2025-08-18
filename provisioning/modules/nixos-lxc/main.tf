@@ -7,15 +7,6 @@ terraform {
   }
 }
 
-data "proxmox_virtual_environment_datastores" "ct_storage" {
-  node_name = var.pve_node_name
-
-  filters = {
-    content_types = ["images", "rootdir"]
-    id            = "local-zfs" #Here for safety wonder if necessary
-  }
-}
-
 resource "proxmox_virtual_environment_container" "ct" {
   node_name = var.pve_node_name
   console {
@@ -29,7 +20,7 @@ resource "proxmox_virtual_environment_container" "ct" {
   }
   description = var.ct_description
   disk {
-    datastore_id = data.proxmox_virtual_environment_datastores.ct_storage.datastores[0].id
+    datastore_id = var.ct_disk_datastore
     size         = var.rootfs_size_gb
   }
   initialization {
@@ -57,30 +48,30 @@ resource "proxmox_virtual_environment_container" "ct" {
 
   dynamic "mount_point" {
     for_each = var.rootfs_impermanence ? [
-      { "vol" : "${data.proxmox_virtual_environment_datastores.ct_storage.datastores[0].id}"
+      { "vol" : "${var.ct_disk_datastore}"
         "ct_path" : "/boot"
         "backup" : false
-        "size" : "100M"
+        "size" : "1G"
       },
-      { "vol" : "${data.proxmox_virtual_environment_datastores.ct_storage.datastores[0].id}"
+      { "vol" : "${var.ct_disk_datastore}"
         "ct_path" : "/nix"
         "backup" : false
         "size" : "4G"
       },
-      { "vol" : "${data.proxmox_virtual_environment_datastores.ct_storage.datastores[0].id}"
+      { "vol" : "${var.ct_disk_datastore}"
         "ct_path" : "/persistent"
         "backup" : true
         "size" : "${var.persistent_fs_size_gb}G"
       },
-      { "vol" : "${data.proxmox_virtual_environment_datastores.ct_storage.datastores[0].id}"
+      { "vol" : "${var.ct_disk_datastore}"
         "ct_path" : "/sbin"
         "backup" : false
-        "size" : "100M"
+        "size" : "1G"
       }
-      , { "vol" : "${data.proxmox_virtual_environment_datastores.ct_storage.datastores[0].id}"
+      , { "vol" : "${var.ct_disk_datastore}"
         "ct_path" : "/bin"
         "backup" : false
-        "size" : "100M"
+        "size" : "1G"
     }] : []
     iterator = mp
     content {
@@ -141,23 +132,30 @@ resource "proxmox_virtual_environment_container" "ct" {
 
   provisioner "local-exec" {
     command = <<EOT
-age_key=$(ssh root@proxmox "pct exec ${self.id} -- sh -c '. /etc/profile ; curl -fsSL https://raw.githubusercontent.com/MayurSaxena/nix-homelab/refs/heads/main/install.sh | bash'")
+sleep 5
+HOSTNAME=${self.ipv4["eth0"]} #${self.initialization[0].hostname}.${self.initialization[0].dns[0].domain}
+age_key=$(nix shell nixpkgs#ssh-to-age --command sh -c "ssh-keyscan -t ed25519 $HOSTNAME | ssh-to-age")
+echo $age_key
 sed -i '' -r "/^.+&all-keys.*$/a\\
     - &${self.initialization[0].hostname} $(echo $age_key | tr -d '\n')\\
 " ../.sops.yaml
 sops updatekeys ../secrets/* -y
 git add ../.sops.yaml ../secrets/* && git commit -m "Adding ${self.initialization[0].hostname} to .sops.yaml" && git push
 sleep 5
-ssh root@proxmox "pct exec ${self.id} -- sh -c '. /etc/profile ; nixos-rebuild switch --flake github:MayurSaxena/nix-homelab'"
+# echo "Hopefully YubiKey was inserted and waiting for touch."
+ssh root@$HOSTNAME nixos-rebuild switch --flake github:MayurSaxena/nix-homelab
 EOT
   }
-
   provisioner "local-exec" {
     when    = destroy
     command = <<EOT
-sed -i '' -r '/^.+[&\*]${self.initialization[0].hostname}.*$/d' ../.sops.yaml
+sed -i '' -r '/^.+[&\*]${self.initialization[0].hostname}( +age.+)?$/d' ../.sops.yaml
 sops updatekeys ../secrets/* -y
 git add ../.sops.yaml ../secrets/* && git commit -m "Removing ${self.initialization[0].hostname} from .sops.yaml" && git push
 EOT
+  }
+
+  lifecycle {
+    ignore_changes = [operating_system["template_file_id"]]
   }
 }

@@ -69,7 +69,7 @@ variable "swap_size_mb" {
   type        = number
   nullable    = false
   description = "The amount of swap in MB."
-  default     = 256
+  default     = 512
 }
 
 variable "persistent_fs_size_gb" {
@@ -135,4 +135,11 @@ variable "custom_hookscript" {
   nullable    = true
   description = "File identifier for executable hook script."
   default     = null
+}
+
+variable "ct_disk_datastore" {
+  type        = string
+  nullable    = false
+  description = "Name of the datastore to store the CT disks in."
+  default     = "local-zfs"
 }
