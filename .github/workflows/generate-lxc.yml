@@ -4,6 +4,7 @@ on:
     push:
         tags:
             - prod
+            - nightly
 permissions:
     contents: write
 jobs:
