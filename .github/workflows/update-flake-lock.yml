@@ -28,3 +28,5 @@ jobs:
           file_pattern: flake.lock
           skip_dirty_check: false
           skip_fetch: true
+          push_options: '--force'
+          tagging_message: 'nightly'
