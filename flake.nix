@@ -85,9 +85,9 @@
       "base-lxc-impermanent" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
       "base-lxc-remote" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-remote.nix;
       "base-lxc-impermanent-remote" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent-remote.nix;
+
       "nix-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
       "dns" = mkNixOSConfig ./hosts/dns-server.nix;
-      "dns2" = mkNixOSConfig ./hosts/dns-server.nix;
     };
   };
 }
