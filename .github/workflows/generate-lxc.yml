@@ -26,7 +26,7 @@ jobs:
                     nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc | {
                         read path
                         FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/$FILENAME"
+                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-standard.tar.xz"
                         cp $path $RELEASE_PATH
                         echo "RP1=$RELEASE_PATH" >> $GITHUB_ENV
                     }
@@ -36,7 +36,7 @@ jobs:
                     nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-impermanent | {
                         read path
                         FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/impermanent-$FILENAME"
+                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-impermanent.tar.xz"
                         cp $path $RELEASE_PATH
                         echo "RP2=$RELEASE_PATH" >> $GITHUB_ENV
                     }
@@ -46,7 +46,7 @@ jobs:
                     nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-remote | {
                         read path
                         FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/remote-$FILENAME"
+                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-standard-remotebuild.tar.xz"
                         cp $path $RELEASE_PATH
                         echo "RP3=$RELEASE_PATH" >> $GITHUB_ENV
                     }
@@ -56,7 +56,7 @@ jobs:
                     nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-impermanent-remote | {
                         read path
                         FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/impermanent-remote-$FILENAME"
+                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-impermanent-remotebuild.tar.xz"
                         cp $path $RELEASE_PATH
                         echo "RP4=$RELEASE_PATH" >> $GITHUB_ENV
                     }
