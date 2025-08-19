@@ -77,7 +77,7 @@ TODO: How much of this can we script?
 4. Save this `age` key for later and exit the `pct` shell.
 
 5. Add a hookscript to the CT so that on every boot the **rootfs** is reverted back to the *blank* snapshot.
-  - See the file at `util/rootfs-impermanence.sh`.
+  - See the file at `assets/rootfs-impermanence.sh`.
   - Place this file in `/var/lib/vz/snippets` on the PVE host, which likely corresponds with your `local` file storage.
   - `chmod +x /var/lib/vz/snippets/rootfs-impermanence.sh`
   - `pct set <ctid> --hookscript local:snippets/rootfs-impermanence.sh`

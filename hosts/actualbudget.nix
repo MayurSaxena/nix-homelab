@@ -5,10 +5,7 @@
   ...
 }: {
   imports = [
-    ./../modules/nixos/base.nix
-    ./../modules/nixos/proxmox-lxc.nix
-    ./../modules/nixos/impermanence.nix
-    ./../modules/nixos/remote-builds.nix
+    ./base-nixos-lxc-proxmox-impermanent-remote.nix
     ./../modules/nixos/root-password.nix
 
     ./../services/actual-budget.nix

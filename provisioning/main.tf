@@ -4,7 +4,7 @@ resource "proxmox_virtual_environment_file" "nixos_lxc_impermanence_hookscript" 
   node_name    = "proxmox"
   file_mode    = 0700
   source_file {
-    path = "../util/rootfs-impermanence.sh"
+    path = "../assets/rootfs-impermanence.sh"
   }
 }
 
