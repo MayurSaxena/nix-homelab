@@ -58,17 +58,17 @@
     forAllSystems = nixpkgs.lib.genAttrs systems;
 
     # Helper function to simply make a NixOS config, passing in inputs, outputs and variables
-    mkNixOSConfig = path:
+    mkNixOSConfig = paths:
       nixpkgs.lib.nixosSystem {
         specialArgs = {inherit inputs outputs;};
-        modules = [path];
+        modules = paths;
       };
 
     # Helper function to simply make a Darwin (Mac) config, passing in inputs, outputs and variables
-    mkDarwinConfig = path:
+    mkDarwinConfig = paths:
       nix-darwin.lib.darwinSystem {
         specialArgs = {inherit inputs outputs;};
-        modules = [path];
+        modules = paths;
       };
   in {
     # so that we can use `nix fmt .` at the shell
@@ -76,19 +76,29 @@
 
     # All Mac builds go here, where key is hostname and value is the config file
     darwinConfigurations = {
-      "Mayurs-MacBook-Pro" = mkDarwinConfig ./hosts/Mayurs-MacBook-Pro.nix;
+      "Mayurs-MacBook-Pro" = mkDarwinConfig [./hosts/Mayurs-MacBook-Pro.nix];
     };
 
     # All NixOS builds go here, where key is hostname and value is the config file
     nixosConfigurations = {
-      "base-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox.nix;
-      "base-lxc-impermanent" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
-      "base-lxc-remote" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-remote.nix;
-      "base-lxc-impermanent-remote" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent-remote.nix;
+      "base-lxc" = mkNixOSConfig [./hosts/base-nixos-lxc-proxmox.nix];
+      "base-lxc-impermanent" = mkNixOSConfig [
+        ./hosts/base-nixos-lxc-proxmox.nix
+        ./modules/nixos/impermanence.nix
+      ];
+      "base-lxc-remote" = mkNixOSConfig [
+        ./hosts/base-nixos-lxc-proxmox.nix
+        ./modules/nixos/remote-builds.nix
+      ];
+      "base-lxc-impermanent-remote" = mkNixOSConfig [
+        ./hosts/base-nixos-lxc-proxmox.nix
+        ./modules/nixos/impermanence.nix
+        ./modules/nixos/remote-builds.nix
+      ];
 
-      "nix-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
-      "dns" = mkNixOSConfig ./hosts/dns-server.nix;
-      "actualbudget" = mkNixOSConfig ./hosts/actualbudget.nix;
+      "nix-builder" = mkNixOSConfig [./hosts/remote-builder.nix];
+      "dns" = mkNixOSConfig [./hosts/dns-server.nix];
+      "actualbudget" = mkNixOSConfig [./hosts/actualbudget.nix];
     };
   };
 }
