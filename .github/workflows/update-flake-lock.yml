@@ -19,15 +19,13 @@ jobs:
       # Run the update which will change flake.lock
       - run: nix flake update
       # Detect changed file and commit back up
-      - uses: stefanzweifel/git-auto-commit-action@v6
+      - uses: EndBug/add-and-commit@v9
         with:
-          commit_message: "Auto-update flake.lock"
-          commit_user_name: Flake Bot
-          commit_options: --no-verify --signoff
-          commit_author: Flake Bot <actions@github.com>
-          branch: main
-          file_pattern: flake.lock
-          skip_dirty_check: false
-          skip_fetch: true
-          push_options: '--force'
-          tagging_message: 'nightly --force'
+          add: flake.lock
+          author_name: Flake Bot
+          author_email: actions@github.com
+          commit: --no-verify --signoff
+          default_author: github_actions
+          message: 'Auto-update flake.lock'
+          tag: 'nightly --force'
+          tag_push: '--force'
