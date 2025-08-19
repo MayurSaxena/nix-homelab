@@ -12,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4 #checkout the repo
         with:
+          token: ${{ secrets.ACTION_TOKEN }}
           fetch-depth: 0
       # Install nix with flake support
       - uses: cachix/install-nix-action@v31
@@ -20,7 +21,6 @@ jobs:
       # Detect changed file and commit back up
       - uses: stefanzweifel/git-auto-commit-action@v6
         with:
-          token: ${{ secrets.ACTION_TOKEN }}
           commit_message: "Auto-update flake.lock"
           commit_user_name: Flake Bot
           commit_options: --no-verify --signoff
