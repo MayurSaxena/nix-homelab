@@ -9,3 +9,7 @@ output "dns-server" {
 output "actualbudget" {
   value = "${module.actualbudget.ct_id}: ${module.actualbudget.ct_address.v4[0]} ${module.actualbudget.ct_address.v6[0]}"
 }
+
+output "sabnzbd" {
+  value = "${module.sabnzbd.ct_id}: ${module.sabnzbd.ct_address.v4[0]} ${module.sabnzbd.ct_address.v6[0]}"
+}
