@@ -30,4 +30,4 @@ jobs:
           skip_dirty_check: false
           skip_fetch: true
           push_options: '--force'
-          tagging_message: 'nightly'
+          tagging_message: 'nightly --force'
