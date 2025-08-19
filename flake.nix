@@ -90,6 +90,7 @@
       "dns" = mkNixOSConfig ./hosts/dns-server.nix;
       "actualbudget" = mkNixOSConfig ./hosts/actualbudget.nix;
       "sabnzbd" = mkNixOSConfig ./hosts/sabnzbd.nix;
+      "homepage" = mkNixOSConfig ./hosts/homepage-dashboard.nix;
     };
   };
 }

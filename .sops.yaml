@@ -16,3 +16,9 @@ creation_rules:
 
   - path_regex: secrets/msaxena.yaml$
     age: *msaxena-keys
+
+  - path_regex: secrets/homepage-dashboard-secrets.env$
+    key_groups:
+      - age: 
+        - *msaxena-keys
+        - *homepage

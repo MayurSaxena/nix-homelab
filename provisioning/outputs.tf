@@ -13,3 +13,7 @@ output "actualbudget" {
 output "sabnzbd" {
   value = "${module.sabnzbd.ct_id}: ${module.sabnzbd.ct_address.v4[0]} ${module.sabnzbd.ct_address.v6[0]}"
 }
+
+output "homepage" {
+  value = "${module.homepage.ct_id}: ${module.homepage.ct_address.v4[0]} ${module.homepage.ct_address.v6[0]}"
+}
