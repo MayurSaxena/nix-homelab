@@ -9,35 +9,25 @@ resource "proxmox_virtual_environment_file" "nixos_lxc_impermanence_hookscript" 
 }
 
 module "nix-builder" {
-  source         = "./modules/nixos-lxc"
-  pve_node_name  = var.pve_node_name
-  num_cpu_cores  = 4
-  ct_description = <<EOT
-Remote Build Server for NixOS
-
-Managed by Terraform
-EOT
-
-  hostname            = "nix-builder"
-  domain              = "dev.home.mayursaxena.com"
-  network_interfaces  = { "eth0" = 60 }
-  memory_size_mb      = 4096
-  rootfs_size_gb      = 8
-  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-prod.id
-  startup_order       = 1
-  rootfs_impermanence = false
+  source             = "./modules/nixos-lxc"
+  pve_node_name      = var.pve_node_name
+  ct_description     = "Remote Build Server for NixOS (Terraform)"
+  hostname           = "nix-builder"
+  domain             = "dev.home.mayursaxena.com"
+  network_interfaces = { "eth0" = 60 }
+  ipv4_settings      = "dhcp"
+  ipv6_settings      = "auto"
+  memory_size_mb     = 4096
+  num_cpu_cores      = 4
+  rootfs_size_gb     = 8
+  ct_template_id     = proxmox_virtual_environment_download_file.nixos-standard-prod.id
+  startup_order      = 3
 }
 
 module "dns-server" {
-  source         = "./modules/nixos-lxc"
-  pve_node_name  = var.pve_node_name
-  num_cpu_cores  = 1
-  ct_description = <<EOT
-Technitium DNS Server
-
-Managed by Terraform
-EOT
-
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "Technitium DNS Server (Terraform)"
   hostname              = "dns"
   domain                = "home.mayursaxena.com"
   dns_servers           = ["127.0.0.1", "::1"]
@@ -45,6 +35,7 @@ EOT
   ipv4_settings         = "10.0.10.2/24;10.0.10.1"
   ipv6_settings         = "2403:5816:961a:1::2/64;2403:5816:961a:1::1"
   memory_size_mb        = 1024
+  num_cpu_cores         = 2
   persistent_fs_size_gb = 2
   ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-prod.id
   pool_id               = "production"
@@ -52,4 +43,24 @@ EOT
   rootfs_impermanence   = true
   custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
   tags                  = ["dhcp", "dns", "networking"]
+}
+
+module "actualbudget" {
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "Actual Budget Server (Terraform)"
+  hostname              = "actualbudget"
+  domain                = "home.mayursaxena.com"
+  network_interfaces    = { "eth0" = 20 }
+  ipv4_settings         = "dhcp"
+  ipv6_settings         = "auto"
+  memory_size_mb        = 1024
+  num_cpu_cores         = 2
+  persistent_fs_size_gb = 4
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
+  pool_id               = "production"
+  startup_order         = 3
+  rootfs_impermanence   = true
+  custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                  = ["finance"]
 }

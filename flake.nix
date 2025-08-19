@@ -88,6 +88,7 @@
 
       "nix-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
       "dns" = mkNixOSConfig ./hosts/dns-server.nix;
+      "actualbudget" = mkNixOSConfig ./hosts/actualbudget.nix;
     };
   };
 }
