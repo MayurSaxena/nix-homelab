@@ -4,13 +4,6 @@ variable "pve_node_name" {
   description = "The name of the PVE node to create the container on."
 }
 
-variable "num_cpu_cores" {
-  type        = number
-  nullable    = false
-  description = "The number of CPU cores to assign."
-  default     = 2
-}
-
 variable "ct_description" {
   type        = string
   nullable    = false
@@ -21,8 +14,14 @@ variable "ct_description" {
 variable "rootfs_size_gb" {
   type        = number
   nullable    = false
-  description = "The size of the impermanent root filesystem in GB."
+  description = "The size of the root filesystem in GB."
   default     = 2
+}
+
+variable "hostname" {
+  type        = string
+  nullable    = false
+  description = "Hostname of the container."
 }
 
 variable "domain" {
@@ -38,31 +37,28 @@ variable "dns_servers" {
   default     = ["2403:5816:961a:1::2", "10.0.10.2"]
 }
 
-variable "hostname" {
-  type        = string
-  nullable    = false
-  description = "Hostname of the container."
-}
-
 variable "ipv4_settings" {
   type        = string
   nullable    = false
   description = "String of form 'dhcp' or 'A.B.C.D/E;F.G.H.I"
-  default     = "dhcp"
 }
 
 variable "ipv6_settings" {
   type        = string
   nullable    = false
   description = "String of form 'auto', 'dhcp' or 'IPv6/CIDR;IPv6"
-  default     = "auto"
 }
 
 variable "memory_size_mb" {
   type        = number
   nullable    = false
   description = "The amount of RAM in MB."
-  default     = 2048
+}
+
+variable "num_cpu_cores" {
+  type        = number
+  nullable    = false
+  description = "The number of CPU cores to assign."
 }
 
 variable "swap_size_mb" {
@@ -76,7 +72,7 @@ variable "persistent_fs_size_gb" {
   type        = number
   nullable    = false
   description = "The size of the persistent filesystem in GB."
-  default     = 4
+  default     = 2
 }
 
 variable "additional_mount_points" {
@@ -107,6 +103,7 @@ variable "rootfs_impermanence" {
   type        = bool
   nullable    = false
   description = "Whether the container's root filesystem should be impermanent."
+  default     = false
 }
 
 variable "pool_id" {
