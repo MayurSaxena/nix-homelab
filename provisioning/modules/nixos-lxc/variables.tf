@@ -79,8 +79,8 @@ variable "additional_mount_points" {
   type = list(object({
     vol     = string,
     ct_path = string,
-    size    = string
-    backup  = bool
+    size    = optional(string, null)
+    backup  = optional(bool, false)
   }))
   nullable    = false
   description = "Additional mount points within CT."
