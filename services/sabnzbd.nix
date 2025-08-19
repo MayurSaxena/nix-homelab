@@ -10,6 +10,8 @@
     group = "sabnzbd";
   };
 
+  users.users.sabnzbd.extraGroups = [ "lxc_share" ];
+
   environment.persistence."/persistent" = {
     directories = [
       {
