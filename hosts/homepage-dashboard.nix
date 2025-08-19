@@ -7,8 +7,6 @@
   imports = [
     ./base-nixos-lxc-proxmox-impermanent-remote.nix
     ./../modules/nixos/root-password.nix
-
-    ./../services/homepage-dashboard.nix
   ];
 
   sops.secrets = {
@@ -19,6 +17,9 @@
   };
   # TODO: Figure out how to incorporate the ICMP binary in the systemd service path so that the ping arguments work.
   services.homepage-dashboard = {
+    enable = true;
+    openFirewall = true;
+    listenPort = 8082;
     environmentFile = config.sops.secrets."homepage-secrets".path;
     allowedHosts = "localhost:8082,127.0.0.1:8082,homepage.home.mayursaxena.com:8082,home.mayursaxena.com";
     widgets = [
@@ -104,7 +105,7 @@
               description = "Hypervisor";
               href = "https://proxmox-web.home.mayursaxena.com";
               icon = "proxmox";
-               #ping = "proxmox.home.mayursaxena.com";
+              #ping = "proxmox.home.mayursaxena.com";
               widget = {
                 fields = [
                   "vms"
@@ -122,7 +123,7 @@
               description = "Technitium DNS";
               href = "https://dns-web.home.mayursaxena.com";
               icon = "technitium";
-               #ping = "dns.home.mayursaxena.com";
+              #ping = "dns.home.mayursaxena.com";
               widget = {
                 fields = [
                   "totalQueries"
@@ -142,7 +143,7 @@
               description = "Reverse Proxy";
               href = "https://npm-web.home.mayursaxena.com";
               icon = "nginx-proxy-manager";
-               #ping = "npm.home.mayursaxena.com";
+              #ping = "npm.home.mayursaxena.com";
               widget = {
                 password = "{{HOMEPAGE_VAR_NGINX_PROXY_MANAGER_PASSWORD}}";
                 type = "npm";
@@ -160,7 +161,7 @@
               description = "Movies";
               href = "https://radarr.home.mayursaxena.com";
               icon = "radarr";
-               #ping = "servarr.home.mayursaxena.com";
+              #ping = "servarr.home.mayursaxena.com";
               widget = {
                 enableQueue = true;
                 key = "{{HOMEPAGE_VAR_RADARR_KEY}}";
@@ -174,7 +175,7 @@
               description = "TV Shows";
               href = "https://sonarr.home.mayursaxena.com";
               icon = "sonarr";
-               #ping = "servarr.home.mayursaxena.com";
+              #ping = "servarr.home.mayursaxena.com";
               widget = {
                 enableQueue = true;
                 key = "{{HOMEPAGE_VAR_SONARR_KEY}}";
@@ -188,7 +189,7 @@
               description = "Subtitles";
               href = "https://bazarr.home.mayursaxena.com";
               icon = "bazarr";
-               #ping = "servarr.home.mayursaxena.com";
+              #ping = "servarr.home.mayursaxena.com";
               widget = {
                 key = "{{HOMEPAGE_VAR_BAZARR_KEY}}";
                 type = "bazarr";
@@ -205,7 +206,7 @@
               description = "Media Library";
               href = "https://plex-web.home.mayursaxena.com";
               icon = "plex";
-               #ping = "plex.home.mayursaxena.com";
+              #ping = "plex.home.mayursaxena.com";
               widget = {
                 key = "{{HOMEPAGE_VAR_PLEX_KEY}}";
                 type = "plex";
@@ -218,7 +219,7 @@
               description = "Plex Performance Monitor";
               href = "https://tautulli.home.mayursaxena.com";
               icon = "tautulli";
-               #ping = "plex.home.mayursaxena.com";
+              #ping = "plex.home.mayursaxena.com";
               widget = {
                 enableUser = true;
                 expandOneStreamToTwoRows = false;
@@ -234,7 +235,7 @@
               description = "Media Requests";
               href = "https://overseerr-web.home.mayursaxena.com";
               icon = "overseerr";
-               #ping = "overseerr.home.mayursaxena.com";
+              #ping = "overseerr.home.mayursaxena.com";
               widget = {
                 key = "{{HOMEPAGE_VAR_OVERSEERR_KEY}}";
                 type = "overseerr";
@@ -251,7 +252,7 @@
               description = "Usenet Downloader";
               href = "https://sabnzbd-web.home.mayursaxena.com";
               icon = "sabnzbd";
-               #ping = "sabnzbd.home.mayursaxena.com";
+              #ping = "sabnzbd.home.mayursaxena.com";
               widget = {
                 key = "{{HOMEPAGE_VAR_SABNZBD_KEY}}";
                 type = "sabnzbd";
@@ -268,7 +269,7 @@
               description = "File Share Server";
               href = "https://files-web.home.mayursaxena.com";
               icon = "files";
-               #ping = "files.home.mayursaxena.com";
+              #ping = "files.home.mayursaxena.com";
             };
           }
         ];
@@ -280,7 +281,7 @@
               description = "Time Series Monitoring";
               href = "https://influxdb-web.home.mayursaxena.com";
               icon = "influxdb";
-               #ping = "influxdb.home.mayursaxena.com";
+              #ping = "influxdb.home.mayursaxena.com";
             };
           }
           {
@@ -288,7 +289,7 @@
               description = "Dashboards";
               href = "https://grafana-web.home.mayursaxena.com";
               icon = "grafana";
-               #ping = "grafana.home.mayursaxena.com";
+              #ping = "grafana.home.mayursaxena.com";
               widget = {
                 fields = [];
                 password = "{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}";
@@ -307,7 +308,7 @@
               description = "Apache Guacamole";
               href = "https://guacamole.home.mayursaxena.com";
               icon = "guacamole";
-               #ping = "jumpbox.home.mayursaxena.com";
+              #ping = "jumpbox.home.mayursaxena.com";
             };
           }
           {
@@ -315,7 +316,7 @@
               description = "Budgeting";
               href = "https://budget.home.mayursaxena.com";
               icon = "actual-budget";
-               #ping = "actualbudget.home.mayursaxena.com";
+              #ping = "actualbudget.home.mayursaxena.com";
             };
           }
           {
@@ -323,7 +324,7 @@
               description = "Document Management";
               href = "https://paperless.home.mayursaxena.com";
               icon = "paperless-ngx";
-               #ping = "paperless-ngx.home.mayursaxena.com";
+              #ping = "paperless-ngx.home.mayursaxena.com";
               widget = {
                 fields = [
                   "total"
