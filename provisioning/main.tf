@@ -79,7 +79,7 @@ module "sabnzbd" {
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
   additional_mount_points = [{
-    vol     = "/mnt/MediaBox/"
+    vol     = "/mnt/MediaBox/usenet/"
     ct_path = "/data"
     backup  = false
   }]
