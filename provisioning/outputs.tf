@@ -17,3 +17,7 @@ output "sabnzbd" {
 output "homepage" {
   value = "${module.homepage.ct_id}: ${module.homepage.ct_address.v4[0]} ${module.homepage.ct_address.v6[0]}"
 }
+
+output "plex-server" {
+  value = "${module.plex-server.ct_id}: ${module.plex-server.ct_address.v4[0]} ${module.plex-server.ct_address.v6[0]}"
+}
