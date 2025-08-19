@@ -21,3 +21,7 @@ output "homepage" {
 output "plex-server" {
   value = "${module.plex-server.ct_id}: ${module.plex-server.ct_address.v4[0]} ${module.plex-server.ct_address.v6[0]}"
 }
+
+output "overseerr" {
+  value = "${module.overseerr.ct_id}: ${module.overseerr.ct_address.v4[0]} ${module.overseerr.ct_address.v6[0]}"
+}

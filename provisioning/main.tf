@@ -135,3 +135,23 @@ module "plex-server" {
   custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
   tags                = ["terraform", "media", "host-mount"]
 }
+
+module "overseerr" {
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "Overseerr Media Requests (Terraform)"
+  hostname              = "overseerr"
+  domain                = "home.mayursaxena.com"
+  network_interfaces    = { "eth0" = 20 }
+  ipv4_settings         = "dhcp"
+  ipv6_settings         = "auto"
+  memory_size_mb        = 1024
+  num_cpu_cores         = 2
+  persistent_fs_size_gb = 4
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
+  pool_id             = "production"
+  startup_order       = 3
+  rootfs_impermanence = true
+  custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                = ["terraform", "media"]
+}

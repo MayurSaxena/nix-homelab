@@ -92,6 +92,7 @@
       "sabnzbd" = mkNixOSConfig ./hosts/sabnzbd.nix;
       "homepage" = mkNixOSConfig ./hosts/homepage-dashboard.nix;
       "plex" = mkNixOSConfig ./hosts/plex-server.nix;
+      "overseerr" = mkNixOSConfig ./hosts/overseerr.nix;
     };
   };
 }
