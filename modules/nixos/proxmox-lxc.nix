@@ -15,8 +15,9 @@
   networking.resolvconf.enable = false;
 
   # make an LXC share group that can be used at any point
+  # maps to group 110000 on the PVE host.
   users.groups.lxc_share = {
     name = "lxc_share";
-    gid = 110000;
+    gid = 10000;
   };
 }
