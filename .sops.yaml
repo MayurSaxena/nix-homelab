@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &homepage age18qkjke5gwtzmpydy6hh8z9kk9y8k8tjdnnz8zu28p2d8q03x35kqu7e2m9
     - &sabnzbd age1tjskj27vva0u9h3uejnp5scgpmz7ut36ffaqzg59sld6nsv0rcnq22jex6
     - &actualbudget age17tezfl457fm3cd9mzrcyqsa8we23w2fhslcurk8ul56f6s36t55sgwjq0r
     - &dns age124f9wlylq6hn9w6hcmyt7s4lg8vljvd96v62p5gh2u2zjuu9z98qvzr5rg
