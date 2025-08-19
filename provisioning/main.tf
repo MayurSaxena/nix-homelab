@@ -22,6 +22,7 @@ module "nix-builder" {
   rootfs_size_gb     = 8
   ct_template_id     = proxmox_virtual_environment_download_file.nixos-standard-prod.id
   startup_order      = 3
+  tags               = ["terraform", "builder"]
 }
 
 module "dns-server" {
@@ -42,7 +43,7 @@ module "dns-server" {
   startup_order         = 1
   rootfs_impermanence   = true
   custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
-  tags                  = ["dhcp", "dns", "networking"]
+  tags                  = ["terraform", "dhcp", "dns", "networking"]
 }
 
 module "actualbudget" {
@@ -62,5 +63,5 @@ module "actualbudget" {
   startup_order         = 3
   rootfs_impermanence   = true
   custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
-  tags                  = ["finance"]
+  tags                  = ["terraform", "finance"]
 }
