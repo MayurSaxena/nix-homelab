@@ -214,22 +214,22 @@
               };
             };
           }
-          {
-            Tautulli = {
-              description = "Plex Performance Monitor";
-              href = "https://tautulli.home.mayursaxena.com";
-              icon = "tautulli";
-              #ping = "plex.home.mayursaxena.com";
-              widget = {
-                enableUser = true;
-                expandOneStreamToTwoRows = false;
-                key = "{{HOMEPAGE_VAR_TAUTULLI_KEY}}";
-                showEpisodeNumber = true;
-                type = "tautulli";
-                url = "https://tautulli.home.mayursaxena.com";
-              };
-            };
-          }
+          # {
+          #   Tautulli = {
+          #     description = "Plex Performance Monitor";
+          #     href = "https://tautulli.home.mayursaxena.com";
+          #     icon = "tautulli";
+          #     #ping = "plex.home.mayursaxena.com";
+          #     widget = {
+          #       enableUser = true;
+          #       expandOneStreamToTwoRows = false;
+          #       key = "{{HOMEPAGE_VAR_TAUTULLI_KEY}}";
+          #       showEpisodeNumber = true;
+          #       type = "tautulli";
+          #       url = "https://tautulli.home.mayursaxena.com";
+          #     };
+          #   };
+          # }
           {
             Overseerr = {
               description = "Media Requests";
