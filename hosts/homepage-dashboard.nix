@@ -214,22 +214,6 @@
               };
             };
           }
-          # {
-          #   Tautulli = {
-          #     description = "Plex Performance Monitor";
-          #     href = "https://tautulli.home.mayursaxena.com";
-          #     icon = "tautulli";
-          #     #ping = "plex.home.mayursaxena.com";
-          #     widget = {
-          #       enableUser = true;
-          #       expandOneStreamToTwoRows = false;
-          #       key = "{{HOMEPAGE_VAR_TAUTULLI_KEY}}";
-          #       showEpisodeNumber = true;
-          #       type = "tautulli";
-          #       url = "https://tautulli.home.mayursaxena.com";
-          #     };
-          #   };
-          # }
           {
             Overseerr = {
               description = "Media Requests";
@@ -322,7 +306,7 @@
           {
             Paperless = {
               description = "Document Management";
-              href = "https://paperless.home.mayursaxena.com";
+              href = "https://paperless-web.home.mayursaxena.com";
               icon = "paperless-ngx";
               #ping = "paperless-ngx.home.mayursaxena.com";
               widget = {
@@ -332,7 +316,7 @@
                 ];
                 key = "{{HOMEPAGE_VAR_PAPERLESS_KEY}}";
                 type = "paperlessngx";
-                url = "https://paperless.home.mayursaxena.com";
+                url = "https://paperless-web.home.mayursaxena.com";
               };
             };
           }
