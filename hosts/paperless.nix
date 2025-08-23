@@ -35,8 +35,12 @@
     };
   };
 
+  networking.firewall.allowedTCPPorts = [config.services.paperless.port];
+
   systemd.tmpfiles.rules = [
     "d /persistent/var/lib/private 0700 root root"
+    "d /persistent/${config.services.paperless.dataDir} 0755 paperless paperless"
+    "d /persistent/${config.services.paperless.mediaDir} 0755 paperless paperless"
   ];
 
   environment.persistence."/persistent" = {
