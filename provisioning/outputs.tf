@@ -25,3 +25,7 @@ output "plex-server" {
 output "overseerr" {
   value = "${module.overseerr.ct_id}: ${module.overseerr.ct_address.v4[0]} ${module.overseerr.ct_address.v6[0]}"
 }
+
+output "paperless" {
+  value = "${module.paperless.ct_id}: ${module.paperless.ct_address.v4[0]} ${module.paperless.ct_address.v6[0]}"
+}
