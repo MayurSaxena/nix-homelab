@@ -168,6 +168,7 @@ module "paperless" {
   memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 16
+  nix_fs_size_gb        = 8
   additional_mount_points = [{
     vol     = "/mnt/NetShare/paperless-consume/"
     ct_path = "/mnt/paperless-consume"

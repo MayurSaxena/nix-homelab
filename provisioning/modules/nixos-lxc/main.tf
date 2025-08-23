@@ -56,7 +56,7 @@ resource "proxmox_virtual_environment_container" "ct" {
       { "vol" : "${var.ct_disk_datastore}"
         "ct_path" : "/nix"
         "backup" : false
-        "size" : "4G"
+        "size" : "${var.nix_fs_size_gb}G"
       },
       { "vol" : "${var.ct_disk_datastore}"
         "ct_path" : "/persistent"

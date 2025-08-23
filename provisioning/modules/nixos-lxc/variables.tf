@@ -75,6 +75,13 @@ variable "persistent_fs_size_gb" {
   default     = 2
 }
 
+variable "nix_fs_size_gb" {
+  type        = number
+  nullable    = false
+  description = "The size of the Nix store filesystem in GB."
+  default     = 4
+}
+
 variable "additional_mount_points" {
   type = list(object({
     vol     = string,
