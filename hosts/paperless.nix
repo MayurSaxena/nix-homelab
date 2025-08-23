@@ -28,7 +28,7 @@
     database.createLocally = true;
     configureTika = true;
     settings = {
-      PAPERLESS_URL = "https://paperless.home.mayursaxena.com";
+      PAPERLESS_URL = "https://paperless-web.home.mayursaxena.com";
       PAPERLESS_USE_X_FORWARD_HOST = true;
       PAPERLESS_USE_X_FORWARD_PORT = true;
       PAPERLESS_PROXY_SSL_HEADER = ["HTTP_X_FORWARDED_PROTO" "https"];
@@ -55,6 +55,12 @@
         user = "redis-paperless";
         group = "redis-paperless";
         mode = "0700";
+      }
+      {
+        directory = "/var/lib/postgresql";
+        user = "postgres";
+        group = "postgres";
+        mode = "0750";
       }
       {
         directory = "/var/lib/private/tika";
