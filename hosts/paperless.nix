@@ -35,10 +35,25 @@
     };
   };
 
+  systemd.tmpfiles.rules = [
+    "d /persistent/var/lib/private 0700 root root"
+  ];
+
   environment.persistence."/persistent" = {
     directories = [
       {
         directory = "/var/lib/paperless";
+        user = "paperless";
+        group = "paperless";
+      }
+      {
+        directory = "/var/lib/redis-paperless";
+        user = "redis-paperless";
+        group = "redis-paperless";
+        mode = "0700";
+      }
+      {
+        directory = "/var/lib/private/actual";
       }
     ];
   };
