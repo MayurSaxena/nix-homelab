@@ -53,7 +53,7 @@
         mode = "0700";
       }
       {
-        directory = "/var/lib/private/actual";
+        directory = "/var/lib/private/tika";
       }
     ];
   };
