@@ -103,12 +103,12 @@ module "homepage" {
   memory_size_mb        = 1024
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
-  ct_template_id      = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
-  pool_id             = "production"
-  startup_order       = 3
-  rootfs_impermanence = true
-  custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
-  tags                = ["terraform", "access", "visualisation"]
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
+  pool_id               = "production"
+  startup_order         = 3
+  rootfs_impermanence   = true
+  custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                  = ["terraform", "access", "visualisation"]
 }
 
 module "plex-server" {
@@ -148,10 +148,35 @@ module "overseerr" {
   memory_size_mb        = 1024
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
+  pool_id               = "production"
+  startup_order         = 3
+  rootfs_impermanence   = true
+  custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                  = ["terraform", "media"]
+}
+
+module "paperless" {
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "Paperless-ngx (Terraform)"
+  hostname              = "paperless"
+  domain                = "home.mayursaxena.com"
+  network_interfaces    = { "eth0" = 20 }
+  ipv4_settings         = "dhcp"
+  ipv6_settings         = "auto"
+  memory_size_mb        = 2048
+  num_cpu_cores         = 2
+  persistent_fs_size_gb = 16
+  additional_mount_points = [{
+    vol     = "/mnt/NetShare/paperless-consume/"
+    ct_path = "/mnt/paperless-consume"
+    backup  = false
+  }]
   ct_template_id      = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
   pool_id             = "production"
   startup_order       = 3
   rootfs_impermanence = true
   custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
-  tags                = ["terraform", "media"]
+  tags                = ["terraform", "document", "host-mount"]
 }

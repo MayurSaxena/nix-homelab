@@ -93,6 +93,7 @@
       "homepage" = mkNixOSConfig ./hosts/homepage-dashboard.nix;
       "plex" = mkNixOSConfig ./hosts/plex-server.nix;
       "overseerr" = mkNixOSConfig ./hosts/overseerr.nix;
+      "paperless" = mkNixOSConfig ./hosts/paperless.nix;
     };
   };
 }

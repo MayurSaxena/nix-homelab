@@ -25,3 +25,9 @@ creation_rules:
       - age: 
         - *msaxena-keys
         - *homepage
+  
+  - path_regex: secrets/paperless.env$
+    key_groups:
+      - age: 
+        - *msaxena-keys
+        - *paperless
