@@ -42,6 +42,28 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    nix-minecraft.url = "github:Infinidoge/nix-minecraft";
+
+    geysermc-geyser-spigot = {
+      url = "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot";
+      flake = false;
+    };
+
+    geysermc-floodgate-spigot = {
+      url = "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot";
+      flake = false;
+    };
+
+    geysermc-optional-pack = {
+      url = "https://download.geysermc.org/v2/projects/geyseroptionalpack/versions/latest/builds/latest/downloads/geyseroptionalpack";
+      flake = false;
+    };
+
+    geysermc-3p-cosmetics = {
+      url = "https://download.geysermc.org/v2/projects/thirdpartycosmetics/versions/latest/builds/latest/downloads/thirdpartycosmetics";
+      flake = false;
+    };
   };
 
   outputs = inputs @ {
@@ -58,17 +80,17 @@
     forAllSystems = nixpkgs.lib.genAttrs systems;
 
     # Helper function to simply make a NixOS config, passing in inputs, outputs and variables
-    mkNixOSConfig = path:
+    mkNixOSConfig = paths:
       nixpkgs.lib.nixosSystem {
         specialArgs = {inherit inputs outputs;};
-        modules = [path];
+        modules = nixpkgs.lib.toList paths;
       };
 
     # Helper function to simply make a Darwin (Mac) config, passing in inputs, outputs and variables
-    mkDarwinConfig = path:
+    mkDarwinConfig = paths:
       nix-darwin.lib.darwinSystem {
         specialArgs = {inherit inputs outputs;};
-        modules = [path];
+        modules = nixpkgs.lib.toList paths;
       };
   in {
     # so that we can use `nix fmt .` at the shell
@@ -94,6 +116,10 @@
       "plex" = mkNixOSConfig ./hosts/plex-server.nix;
       "overseerr" = mkNixOSConfig ./hosts/overseerr.nix;
       "paperless" = mkNixOSConfig ./hosts/paperless.nix;
+      "minecraft" = mkNixOSConfig [
+        ./hosts/minecraft.nix
+        {nixpkgs.overlays = [inputs.nix-minecraft.overlay];}
+      ];
     };
   };
 }

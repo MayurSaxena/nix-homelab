@@ -29,3 +29,7 @@ output "overseerr" {
 output "paperless" {
   value = "${module.paperless.ct_id}: ${module.paperless.ct_address.v4[0]} ${module.paperless.ct_address.v6[0]}"
 }
+
+output "minecraft" {
+  value = "${module.minecraft.ct_id}: ${module.minecraft.ct_address.v4[0]} ${module.minecraft.ct_address.v6[0]}"
+}

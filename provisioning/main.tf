@@ -181,3 +181,22 @@ module "paperless" {
   custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
   tags                = ["terraform", "document", "host-mount"]
 }
+
+module "minecraft" {
+  source              = "./modules/nixos-lxc"
+  pve_node_name       = var.pve_node_name
+  ct_description      = "Minecraft Server (Terraform)"
+  hostname            = "minecraft"
+  domain              = "home.mayursaxena.com"
+  network_interfaces  = { "eth0" = 40 }
+  ipv4_settings       = "dhcp"
+  ipv6_settings       = "auto"
+  memory_size_mb      = 6144
+  num_cpu_cores       = 4
+  rootfs_size_gb      = 16
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
+  pool_id             = "production"
+  startup_order       = 3
+  rootfs_impermanence = false
+  tags                = ["terraform", "games"]
+}
