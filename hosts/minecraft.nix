@@ -27,6 +27,7 @@
         online-mode = true;
         gamemode = "survival";
         difficulty = 2;
+        white-list = true;
       };
       package = pkgs.paperServers.paper;
       jvmOpts = "-Xms2G -Xmx6G";
@@ -37,6 +38,10 @@
         "plugins/Geyser-Spigot/packs/GeyserOptionalPack.mcpack" = inputs.geysermc-optional-pack;
         "plugins/Geyser-Spigot/extensions/ThirdPartyCosmetics.jar" = inputs.geysermc-3p-cosmetics;
       };
+      whitelist = {
+        "Mercuron" = "935bb415-cb6b-433c-842c-9cb16f7bf956";
+        ".Lazerblade31415" = "00000000-0000-0000-0009-01f6e397cac2";
+      }
     };
   };
 
