@@ -41,6 +41,7 @@
       whitelist = {
         "Mercuron" = "935bb415-cb6b-433c-842c-9cb16f7bf956";
         ".Lazerblade31415" = "00000000-0000-0000-0009-01f6e397cac2";
+        "fa11ingsky" = "d9156b24-c316-461e-bbd7-0aa1cc6f28f5";
       };
     };
   };
