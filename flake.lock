@@ -78,7 +78,7 @@
     "geysermc-geyser-spigot": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-KUO4l25G2f1nAwts2pFjAJwB9nUBlhccS4Z6U3jWgvU=",
+        "narHash": "sha256-q61icg/NZbKQU7awEzHzEY9ws0ggt4cVH4DGWEhTMvU=",
         "type": "file",
         "url": "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot"
       },
@@ -106,11 +106,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1757650187,
-        "narHash": "sha256-OrythrqccPKtuVt0mj26rr83Qo3Ljb4ZmwLdPGjzjMU=",
+        "lastModified": 1757698511,
+        "narHash": "sha256-UqHHGydF/q3jfYXCpvYLA0TWtvByOp1NwOKCUjhYmPs=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "9eab59f3e71ea3a725e4817d8dcf0da0824ad19d",
+        "rev": "a3fcc92180c7462082cd849498369591dfb20855",
         "type": "github"
       },
       "original": {
@@ -138,11 +138,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1757696182,
-        "narHash": "sha256-OcPfMsCaiW33WPBFnTbf/2Rifc58G8++HHW+GRcqoa0=",
+        "lastModified": 1757780340,
+        "narHash": "sha256-YQDuwFgtqYGF4YWkLUQ0R8qIOnrhEBo4KetG78p1gio=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "813ab9aefec93b42479fe93eb5f5519da04e13e4",
+        "rev": "180c7af68dee316e274ba3f23aaaf97abe04efbe",
         "type": "github"
       },
       "original": {
@@ -154,11 +154,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1757696822,
-        "narHash": "sha256-SpdA10WESeKzqUw8ow9tplrgpU9ucFSeFGjcCgO7ho4=",
+        "lastModified": 1757783074,
+        "narHash": "sha256-6RyAE+T14xaF+RqCHocXacczI9nQykhXWlqjqo0/XI0=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "20663003c5c92cf67c0ef8d5480dd313c89ddeca",
+        "rev": "223b8a46457778d118e99077f2e0c617e4af2a27",
         "type": "github"
       },
       "original": {
@@ -259,11 +259,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1757651841,
-        "narHash": "sha256-Lh9QoMzTjY/O4LqNwcm6s/WSYStDmCH6f3V/izwlkHc=",
+        "lastModified": 1757746433,
+        "narHash": "sha256-fEvTiU4s9lWgW7mYEU/1QUPirgkn+odUBTaindgiziY=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "ad4e6dd68c30bc8bd1860a27bc6f0c485bd7f3b6",
+        "rev": "6d7ec06d6868ac6d94c371458fc2391ded9ff13d",
         "type": "github"
       },
       "original": {
