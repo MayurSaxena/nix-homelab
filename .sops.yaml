@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &files age1uwqganncsyw33md8v23w44yurzkzdagx66haq7kaguvlfjw7deys4nmd58
     - &minecraft age1t00d3hke2z07xj8x68vjl537wnxq3atdwadqr26afzm6gnhlseysscgmne
     - &paperless age15xxnpxcryg0pmgshs4jqu74z3ve6ns0n2zdguchc7cvxg452qsespce3la
     - &plex age1r2dnumz77m54a6z94w90tq47ck8jtxev0tzg4602awffrahl3fzsq4mmg3
