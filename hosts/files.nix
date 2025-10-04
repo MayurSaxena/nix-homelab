@@ -26,7 +26,6 @@
   users.users.timemachine = {
     hashedPasswordFile = config.sops.secrets."passwords/timemachine".path;
     isNormalUser = true;
-    extraGroups = ["lxc_share"];
   };
 
   users.users.msaxena = {
@@ -37,7 +36,6 @@
 
   users.users.ubnt = {
     isNormalUser = true;
-    extraGroups = ["lxc_share"];
     shell = pkgs.scponly;
     openssh.authorizedKeys.keys = [
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDZHlCICwIQXr1FCNkE7cwa29KNGr4amqf8H5Fxa7wvqo8KfWRP7M2m+N7cdqtXd6dy3+dKvuh261y0yl9lKUsN03D+SNYp0mK9Z8CjoDMCNLRVewgSt8aM6FklMvza68ImZoc9fD4aYwUfXwxiL2s32pQ54DDYFrImtGtl8U5Gu+Y1eyZqKHI0eIPGo7HFw3VlgO8ZZ/t7u9jJ1+HDSeG9/e5GCsrulbKqZYVNvzTfng/gcJRrR5nieAeG4BVe/K7+FUZWu/xs7/CGSv/n7wb/d8xTPPk/clGv5LihK3dYgceajHl8AgAA58j3QBJbVEoUugzbHmHNRXjwHVhFl02jKgkvmcCFYG0BrPgmT1WT+6uFAgOTH71m3vEI+apnKfV2mHG2C3SaPgdgry7QPrwWr4Pj81soTyvXwheGk8GrYSnkFaaHj7wHxKxlp3GE5UVH+KdAlFLPmmq7G5vk2Nc7kIJq7zTBGIH3lk15iwEwxMuL9lpkcisiDMx3+SldemM="
