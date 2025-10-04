@@ -33,3 +33,9 @@ creation_rules:
       - age: 
         - *msaxena-keys
         - *paperless
+  
+  - path_regex: secrets/fileserver.yaml$
+    key_groups:
+      - age: 
+        - *msaxena-keys
+        - *files

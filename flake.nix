@@ -120,6 +120,7 @@
         ./hosts/minecraft.nix
         {nixpkgs.overlays = [inputs.nix-minecraft.overlay];}
       ];
+      "files" = mkNixOSConfig ./hosts/files.nix;
     };
   };
 }

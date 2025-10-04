@@ -33,3 +33,7 @@ output "paperless" {
 output "minecraft" {
   value = "${module.minecraft.ct_id}: ${module.minecraft.ct_address.v4[0]} ${module.minecraft.ct_address.v6[0]}"
 }
+
+output "fileserver" {
+  value = "${module.fileserver.ct_id}: ${module.fileserver.ct_address.v4[0]} ${module.fileserver.ct_address.v6[0]}"
+}
