@@ -68,34 +68,55 @@
       headerStyle = "clean";
       startUrl = "https://home.mayursaxena.com";
       target = "_self";
-      layout = {
-        "Core Network" = {
-          icon = "mdi-lan-connect";
-          style = "row";
-          columns = 3;
-        };
+      layout = [
+        {
+          "Core Network" = {
+            icon = "mdi-lan-connect";
+            style = "row";
+            columns = 2;
+          };
+        }
 
-        "Monitoring" = {
-          icon = "mdi-monitor-dashboard";
-          style = "row";
-          columns = 2;
-        };
+        {
+          "Downloads" = {
+            icon = "mdi-download-box";
+            style = "row";
+          };
+        }
 
-        "Media" = {
-          icon = "mdi-multimedia";
-        };
+        {
+          "Media" = {
+            icon = "mdi-multimedia";
+            style = "row";
+            columns = 2;
+          };
+        }
 
-        "Media Tools" = {
-          icon = "mdi-play-network-outline";
-          style = "column";
-          rows = 2;
-        };
+        {
+          "Media Tools" = {
+            icon = "mdi-play-network-outline";
+            style = "row";
+            columns = 3;
+          };
+        }
 
-        "Downloads" = {
-          icon = "mdi-download-box";
-          style = "row";
-        };
-      };
+        {
+          "Monitoring" = {
+            icon = "mdi-monitor-dashboard";
+            style = "row";
+            columns = 2;
+          };
+        }
+
+        {
+          "Apps" = {
+            icon = "mdi-application-brackets-outline";
+            style = "column";
+            rows = 3;
+            useEqualHeights = true;
+          };
+        }
+      ];
     };
     services = [
       {
@@ -138,20 +159,6 @@
               };
             };
           }
-          {
-            "NGINX Proxy Manager (NPM)" = {
-              description = "Reverse Proxy";
-              href = "https://npm-web.home.mayursaxena.com";
-              icon = "nginx-proxy-manager";
-              #ping = "npm.home.mayursaxena.com";
-              widget = {
-                password = "{{HOMEPAGE_VAR_NGINX_PROXY_MANAGER_PASSWORD}}";
-                type = "npm";
-                url = "https://npm-web.home.mayursaxena.com";
-                username = "{{HOMEPAGE_VAR_NGINX_PROXY_MANAGER_USERNAME}}";
-              };
-            };
-          }
         ];
       }
       {
@@ -163,7 +170,7 @@
               icon = "radarr";
               #ping = "servarr.home.mayursaxena.com";
               widget = {
-                enableQueue = true;
+                enableQueue = false;
                 key = "{{HOMEPAGE_VAR_RADARR_KEY}}";
                 type = "radarr";
                 url = "https://radarr.home.mayursaxena.com";
@@ -177,7 +184,7 @@
               icon = "sonarr";
               #ping = "servarr.home.mayursaxena.com";
               widget = {
-                enableQueue = true;
+                enableQueue = false;
                 key = "{{HOMEPAGE_VAR_SONARR_KEY}}";
                 type = "sonarr";
                 url = "https://sonarr.home.mayursaxena.com";
@@ -200,7 +207,7 @@
         ];
       }
       {
-        Media = [
+        "Media" = [
           {
             Plex = {
               description = "Media Library";
@@ -230,7 +237,7 @@
         ];
       }
       {
-        Downloads = [
+        "Downloads" = [
           {
             SABnzbd = {
               description = "Usenet Downloader";
@@ -247,19 +254,7 @@
         ];
       }
       {
-        Misc = [
-          {
-            NAS = {
-              description = "File Share Server";
-              href = "https://files-web.home.mayursaxena.com";
-              icon = "files";
-              #ping = "files.home.mayursaxena.com";
-            };
-          }
-        ];
-      }
-      {
-        Monitoring = [
+        "Monitoring" = [
           {
             InfluxDB = {
               description = "Time Series Monitoring";
@@ -286,7 +281,7 @@
         ];
       }
       {
-        Apps = [
+        "Apps" = [
           {
             Guacamole = {
               description = "Apache Guacamole";
