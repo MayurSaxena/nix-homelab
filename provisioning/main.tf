@@ -233,3 +233,23 @@ module "fileserver" {
   custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
   tags                = ["terraform", "host-mount", "storage"]
 }
+
+module "caddy" {
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "Caddy Reverse Proxy (Terraform)"
+  hostname              = "caddy"
+  domain                = "home.mayursaxena.com"
+  network_interfaces    = { "eth0" = 10 }
+  ipv4_settings         = "dhcp"
+  ipv6_settings         = "auto"
+  memory_size_mb        = 1024
+  num_cpu_cores         = 2
+  persistent_fs_size_gb = 4
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
+  pool_id               = "production"
+  startup_order         = 2
+  rootfs_impermanence   = true
+  custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                  = ["terraform", "networking", "proxy"]
+}

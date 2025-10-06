@@ -37,3 +37,7 @@ output "minecraft" {
 output "fileserver" {
   value = "${module.fileserver.ct_id}: ${module.fileserver.ct_address.v4[0]} ${module.fileserver.ct_address.v6[0]}"
 }
+
+output "caddy" {
+  value = "${module.caddy.ct_id}: ${module.caddy.ct_address.v4[0]} ${module.caddy.ct_address.v6[0]}"
+}

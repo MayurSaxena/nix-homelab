@@ -40,3 +40,9 @@ creation_rules:
       - age: 
         - *msaxena-keys
         - *files
+
+  - path_regex: secrets/caddy.env$
+    key_groups:
+      - age: 
+        - *msaxena-keys
+        - *caddy
