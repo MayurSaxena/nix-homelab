@@ -40,10 +40,14 @@
     '';
     virtualHosts = {
       "bikinibottom.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy https://10.0.10.1
+        reverse_proxy https://10.0.10.1 {
+          transport http {
+            tls_insecure_skip_verify
+          }
+        }
         import use-external-dns-acme
       '';
-      "proxmox-web.mayursaxena.com".extraConfig = ''
+      "proxmox-web.home.mayursaxena.com".extraConfig = ''
         reverse_proxy https://proxmox.home.mayursaxena.com:8006
         import use-external-dns-acme
       '';
@@ -64,28 +68,32 @@
         reverse_proxy http://grafana.home.mayursaxena.com:3000
         import use-external-dns-acme
       '';
-      "paperless-web.mayursaxena.com".extraConfig = ''
+      "influxdb-web.home.mayursaxena.com".extraConfig = ''
+        reverse_proxy http://influxdb.home.mayursaxena.com:8086
+        import use-external-dns-acme
+      '';
+      "paperless-web.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://paperless.home.mayursaxena.com:8000
         import use-external-dns-acme
       '';
-      "plex-web.mayursaxena.com".extraConfig = ''
+      "plex-web.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://plex.home.mayursaxena.com:32400
         import use-external-dns-acme
       '';
-      "overseerr-web.mayursaxena.com".extraConfig = ''
+      "overseerr-web.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://overseerr.home.mayursaxena.com:5055
         import use-external-dns-acme
       '';
-      "sabnzbd-web.mayursaxena.com".extraConfig = ''
+      "sabnzbd-web.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://sabnzbd.home.mayursaxena.com:8080
         import use-external-dns-acme
       '';
 
-      "radarr.mayursaxena.com".extraConfig = ''
+      "radarr.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://servarr.home.mayursaxena.com:7878
         import use-external-dns-acme
       '';
-      "sonarr.mayursaxena.com".extraConfig = ''
+      "sonarr.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://servarr.home.mayursaxena.com:8989
         import use-external-dns-acme
       '';
