@@ -26,7 +26,8 @@
       hash = "sha256-j+xUy8OAjEo+bdMOkQ1kVqDnEkzKGTBIbMDVL7YDwDY=";
     };
     environmentFile = config.sops.secrets."caddy-secrets".path;
-    acmeCA = "https://acme-staging-v02.api.letsencrypt.org/directory";
+    # Uncomment for development.
+    # acmeCA = "https://acme-staging-v02.api.letsencrypt.org/directory";
     email = "mayur.saxena1997@gmail.com";
     globalConfig = "";
     extraConfig = ''
