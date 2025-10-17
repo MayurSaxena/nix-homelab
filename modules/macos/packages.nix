@@ -51,6 +51,7 @@
       "visual-studio-code"
       "yubico-authenticator"
       "windows-app"
+      "vlc"
     ];
     masApps = {
       # Apps that are in the Mac App Store
