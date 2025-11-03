@@ -46,6 +46,7 @@
       "wireshark-app"
       "db-browser-for-sqlite"
       "discord"
+      "notion"
       "plex"
       "signal"
       "visual-studio-code"
