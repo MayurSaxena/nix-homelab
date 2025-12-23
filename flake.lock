@@ -66,7 +66,7 @@
     "geysermc-floodgate-spigot": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-VjgX4kEikoFCA3qE8NC8Onj1tk6s8bWDu4GdpE7AVWU=",
+        "narHash": "sha256-bEBz2ANvi+LUzDeOLQunA/730l1St5zWKnGM6BSP/tw=",
         "type": "file",
         "url": "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot"
       },
@@ -138,11 +138,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1766423059,
-        "narHash": "sha256-czmUcNt4+KeSP5XscOxduN+FNWVAoG4ElNEQj96PlYM=",
+        "lastModified": 1766508745,
+        "narHash": "sha256-AEmSd90pbbkbXlnnKoNxnL9i4uZwnBHI9pQRTXMsI6I=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "bd81727ef02df2823fcfe37b6cc24bd03a56d4a2",
+        "rev": "aa951e279c060a6e54f3d7e6d1f94cfdd313bdb7",
         "type": "github"
       },
       "original": {
@@ -154,11 +154,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1766423295,
-        "narHash": "sha256-8+i2vYlkmh5nMSoBv9VTIAErHp3W0WftLQlGYfd1OxQ=",
+        "lastModified": 1766504253,
+        "narHash": "sha256-+GUn73ZOcftE+s54J6EuUQ1kL8Chhhbl6u+DDhMQ9fY=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "22f32c199811f39ad125dc0445cfa3a5aaa611dd",
+        "rev": "96884bcbcd1a9c2fe83ff2f5e21ecab8e212b613",
         "type": "github"
       },
       "original": {
@@ -259,11 +259,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1766314097,
-        "narHash": "sha256-laJftWbghBehazn/zxVJ8NdENVgjccsWAdAqKXhErrM=",
+        "lastModified": 1766410818,
+        "narHash": "sha256-ruVneSx6wFy5PMw1ow3BE+znl653TJ6+eeNUj4B/9y8=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "306ea70f9eb0fb4e040f8540e2deab32ed7e2055",
+        "rev": "3a7affa77a5a539afa1c7859e2c31abdb1aeadf3",
         "type": "github"
       },
       "original": {
