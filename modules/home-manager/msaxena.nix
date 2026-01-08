@@ -91,8 +91,12 @@
 
     git = {
       enable = true;
-      userEmail = "me@mayursaxena.com";
-      userName = "Mayur Saxena";
+      settings = {
+        user = {
+          email = "me@mayursaxena.com";
+          name = "Mayur Saxena";
+        };
+      };
     };
   };
 
