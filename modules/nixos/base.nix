@@ -15,7 +15,7 @@
       # Automatic garbage collection every day
       automatic = true;
       dates = "daily";
-      options = "--delete-older-than 14d";
+      options = "--delete-older-than 7d";
     };
     settings = {
       # enable flakes
