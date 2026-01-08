@@ -15,6 +15,7 @@
       # Automatic garbage collection every day
       automatic = true;
       dates = "daily";
+      options = "--delete-older-than 14d";
     };
     settings = {
       # enable flakes
@@ -31,9 +32,10 @@
   system.autoUpgrade = {
     enable = true;
     dates = "*-*-* 18:00:00 UTC";
-    randomizedDelaySec = "30min";
+    randomizedDelaySec = "90min";
     flake = "github:MayurSaxena/nix-homelab";
     flags = ["--refresh"];
+    runGarbageCollection = true;
   };
 
   # enable the firewall
