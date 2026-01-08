@@ -34,7 +34,7 @@ variable "dns_servers" {
   type        = list(string)
   nullable    = false
   description = "DNS servers to utilise."
-  default     = ["2403:5816:961a:1::2", "10.0.10.2"]
+  default     = ["2403:5816:df19:1::2", "10.0.10.2"]
 }
 
 variable "ipv4_settings" {
