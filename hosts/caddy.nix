@@ -59,6 +59,17 @@
         reverse_proxy http://homepage.home.mayursaxena.com:8082
         import use-external-dns-acme
       '';
+      "beszel.home.mayursaxena.com".extraConfig = ''
+        reverse_proxy http://beszel-hub.home.mayursaxena.com:8390 {
+          transport http {
+            read_timeout 360s
+          }
+        }
+        request_body {
+          max_size 10MB
+        }
+        import use-external-dns-acme
+      '';
 
       "budget.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://actualbudget.home.mayursaxena.com:3000
