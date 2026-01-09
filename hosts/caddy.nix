@@ -60,7 +60,7 @@
         import use-external-dns-acme
       '';
       "beszel.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://beszel-hub.home.mayursaxena.com:8390 {
+        reverse_proxy http://beszel-hub.home.mayursaxena.com:8090 {
           transport http {
             read_timeout 360s
           }
