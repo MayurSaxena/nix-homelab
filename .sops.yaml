@@ -48,3 +48,9 @@ creation_rules:
       - age: 
         - *msaxena-keys
         - *caddy
+
+  - path_regex: secrets/beszel-hub.yaml$
+    key_groups:
+      - age: 
+        - *msaxena-keys
+        - *beszel-hub
