@@ -122,6 +122,7 @@
       ];
       "files" = mkNixOSConfig ./hosts/files.nix;
       "caddy" = mkNixOSConfig ./hosts/caddy.nix;
+      "beszel-hub" = mkNixOSConfig ./hosts/beszel-hub.nix;
     };
   };
 }

@@ -38,7 +38,7 @@ module "dns-server" {
   memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 2
-  nix_fs_size_gb = 8
+  nix_fs_size_gb        = 8
   ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-prod.id
   pool_id               = "production"
   startup_order         = 1
@@ -280,4 +280,24 @@ module "servarr" {
   rootfs_impermanence = true
   custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
   tags                = ["terraform", "media", "host-mount"]
+}
+
+module "beszel-hub" {
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "Beszel Hub (Terraform)"
+  hostname              = "beszel-hub"
+  domain                = "home.mayursaxena.com"
+  network_interfaces    = { "eth0" = 20 }
+  ipv4_settings         = "dhcp"
+  ipv6_settings         = "auto"
+  memory_size_mb        = 2048
+  num_cpu_cores         = 2
+  persistent_fs_size_gb = 8
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
+  pool_id               = "production"
+  startup_order         = 2
+  rootfs_impermanence   = true
+  custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                  = ["terraform", "monitoring"]
 }

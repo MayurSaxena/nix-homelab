@@ -140,10 +140,10 @@ sed -i '' -r "/^.+&all-keys.*$/a\\
     - &${self.initialization[0].hostname} $(echo $age_key | tr -d '\n')\\
 " ../.sops.yaml
 sops updatekeys ../secrets/* -y
-git add ../.sops.yaml ../secrets/* && git commit -m "Adding ${self.initialization[0].hostname} to .sops.yaml" && git push
-sleep 5
-# echo "Hopefully YubiKey was inserted and waiting for touch."
-ssh root@$HOSTNAME nixos-rebuild switch --flake github:MayurSaxena/nix-homelab
+# git add ../.sops.yaml ../secrets/* && git commit -m "Adding ${self.initialization[0].hostname} to .sops.yaml" && git push
+# sleep 5
+# # echo "Hopefully YubiKey was inserted and waiting for touch."
+# ssh root@$HOSTNAME nixos-rebuild switch --flake github:MayurSaxena/nix-homelab
 EOT
   }
   provisioner "local-exec" {
@@ -151,7 +151,7 @@ EOT
     command = <<EOT
 sed -i '' -r '/^.+[&\*]${self.initialization[0].hostname}( +age.+)?$/d' ../.sops.yaml
 sops updatekeys ../secrets/* -y
-git add ../.sops.yaml ../secrets/* && git commit -m "Removing ${self.initialization[0].hostname} from .sops.yaml" && git push
+# git add ../.sops.yaml ../secrets/* && git commit -m "Removing ${self.initialization[0].hostname} from .sops.yaml" && git push
 EOT
   }
 
