@@ -78,7 +78,7 @@
     "geysermc-geyser-spigot": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-JWBL6eMrjiS+vRqL20nKhEzbXolPsopyHNTZDKPlZBw=",
+        "narHash": "sha256-jf3iYJtji09OtL+veIYWsm57rrTB+f9u9I/FekGXJnM=",
         "type": "file",
         "url": "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot"
       },
@@ -106,11 +106,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1767890644,
-        "narHash": "sha256-clGZcCXX4VLLdzFDu2YRflI+oKWbv41x0w0G06h88L0=",
+        "lastModified": 1767971841,
+        "narHash": "sha256-TwDXF4MkmjI9c3Sly9FOWXf4sPbre6ZujG87v39G1Ig=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "92394f9deafa80b9de95d7e0f10de78d39ff0564",
+        "rev": "0e4217b2c4827e71e2e612accccb01981c16afda",
         "type": "github"
       },
       "original": {
@@ -159,11 +159,11 @@
     "homebrew-cask": {
       "flake": false,
       "locked": {
-        "lastModified": 1767892109,
-        "narHash": "sha256-7D90RQOnhQYSOF5i0j/r34kA8dbg7V1nPSUA0aKJoi4=",
+        "lastModified": 1767977789,
+        "narHash": "sha256-dgJzNDfsvgU7lG+3VEWnKH5hqPzlm0c+ydYDdSpcsjA=",
         "owner": "homebrew",
         "repo": "homebrew-cask",
-        "rev": "350ed5bfe1264da153afe70e2c07b6299c7ab2c1",
+        "rev": "366511dae97966350c197dbb9f7e25fa762e03e6",
         "type": "github"
       },
       "original": {
@@ -175,11 +175,11 @@
     "homebrew-core": {
       "flake": false,
       "locked": {
-        "lastModified": 1767892001,
-        "narHash": "sha256-BctttOnQM+SenNyNO3bz8v+Me6FcgHE6XyphSiVC/EU=",
+        "lastModified": 1767978735,
+        "narHash": "sha256-OeIWeJSzr8Ft0v2+xVZQkPnTNcmiW6NyjmW1CeY2rww=",
         "owner": "homebrew",
         "repo": "homebrew-core",
-        "rev": "4c88eba3858d37570d63e38f420a108ae7883e0a",
+        "rev": "b3fe85cb4b1569ac0a77859263a112c10036c348",
         "type": "github"
       },
       "original": {
