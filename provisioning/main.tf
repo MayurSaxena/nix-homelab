@@ -288,7 +288,7 @@ module "beszel-hub" {
   ct_description        = "Beszel Hub (Terraform)"
   hostname              = "beszel-hub"
   domain                = "home.mayursaxena.com"
-  network_interfaces    = { "eth0" = 20 }
+  network_interfaces    = { "eth0" = 10 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
   memory_size_mb        = 2048
