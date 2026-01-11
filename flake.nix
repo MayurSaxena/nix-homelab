@@ -83,7 +83,7 @@
     mkNixOSConfig = paths:
       nixpkgs.lib.nixosSystem {
         specialArgs = {inherit inputs outputs;};
-        modules = nixpkgs.lib.toList paths;
+        modules = [./modules/nixos] ++ nixpkgs.lib.toList paths;
       };
 
     # Helper function to simply make a Darwin (Mac) config, passing in inputs, outputs and variables
@@ -122,6 +122,7 @@
       ];
       "files" = mkNixOSConfig ./hosts/files.nix;
       "caddy" = mkNixOSConfig ./hosts/caddy.nix;
+      "beszel-hub" = mkNixOSConfig ./hosts/beszel-hub.nix;
     };
   };
 }

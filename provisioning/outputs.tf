@@ -41,3 +41,7 @@ output "fileserver" {
 output "caddy" {
   value = "${module.caddy.ct_id}: ${module.caddy.ct_address.v4[0]} ${module.caddy.ct_address.v6[0]}"
 }
+
+output "beszel-hub" {
+  value = "${module.beszel-hub.ct_id}: ${module.beszel-hub.ct_address.v4[0]} ${module.beszel-hub.ct_address.v6[0]}"
+}

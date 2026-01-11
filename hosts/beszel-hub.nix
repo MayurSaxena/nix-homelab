@@ -13,13 +13,16 @@
   custom.root-password.enable = true;
   custom.beszel-monitoring-agent.enable = true;
 
-  services.overseerr = {
+  services.beszel.hub = {
     enable = true;
-    openFirewall = true;
-    port = 5055;
+    host = "0.0.0.0";
+    environment = {
+      APP_URL = "https://beszel.home.mayursaxena.com";
+    };
   };
 
-  # So that dynamic-user folders stay private because impermanence default perms are 755
+  networking.firewall.allowedTCPPorts = [8090];
+
   systemd.tmpfiles.rules = [
     "d ${config.custom.impermanence.persistence-root}/var/lib/private 0700 root root"
   ];
@@ -27,7 +30,7 @@
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
-        directory = "/var/lib/private/overseerr";
+        directory = "/var/lib/private/beszel-hub";
       }
     ];
   };

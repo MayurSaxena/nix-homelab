@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &beszel-hub age1mxk8n50wg4q4uv49zd522vyvlcn0393cger23yeq00pgf9898ayqumpynk
     - &caddy age13mjch3p4qrwup3r7a2flln3wj5tc0ld2696q9tsw2kpkll6565esrapt66
     - &files age1uwqganncsyw33md8v23w44yurzkzdagx66haq7kaguvlfjw7deys4nmd58
     - &minecraft age1t00d3hke2z07xj8x68vjl537wnxq3atdwadqr26afzm6gnhlseysscgmne

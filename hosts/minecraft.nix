@@ -6,13 +6,17 @@
   ...
 }: {
   imports = [
-    ./base-nixos-lxc-proxmox.nix
-    ./../modules/nixos/root-password.nix
     inputs.nix-minecraft.nixosModules.minecraft-servers
   ];
 
   # Set system architecture for this host
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
+
+  custom.proxmox-lxc.enable = true;
+  custom.impermanence.enable = false;
+  custom.remote-builds.enable = false;
+  custom.root-password.enable = true;
+  custom.beszel-monitoring-agent.enable = true;
 
   services.minecraft-servers = {
     enable = true;
