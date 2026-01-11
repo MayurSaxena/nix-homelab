@@ -6,6 +6,11 @@
 }: {
   imports = [
     inputs.sops-nix.nixosModules.sops
+    ./impermanence.nix
+    ./proxmox-lxc.nix
+    ./remote-builds.nix
+    ./root-password.nix
+    ../beszel-agent.nix
   ];
 
   system.stateVersion = "25.11";
