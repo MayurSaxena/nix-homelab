@@ -56,11 +56,11 @@
       "locked": {
         "narHash": "sha256-X433RPOAalswoAfXm3LvVr0dqU2/FYbK03HyeAjWKB0=",
         "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/thirdpartycosmetics/versions/latest/builds/latest/downloads/thirdpartycosmetics"
+        "url": "https://download.geysermc.org/v2/projects/thirdpartycosmetics/versions/1.0.0/builds/9/downloads/thirdpartycosmetics"
       },
       "original": {
         "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/thirdpartycosmetics/versions/latest/builds/latest/downloads/thirdpartycosmetics"
+        "url": "https://download.geysermc.org/v2/projects/thirdpartycosmetics/versions/1.0.0/builds/9/downloads/thirdpartycosmetics"
       }
     },
     "geysermc-floodgate-spigot": {
@@ -68,35 +68,23 @@
       "locked": {
         "narHash": "sha256-lukkc+27y+vuzsjOA1vS4TA3x9lkETnLEN+iuBqYF74=",
         "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot"
+        "url": "https://download.geysermc.org/v2/projects/floodgate/versions/2.2.5/builds/126/downloads/spigot"
       },
       "original": {
         "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot"
+        "url": "https://download.geysermc.org/v2/projects/floodgate/versions/2.2.5/builds/126/downloads/spigot"
       }
     },
     "geysermc-geyser-spigot": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-c47HOhqHqcQOR+OMglwPlRfU+4ASmLAEIow+we32DhU=",
+        "narHash": "sha256-AxwVep2hymZHsYTGeESKZ/SjZRMEXL12ZPBch2mmbno=",
         "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot"
+        "url": "https://download.geysermc.org/v2/projects/geyser/versions/2.9.2/builds/1022/downloads/spigot"
       },
       "original": {
         "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot"
-      }
-    },
-    "geysermc-optional-pack": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-Qiyf5Aj40DAHqpg3N1TBU/o2qp2OTJOZMU4KngdXPoM=",
-        "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/geyseroptionalpack/versions/latest/builds/latest/downloads/geyseroptionalpack"
-      },
-      "original": {
-        "type": "file",
-        "url": "https://download.geysermc.org/v2/projects/geyseroptionalpack/versions/latest/builds/latest/downloads/geyseroptionalpack"
+        "url": "https://download.geysermc.org/v2/projects/geyser/versions/2.9.2/builds/1022/downloads/spigot"
       }
     },
     "home-manager": {
@@ -319,7 +307,6 @@
         "geysermc-3p-cosmetics": "geysermc-3p-cosmetics",
         "geysermc-floodgate-spigot": "geysermc-floodgate-spigot",
         "geysermc-geyser-spigot": "geysermc-geyser-spigot",
-        "geysermc-optional-pack": "geysermc-optional-pack",
         "home-manager": "home-manager",
         "homebrew-bundle": "homebrew-bundle",
         "homebrew-cask": "homebrew-cask",

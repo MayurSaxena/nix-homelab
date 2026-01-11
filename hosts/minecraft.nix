@@ -39,7 +39,6 @@
         # TODO: Symlink in the geyser and floodgate configs? Or generate them here.
         "plugins/Geyser-Spigot.jar" = inputs.geysermc-geyser-spigot;
         "plugins/floodgate-spigot.jar" = inputs.geysermc-floodgate-spigot;
-        "plugins/Geyser-Spigot/packs/GeyserOptionalPack.mcpack" = inputs.geysermc-optional-pack;
         "plugins/Geyser-Spigot/extensions/ThirdPartyCosmetics.jar" = inputs.geysermc-3p-cosmetics;
       };
       whitelist = {

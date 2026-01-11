@@ -46,22 +46,17 @@
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
 
     geysermc-geyser-spigot = {
-      url = "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot";
+      url = "https://download.geysermc.org/v2/projects/geyser/versions/2.9.2/builds/1022/downloads/spigot";
       flake = false;
     };
 
     geysermc-floodgate-spigot = {
-      url = "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot";
-      flake = false;
-    };
-
-    geysermc-optional-pack = {
-      url = "https://download.geysermc.org/v2/projects/geyseroptionalpack/versions/latest/builds/latest/downloads/geyseroptionalpack";
+      url = "https://download.geysermc.org/v2/projects/floodgate/versions/2.2.5/builds/126/downloads/spigot";
       flake = false;
     };
 
     geysermc-3p-cosmetics = {
-      url = "https://download.geysermc.org/v2/projects/thirdpartycosmetics/versions/latest/builds/latest/downloads/thirdpartycosmetics";
+      url = "https://download.geysermc.org/v2/projects/thirdpartycosmetics/versions/1.0.0/builds/9/downloads/thirdpartycosmetics";
       flake = false;
     };
   };
