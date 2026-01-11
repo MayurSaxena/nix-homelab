@@ -4,12 +4,14 @@
   config,
   ...
 }: {
-  imports = [
-    ./base-nixos-lxc-proxmox-impermanent-remote.nix
-    ./../modules/nixos/root-password.nix
-  ];
   # Set system architecture for this host
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
+
+  custom.proxmox-lxc.enable = true;
+  custom.impermanence.enable = true;
+  custom.remote-builds.enable = true;
+  custom.root-password.enable = true;
+  custom.beszel-monitoring-agent.enable = true;
 
   services.plex = {
     enable = true;
@@ -22,7 +24,7 @@
   # So that the user running the program can access the host mount
   users.users.plex.extraGroups = ["lxc_share"];
 
-  environment.persistence."/persistent" = {
+  environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
         directory = "/var/lib/plex";
