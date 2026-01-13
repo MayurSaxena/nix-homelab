@@ -2,6 +2,7 @@
   inputs,
   outputs,
   config,
+  pkgs,
   ...
 }: {
   # Set system architecture for this host
@@ -17,9 +18,14 @@
     "homepage-secrets" = {
       format = "dotenv";
       sopsFile = ./../secrets/homepage-dashboard-secrets.env;
+      restartUnits = ["homepage-dashboard.service"];
     };
   };
-  # TODO: Figure out how to incorporate the ICMP binary in the systemd service path so that the ping arguments work.
+
+  systemd.services.homepage-dashboard = {
+    path = [ pkgs.iputils ];
+  };
+
   services.homepage-dashboard = {
     enable = true;
     openFirewall = true;
@@ -130,7 +136,7 @@
               description = "Hypervisor";
               href = "https://proxmox-web.home.mayursaxena.com";
               icon = "proxmox";
-              #ping = "proxmox.home.mayursaxena.com";
+              # ping = "proxmox.home.mayursaxena.com";
               widget = {
                 fields = [
                   "vms"
@@ -260,26 +266,18 @@
       {
         "Monitoring" = [
           {
-            InfluxDB = {
-              description = "Time Series Monitoring";
-              href = "https://influxdb-web.home.mayursaxena.com";
-              icon = "influxdb";
-              #ping = "influxdb.home.mayursaxena.com";
-            };
-          }
-          {
-            Grafana = {
-              description = "Dashboards";
-              href = "https://grafana-web.home.mayursaxena.com";
-              icon = "grafana";
-              #ping = "grafana.home.mayursaxena.com";
-              widget = {
-                fields = [];
-                password = "{{HOMEPAGE_VAR_GRAFANA_PASSWORD}}";
-                type = "grafana";
-                url = "https://grafana-web.home.mayursaxena.com";
-                username = "{{HOMEPAGE_VAR_GRAFANA_USERNAME}}";
-              };
+            Beszel = {
+              description = "Monitoring Dashboard";
+              href = "https://beszel.home.mayursaxena.com";
+              icon = "beszel";
+              # widget = {
+              #   type = "beszel";
+              #   url = "https://beszel.home.mayursaxena.com";
+              #   username = "{{HOMEPAGE_VAR_BESZEL_USERNAME}}";
+              #   password = "{{HOMEPAGE_VAR_BESZEL_PASSWORD}}";
+              #   version = 2;
+              #   fields = [];
+              # };
             };
           }
         ];
