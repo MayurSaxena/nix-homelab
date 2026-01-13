@@ -13,6 +13,16 @@
   custom.root-password.enable = true;
   custom.beszel-monitoring-agent.enable = true;
 
+  sops.secrets = {
+    "sabnzbd-secrets" = {
+      format = "ini";
+      sopsFile = ./../secrets/sabnzbd.ini;
+      owner = config.services.sabnzbd.user;
+      group = config.services.sabnzbd.group;
+      path = config.services.sabnzbd.configFile;
+    };
+  };
+
   services.sabnzbd = {
     enable = true;
     openFirewall = true; #TCP 8080
@@ -25,7 +35,7 @@
   # TODO: Front this with an nginx or something?
 
   # So that the user running the program can access the host mount
-  users.users.sabnzbd.extraGroups = ["lxc_share"];
+  users.users.${config.services.sabnzbd.user}.extraGroups = ["lxc_share"];
 
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
