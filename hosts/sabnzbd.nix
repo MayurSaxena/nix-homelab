@@ -19,7 +19,7 @@
       sopsFile = ./../secrets/sabnzbd.ini;
       owner = config.services.sabnzbd.user;
       group = config.services.sabnzbd.group;
-      path = config.services.sabnzbd.configFile;
+      path = "${config.services.sabnzbd.configFile}";
     };
   };
 
