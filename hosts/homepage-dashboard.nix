@@ -23,7 +23,7 @@
   };
 
   systemd.services.homepage-dashboard = {
-    path = [ pkgs.iputils ];
+    path = [pkgs.iputils];
   };
 
   services.homepage-dashboard = {
