@@ -12,7 +12,19 @@
   custom.impermanence.enable = true;
   custom.remote-builds.enable = true;
   custom.root-password.enable = true;
-  custom.beszel-monitoring-agent.enable = true;
+  custom.beszel-monitoring-agent = {
+    enable = true;
+    extraFilesystems = [
+      {
+        path = "/media/TimeCapsule";
+        name = "Time Capsule";
+      }
+      {
+        path = "/media/NetShare";
+        name = "Network Share";
+      }
+    ];
+  };
 
   sops.secrets = {
     "passwords/timemachine" = {
