@@ -116,7 +116,7 @@
     defaultSopsFile = ./../../secrets/msaxena.yaml;
     # need this so that the launchd agent uses age-plugin-yubikey to decrypt the secrets using a yubikey
     environment = lib.mkIf (pkgs.stdenv.isDarwin) {
-      PATH = "${pkgs.age-plugin-yubikey}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+      PATH = lib.mkForce "${pkgs.age-plugin-yubikey}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
     };
     # Secrets that need to be decrypted and made available.
     secrets = {

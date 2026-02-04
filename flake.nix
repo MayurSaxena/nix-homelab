@@ -14,6 +14,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # For Determinate Nix
+    determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
+
     #Home-manager for user level configs (wonder if I really need this...)
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -85,7 +88,7 @@
     mkDarwinConfig = paths:
       nix-darwin.lib.darwinSystem {
         specialArgs = {inherit inputs outputs;};
-        modules = nixpkgs.lib.toList paths;
+        modules = [inputs.determinate.darwinModules.default] ++ nixpkgs.lib.toList paths;
       };
   in {
     # so that we can use `nix fmt .` at the shell
