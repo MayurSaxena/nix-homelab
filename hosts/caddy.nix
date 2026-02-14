@@ -50,7 +50,11 @@
         import use-external-dns-acme
       '';
       "proxmox-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy https://proxmox.home.internal:8006
+        reverse_proxy https://proxmox.home.internal:8006 {
+          transport http {
+            tls_insecure_skip_verify
+          }
+        }
         import use-external-dns-acme
       '';
       "dns-web.home.mayursaxena.com".extraConfig = ''
