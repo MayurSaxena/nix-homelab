@@ -50,19 +50,19 @@
         import use-external-dns-acme
       '';
       "proxmox-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy https://proxmox.home.mayursaxena.com:8006
+        reverse_proxy https://proxmox.home.internal:8006
         import use-external-dns-acme
       '';
       "dns-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://dns.home.mayursaxena.com:5380
+        reverse_proxy http://dns.home.internal:5380
         import use-external-dns-acme
       '';
       "home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://homepage.home.mayursaxena.com:8082
+        reverse_proxy http://homepage.home.internal:8082
         import use-external-dns-acme
       '';
       "beszel.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://beszel-hub.home.mayursaxena.com:8090 {
+        reverse_proxy http://beszel-hub.home.internal:8090 {
           transport http {
             read_timeout 360s
           }
@@ -74,44 +74,36 @@
       '';
 
       "budget.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://actualbudget.home.mayursaxena.com:3000
-        import use-external-dns-acme
-      '';
-      "grafana-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://grafana.home.mayursaxena.com:3000
-        import use-external-dns-acme
-      '';
-      "influxdb-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://influxdb.home.mayursaxena.com:8086
+        reverse_proxy http://actualbudget.home.internal:3000
         import use-external-dns-acme
       '';
       "paperless-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://paperless.home.mayursaxena.com:8000
+        reverse_proxy http://paperless.home.internal:8000
         import use-external-dns-acme
       '';
       "plex-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://plex.home.mayursaxena.com:32400
+        reverse_proxy http://plex.home.internal:32400
         import use-external-dns-acme
       '';
       "overseerr-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://overseerr.home.mayursaxena.com:5055
+        reverse_proxy http://overseerr.home.internal:5055
         import use-external-dns-acme
       '';
       "sabnzbd-web.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://sabnzbd.home.mayursaxena.com:8080
+        reverse_proxy http://sabnzbd.home.internal:8080
         import use-external-dns-acme
       '';
 
       "radarr.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://servarr.home.mayursaxena.com:7878
+        reverse_proxy http://servarr.home.internal:7878
         import use-external-dns-acme
       '';
       "sonarr.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://servarr.home.mayursaxena.com:8989
+        reverse_proxy http://servarr.home.internal:8989
         import use-external-dns-acme
       '';
       "bazarr.home.mayursaxena.com".extraConfig = ''
-        reverse_proxy http://servarr.home.mayursaxena.com:6767
+        reverse_proxy http://servarr.home.internal:6767
         import use-external-dns-acme
       '';
     };

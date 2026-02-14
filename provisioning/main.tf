@@ -13,7 +13,7 @@ module "nix-builder" {
   pve_node_name      = var.pve_node_name
   ct_description     = "Remote Build Server for NixOS (Terraform)"
   hostname           = "nix-builder"
-  domain             = "dev.home.mayursaxena.com"
+  domain             = "dev.internal"
   network_interfaces = { "eth0" = 60 }
   ipv4_settings      = "dhcp"
   ipv6_settings      = "auto"
@@ -30,7 +30,7 @@ module "dns-server" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Technitium DNS Server (Terraform)"
   hostname              = "dns"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   dns_servers           = ["127.0.0.1", "::1"]
   network_interfaces    = { "eth0" = 10 }
   ipv4_settings         = "10.0.10.2/24;10.0.10.1"
@@ -52,7 +52,7 @@ module "actualbudget" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Actual Budget Server (Terraform)"
   hostname              = "actualbudget"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -73,7 +73,7 @@ module "sabnzbd" {
   pve_node_name         = var.pve_node_name
   ct_description        = "SABnzbd Downloader (Terraform)"
   hostname              = "sabnzbd"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -99,7 +99,7 @@ module "homepage" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Homepage Dashboard (Terraform)"
   hostname              = "homepage"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -120,7 +120,7 @@ module "plex-server" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Plex Media Server (Terraform)"
   hostname              = "plex"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -146,7 +146,7 @@ module "overseerr" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Overseerr Media Requests (Terraform)"
   hostname              = "overseerr"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -167,7 +167,7 @@ module "paperless" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Paperless-ngx (Terraform)"
   hostname              = "paperless"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -193,7 +193,7 @@ module "minecraft" {
   pve_node_name       = var.pve_node_name
   ct_description      = "Minecraft Server (Terraform)"
   hostname            = "minecraft"
-  domain              = "home.mayursaxena.com"
+  domain              = "home.internal"
   network_interfaces  = { "eth0" = 40 }
   ipv4_settings       = "dhcp"
   ipv6_settings       = "auto"
@@ -212,7 +212,7 @@ module "fileserver" {
   pve_node_name         = var.pve_node_name
   ct_description        = "File Server (Terraform)"
   hostname              = "files"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -243,7 +243,7 @@ module "caddy" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Caddy Reverse Proxy (Terraform)"
   hostname              = "caddy"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 10 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
@@ -263,7 +263,7 @@ module "servarr" {
   pve_node_name      = var.pve_node_name
   ct_description     = "Servarr (Terraform)"
   hostname           = "servarr-test"
-  domain             = "home.mayursaxena.com"
+  domain             = "home.internal"
   network_interfaces = { "eth0" = 20 }
   ipv4_settings      = "dhcp"
   ipv6_settings      = "auto"
@@ -287,7 +287,7 @@ module "beszel-hub" {
   pve_node_name         = var.pve_node_name
   ct_description        = "Beszel Hub (Terraform)"
   hostname              = "beszel-hub"
-  domain                = "home.mayursaxena.com"
+  domain                = "home.internal"
   network_interfaces    = { "eth0" = 10 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
