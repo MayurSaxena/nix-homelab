@@ -11,7 +11,7 @@ in {
   options.custom.remote-builds = {
     enable = lib.mkEnableOption "remote building";
     remote-host = lib.mkOption {
-      default = "nix-builder.dev.internal";
+      default = "nix-builder.home.internal";
       type = lib.types.str;
       example = "host.example.com";
       description = "Hostname of remote build machine.";

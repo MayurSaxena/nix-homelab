@@ -13,8 +13,8 @@ module "nix-builder" {
   pve_node_name      = var.pve_node_name
   ct_description     = "Remote Build Server for NixOS (Terraform)"
   hostname           = "nix-builder"
-  domain             = "dev.internal"
-  network_interfaces = { "eth0" = 60 }
+  domain             = "home.internal"
+  network_interfaces = { "eth0" = 20 }
   ipv4_settings      = "dhcp"
   ipv6_settings      = "auto"
   memory_size_mb     = 4096
