@@ -119,7 +119,9 @@ in {
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
         ProtectControlGroups = true;
-        RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
+        # libuv uses AF_NETLINK (NETLINK_ROUTE) to query network interfaces
+        # for Node.js os.networkInterfaces(); without it the process crashes.
+        RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK"];
         RestrictNamespaces = true;
         LockPersonality = true;
         # Node.js JIT requires the ability to map memory as writable+executable.
