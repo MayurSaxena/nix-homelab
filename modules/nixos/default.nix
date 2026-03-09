@@ -10,8 +10,12 @@
     ./proxmox-lxc.nix
     ./remote-builds.nix
     ./root-password.nix
+    ./scrobblex.nix
     ../beszel-agent.nix
   ];
+
+  # Packages not yet in nixpkgs-unstable — remove once PRs merge.
+  nixpkgs.overlays = [ (import ./../../overlays/default.nix) ];
 
   system.stateVersion = "25.11";
   nixpkgs.config.allowUnfree = true;

@@ -1,6 +1,9 @@
 {pkgs, ...}: {
   # By default on any new Mac install things in macos/packages.nix at the system level
-  imports = [./packages.nix];
+  imports = [
+    ./packages.nix
+    ./remote-builds.nix
+  ];
 
   determinateNix.enable = true;
 

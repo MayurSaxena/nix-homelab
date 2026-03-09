@@ -12,6 +12,8 @@
   # Set the platform for this host
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "aarch64-darwin";
 
+  custom.remote-builds.enable = true;
+
   # Use home-manager to manage the user configs
   home-manager = {
     extraSpecialArgs = {inherit inputs outputs;};
