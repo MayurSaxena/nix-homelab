@@ -62,7 +62,7 @@ in {
 
   config = lib.mkIf cfg.enable {
     systemd.services.scrobblex = {
-      description = "Scrobblex Plex-to-Trakt scrobbler";
+      description = "Scrobblex";
       after = ["network.target"];
       wantedBy = ["multi-user.target"];
 
@@ -136,19 +136,3 @@ in {
     networking.firewall.allowedTCPPorts = lib.optional cfg.openFirewall cfg.port;
   };
 }
-# ── Impermanence note ────────────────────────────────────────────────────────
-#
-# scrobblex stores its Trakt OAuth tokens under /var/lib/scrobblex/data.
-# Without these tokens the service will start but immediately prompt you to
-# re-authorise via the web UI.
-#
-# On impermanent setups (nixos-impermanence / tmpfs root) add this to your
-# persistence configuration:
-#
-#   environment.persistence."/persist".directories = [
-#     { directory = "/var/lib/scrobblex"; user = "scrobblex"; group = "scrobblex"; mode = "0700"; }
-#   ];
-#
-# Note: DynamicUser allocates the UID by hashing the service name, so the UID
-# is deterministic for a given service name across reboots as long as the
-# systemd version and unit name do not change.

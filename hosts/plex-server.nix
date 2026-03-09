@@ -13,6 +13,13 @@
   custom.root-password.enable = true;
   custom.beszel-monitoring-agent.enable = true;
 
+  sops.secrets = {
+    "scrobblex-secrets" = {
+      format = "dotenv";
+      sopsFile = ./../secrets/scrobblex.env;
+    };
+  };
+
   services.plex = {
     enable = true;
     openFirewall = true;
@@ -21,8 +28,21 @@
     dataDir = "/var/lib/plex";
   };
 
+  services.scrobblex = {
+    enable = true;
+    port = 3090;
+    plexUser = [ "MayurSaxena" ];
+    openFirewall = true;
+    environmentFile = config.sops.secrets.scrobblex-secrets.path;
+  };
+
   # So that the user running the program can access the host mount
   users.users.plex.extraGroups = ["lxc_share"];
+
+  # So that dynamic-user folders stay private because impermanence default perms are 755
+  systemd.tmpfiles.rules = [
+    "d ${config.custom.impermanence.persistence-root}/var/lib/private 0700 root root"
+  ];
 
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
@@ -31,6 +51,9 @@
         user = "plex";
         group = "plex";
         mode = "0755";
+      }
+      {
+        directory = "/var/lib/private/scrobblex";
       }
     ];
   };

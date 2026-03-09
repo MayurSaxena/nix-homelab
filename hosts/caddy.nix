@@ -24,8 +24,8 @@
   services.caddy = {
     enable = true;
     package = pkgs.caddy.withPlugins {
-      plugins = ["github.com/caddy-dns/cloudflare@v0.2.1"];
-      hash = "sha256-Zls+5kWd/JSQsmZC4SRQ/WS+pUcRolNaaI7UQoPzJA0=";
+      plugins = ["github.com/caddy-dns/cloudflare@v0.2.3"];
+      hash = "sha256-mmkziFzEMBcdnCWCRiT3UyWPNbINbpd3KUJ0NMW632w=";
     };
     environmentFile = config.sops.secrets."caddy-secrets".path;
     # Uncomment for development.
@@ -108,6 +108,10 @@
       '';
       "bazarr.home.mayursaxena.com".extraConfig = ''
         reverse_proxy http://servarr.home.internal:6767
+        import use-external-dns-acme
+      '';
+      "scrobblex.home.mayursaxena.com".extraConfig = ''
+        reverse_proxy http://plex.home.internal:3090
         import use-external-dns-acme
       '';
     };
