@@ -5,37 +5,9 @@
     ./remote-builds.nix
   ];
 
+  # Determinate Nix manages nix.conf directly (gc, optimise, settings).
+  # nix.* options in nix-darwin are a no-op when determinateNix.enable = true.
   determinateNix.enable = true;
-
-  # nix = {
-  #   # Automatic garbage collection (12AM every day hopefully)
-  #   gc = {
-  #     automatic = true;
-  #     interval = {
-  #       Hour = 0;
-  #       Minute = 0;
-  #     };
-  #   };
-  #   optimise = {
-  #     # Optimise every day at 1AM
-  #     automatic = true;
-  #     interval = {
-  #       Hour = 1;
-  #       Minute = 0;
-  #     };
-  #   };
-  #   settings = {
-  #     experimental-features = "nix-command flakes"; # Enable flakes
-  #     sandbox = true; # Enable sandboxed builds
-  #     # Allow these paths to be accessed in the sandbox (unsure if still necessary)
-  #     extra-sandbox-paths = ["/private/tmp/" "/private/var/tmp/"];
-  #     # Root and users in the admin group can manage the nix install
-  #     trusted-users = [
-  #       "root"
-  #       "@admin"
-  #     ];
-  #   };
-  # };
 
   # Enable Touch ID and Watch ID for sudo
   security.pam.services.sudo_local = {

@@ -2,8 +2,15 @@
   inputs,
   config,
   pkgs,
+  lib,
   ...
 }: {
+  options.custom.domain = lib.mkOption {
+    type = lib.types.str;
+    default = "home.mayursaxena.com";
+    description = "Base domain for all services (e.g. plex.home.mayursaxena.com).";
+  };
+
   imports = [
     inputs.sops-nix.nixosModules.sops
     ./impermanence.nix
@@ -15,7 +22,7 @@
   ];
 
   # Packages not yet in nixpkgs-unstable — remove once PRs merge.
-  nixpkgs.overlays = [ (import ./../../overlays/default.nix) ];
+  nixpkgs.overlays = [(import ./../../overlays/default.nix)];
 
   system.stateVersion = "25.11";
   nixpkgs.config.allowUnfree = true;
@@ -85,8 +92,13 @@
     authorizedKeysInHomedir = false;
     settings = {
       PermitRootLogin = "prohibit-password";
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+      X11Forwarding = false;
     };
   };
 
+  # Accept SSH host keys automatically on first connection to simplify bootstrapping
+  # new hosts. Safe within the homelab network; avoid this in internet-facing configs.
   programs.ssh.extraConfig = "StrictHostKeyChecking=accept-new";
 }

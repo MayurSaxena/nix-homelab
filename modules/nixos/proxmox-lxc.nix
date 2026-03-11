@@ -18,6 +18,8 @@
       manageHostName = false;
     };
 
+    # Proxmox injects resolv.conf into the container at the host level.
+    # Letting systemd-resolved or resolvconf manage it causes conflicts.
     services.resolved.enable = false;
     networking.resolvconf.enable = false;
 

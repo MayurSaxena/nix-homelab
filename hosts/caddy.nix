@@ -4,8 +4,9 @@
   config,
   pkgs,
   ...
-}: {
-  # Set system architecture for this host
+}: let
+  domain = config.custom.domain;
+in {
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
   custom.proxmox-lxc.enable = true;
@@ -41,7 +42,7 @@
       }
     '';
     virtualHosts = {
-      "bikinibottom.home.mayursaxena.com".extraConfig = ''
+      "bikinibottom.${domain}".extraConfig = ''
         reverse_proxy https://10.0.10.1 {
           transport http {
             tls_insecure_skip_verify
@@ -49,7 +50,7 @@
         }
         import use-external-dns-acme
       '';
-      "proxmox-web.home.mayursaxena.com".extraConfig = ''
+      "proxmox-web.${domain}".extraConfig = ''
         reverse_proxy https://proxmox.home.internal:8006 {
           transport http {
             tls_insecure_skip_verify
@@ -57,15 +58,15 @@
         }
         import use-external-dns-acme
       '';
-      "dns-web.home.mayursaxena.com".extraConfig = ''
+      "dns-web.${domain}".extraConfig = ''
         reverse_proxy http://dns.home.internal:5380
         import use-external-dns-acme
       '';
-      "home.mayursaxena.com".extraConfig = ''
+      "${domain}".extraConfig = ''
         reverse_proxy http://homepage.home.internal:8082
         import use-external-dns-acme
       '';
-      "beszel.home.mayursaxena.com".extraConfig = ''
+      "beszel.${domain}".extraConfig = ''
         reverse_proxy http://beszel-hub.home.internal:8090 {
           transport http {
             read_timeout 360s
@@ -77,40 +78,44 @@
         import use-external-dns-acme
       '';
 
-      "budget.home.mayursaxena.com".extraConfig = ''
+      "budget.${domain}".extraConfig = ''
         reverse_proxy http://actualbudget.home.internal:3000
         import use-external-dns-acme
       '';
-      "paperless-web.home.mayursaxena.com".extraConfig = ''
+      "paperless-web.${domain}".extraConfig = ''
         reverse_proxy http://paperless.home.internal:8000
         import use-external-dns-acme
       '';
-      "plex-web.home.mayursaxena.com".extraConfig = ''
+      "plex-web.${domain}".extraConfig = ''
         reverse_proxy http://plex.home.internal:32400
         import use-external-dns-acme
       '';
-      "overseerr-web.home.mayursaxena.com".extraConfig = ''
+      "overseerr-web.${domain}".extraConfig = ''
         reverse_proxy http://overseerr.home.internal:5055
         import use-external-dns-acme
       '';
-      "sabnzbd-web.home.mayursaxena.com".extraConfig = ''
+      "sabnzbd-web.${domain}".extraConfig = ''
         reverse_proxy http://sabnzbd.home.internal:8080
         import use-external-dns-acme
       '';
 
-      "radarr.home.mayursaxena.com".extraConfig = ''
+      "radarr.${domain}".extraConfig = ''
         reverse_proxy http://servarr.home.internal:7878
         import use-external-dns-acme
       '';
-      "sonarr.home.mayursaxena.com".extraConfig = ''
+      "sonarr.${domain}".extraConfig = ''
         reverse_proxy http://servarr.home.internal:8989
         import use-external-dns-acme
       '';
-      "bazarr.home.mayursaxena.com".extraConfig = ''
+      "bazarr.${domain}".extraConfig = ''
         reverse_proxy http://servarr.home.internal:6767
         import use-external-dns-acme
       '';
-      "scrobblex.home.mayursaxena.com".extraConfig = ''
+      "prowlarr.${domain}".extraConfig = ''
+        reverse_proxy http://servarr.home.internal:9696
+        import use-external-dns-acme
+      '';
+      "scrobblex.${domain}".extraConfig = ''
         reverse_proxy http://plex.home.internal:3090
         import use-external-dns-acme
       '';

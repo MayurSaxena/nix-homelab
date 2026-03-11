@@ -4,8 +4,9 @@
   config,
   lib,
   ...
-}: {
-  # Set system architecture for this host
+}: let
+  domain = config.custom.domain;
+in {
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
   custom.proxmox-lxc.enable = true;
@@ -40,7 +41,7 @@
         download_dir = "/data/incomplete";
         complete_dir = "/data/complete";
         cache_limit = "500M";
-        host_whitelist = "sabnzbd-web.home.mayursaxena.com";
+        host_whitelist = "sabnzbd-web.${domain}";
       };
       servers = {
         newsgroup_ninja = {

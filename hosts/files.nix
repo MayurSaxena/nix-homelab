@@ -111,10 +111,10 @@
           "guest ok" = "yes";
           "path" = "/media/NetShare";
           "wide links" = "no";
-          "directory mode" = "777";
+          "directory mode" = "0775";
           "valid users" = "msaxena,nobody";
           "comment" = "Public Network Share";
-          "create mode" = "777";
+          "create mode" = "0664";
           "writeable" = "yes";
         };
       };

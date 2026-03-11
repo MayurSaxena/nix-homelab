@@ -4,8 +4,9 @@
   config,
   pkgs,
   ...
-}: {
-  # Set system architecture for this host
+}: let
+  domain = config.custom.domain;
+in {
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
   custom.proxmox-lxc.enable = true;
@@ -31,12 +32,12 @@
     openFirewall = true;
     listenPort = 8082;
     environmentFile = config.sops.secrets."homepage-secrets".path;
-    allowedHosts = "localhost:8082,127.0.0.1:8082,homepage.home.mayursaxena.com:8082,home.mayursaxena.com";
+    allowedHosts = "localhost:8082,127.0.0.1:8082,homepage.${domain}:8082,${domain}";
     widgets = [
       {
         unifi_console = {
-          href = "https://bikinibottom.home.mayursaxena.com";
-          url = "https://bikinibottom.home.mayursaxena.com";
+          href = "https://bikinibottom.${domain}";
+          url = "https://bikinibottom.${domain}";
           username = "{{HOMEPAGE_VAR_UNIFI_USERNAME}}";
           password = "{{HOMEPAGE_VAR_UNIFI_PASSWORD}}";
         };
@@ -76,7 +77,7 @@
     settings = {
       title = "Mayur's Network";
       headerStyle = "clean";
-      startUrl = "https://home.mayursaxena.com";
+      startUrl = "https://${domain}";
       target = "_self";
       layout = [
         {
@@ -122,7 +123,7 @@
           "Apps" = {
             icon = "mdi-application-brackets-outline";
             style = "column";
-            rows = 3;
+            rows = 2;
             useEqualHeights = true;
           };
         }
@@ -134,9 +135,9 @@
           {
             Proxmox = {
               description = "Hypervisor";
-              href = "https://proxmox-web.home.mayursaxena.com";
+              href = "https://proxmox-web.${domain}";
               icon = "proxmox";
-              # ping = "proxmox.home.mayursaxena.com";
+              # ping = "proxmox.${domain}";
               widget = {
                 fields = [
                   "vms"
@@ -144,7 +145,7 @@
                 ];
                 password = "{{HOMEPAGE_VAR_PROXMOX_PASSWORD}}";
                 type = "proxmox";
-                url = "https://proxmox-web.home.mayursaxena.com";
+                url = "https://proxmox-web.${domain}";
                 username = "{{HOMEPAGE_VAR_PROXMOX_USERNAME}}";
               };
             };
@@ -152,9 +153,9 @@
           {
             DNS = {
               description = "Technitium DNS";
-              href = "https://dns-web.home.mayursaxena.com";
+              href = "https://dns-web.${domain}";
               icon = "technitium";
-              #ping = "dns.home.mayursaxena.com";
+              #ping = "dns.${domain}";
               widget = {
                 fields = [
                   "totalQueries"
@@ -165,7 +166,7 @@
                 key = "{{HOMEPAGE_VAR_TECHNITIUM_KEY}}";
                 range = "LastHour";
                 type = "technitium";
-                url = "https://dns-web.home.mayursaxena.com";
+                url = "https://dns-web.${domain}";
               };
             };
           }
@@ -176,41 +177,53 @@
           {
             Radarr = {
               description = "Movies";
-              href = "https://radarr.home.mayursaxena.com";
+              href = "https://radarr.${domain}";
               icon = "radarr";
-              #ping = "servarr.home.mayursaxena.com";
+              #ping = "servarr.${domain}";
               widget = {
                 enableQueue = false;
                 key = "{{HOMEPAGE_VAR_RADARR_KEY}}";
                 type = "radarr";
-                url = "https://radarr.home.mayursaxena.com";
+                url = "https://radarr.${domain}";
               };
             };
           }
           {
             Sonarr = {
               description = "TV Shows";
-              href = "https://sonarr.home.mayursaxena.com";
+              href = "https://sonarr.${domain}";
               icon = "sonarr";
-              #ping = "servarr.home.mayursaxena.com";
+              #ping = "servarr.${domain}";
               widget = {
                 enableQueue = false;
                 key = "{{HOMEPAGE_VAR_SONARR_KEY}}";
                 type = "sonarr";
-                url = "https://sonarr.home.mayursaxena.com";
+                url = "https://sonarr.${domain}";
               };
             };
           }
           {
             Bazarr = {
               description = "Subtitles";
-              href = "https://bazarr.home.mayursaxena.com";
+              href = "https://bazarr.${domain}";
               icon = "bazarr";
-              #ping = "servarr.home.mayursaxena.com";
+              #ping = "servarr.${domain}";
               widget = {
                 key = "{{HOMEPAGE_VAR_BAZARR_KEY}}";
                 type = "bazarr";
-                url = "https://bazarr.home.mayursaxena.com";
+                url = "https://bazarr.${domain}";
+              };
+            };
+          }
+          {
+            Prowlarr = {
+              description = "Indexers";
+              href = "https://prowlarr.${domain}";
+              icon = "prowlarr";
+              widget = {
+                key = "{{HOMEPAGE_VAR_PROWLARR_KEY}}";
+                type = "prowlarr";
+                url = "https://prowlarr.${domain}";
               };
             };
           }
@@ -221,26 +234,26 @@
           {
             Plex = {
               description = "Media Library";
-              href = "https://plex-web.home.mayursaxena.com";
+              href = "https://plex-web.${domain}";
               icon = "plex";
-              #ping = "plex.home.mayursaxena.com";
+              #ping = "plex.${domain}";
               widget = {
                 key = "{{HOMEPAGE_VAR_PLEX_KEY}}";
                 type = "plex";
-                url = "https://plex-web.home.mayursaxena.com";
+                url = "https://plex-web.${domain}";
               };
             };
           }
           {
             Overseerr = {
               description = "Media Requests";
-              href = "https://overseerr-web.home.mayursaxena.com";
+              href = "https://overseerr-web.${domain}";
               icon = "overseerr";
-              #ping = "overseerr.home.mayursaxena.com";
+              #ping = "overseerr.${domain}";
               widget = {
                 key = "{{HOMEPAGE_VAR_OVERSEERR_KEY}}";
                 type = "overseerr";
-                url = "https://overseerr-web.home.mayursaxena.com";
+                url = "https://overseerr-web.${domain}";
               };
             };
           }
@@ -251,13 +264,13 @@
           {
             SABnzbd = {
               description = "Usenet Downloader";
-              href = "https://sabnzbd-web.home.mayursaxena.com";
+              href = "https://sabnzbd-web.${domain}";
               icon = "sabnzbd";
-              #ping = "sabnzbd.home.mayursaxena.com";
+              #ping = "sabnzbd.${domain}";
               widget = {
                 key = "{{HOMEPAGE_VAR_SABNZBD_KEY}}";
                 type = "sabnzbd";
-                url = "https://sabnzbd-web.home.mayursaxena.com";
+                url = "https://sabnzbd-web.${domain}";
               };
             };
           }
@@ -268,11 +281,11 @@
           {
             Beszel = {
               description = "Monitoring Dashboard";
-              href = "https://beszel.home.mayursaxena.com";
+              href = "https://beszel.${domain}";
               icon = "beszel";
               # widget = {
               #   type = "beszel";
-              #   url = "https://beszel.home.mayursaxena.com";
+              #   url = "https://beszel.${domain}";
               #   username = "{{HOMEPAGE_VAR_BESZEL_USERNAME}}";
               #   password = "{{HOMEPAGE_VAR_BESZEL_PASSWORD}}";
               #   version = 2;
@@ -285,27 +298,19 @@
       {
         "Apps" = [
           {
-            Guacamole = {
-              description = "Apache Guacamole";
-              href = "https://guacamole.home.mayursaxena.com";
-              icon = "guacamole";
-              #ping = "jumpbox.home.mayursaxena.com";
-            };
-          }
-          {
             "Actual Budget" = {
               description = "Budgeting";
-              href = "https://budget.home.mayursaxena.com";
+              href = "https://budget.${domain}";
               icon = "actual-budget";
-              #ping = "actualbudget.home.mayursaxena.com";
+              #ping = "actualbudget.${domain}";
             };
           }
           {
             Paperless = {
               description = "Document Management";
-              href = "https://paperless-web.home.mayursaxena.com";
+              href = "https://paperless-web.${domain}";
               icon = "paperless-ngx";
-              #ping = "paperless-ngx.home.mayursaxena.com";
+              #ping = "paperless-ngx.${domain}";
               widget = {
                 fields = [
                   "total"
@@ -313,7 +318,7 @@
                 ];
                 key = "{{HOMEPAGE_VAR_PAPERLESS_KEY}}";
                 type = "paperlessngx";
-                url = "https://paperless-web.home.mayursaxena.com";
+                url = "https://paperless-web.${domain}";
               };
             };
           }

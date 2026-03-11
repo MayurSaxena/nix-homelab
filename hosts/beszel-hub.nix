@@ -3,8 +3,9 @@
   outputs,
   config,
   ...
-}: {
-  # Set system architecture for this host
+}: let
+  domain = config.custom.domain;
+in {
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
   custom.proxmox-lxc.enable = true;
@@ -17,15 +18,11 @@
     enable = true;
     host = "0.0.0.0";
     environment = {
-      APP_URL = "https://beszel.home.mayursaxena.com";
+      APP_URL = "https://beszel.${domain}";
     };
   };
 
   networking.firewall.allowedTCPPorts = [8090];
-
-  systemd.tmpfiles.rules = [
-    "d ${config.custom.impermanence.persistence-root}/var/lib/private 0700 root root"
-  ];
 
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [

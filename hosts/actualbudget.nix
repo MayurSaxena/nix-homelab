@@ -18,10 +18,6 @@
     openFirewall = true;
   };
 
-  systemd.tmpfiles.rules = [
-    "d ${config.custom.impermanence.persistence-root}/var/lib/private 0700 root root"
-  ];
-
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {

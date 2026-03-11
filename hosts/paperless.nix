@@ -3,8 +3,9 @@
   outputs,
   config,
   ...
-}: {
-  # Set system architecture for this host
+}: let
+  domain = config.custom.domain;
+in {
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
   custom.proxmox-lxc.enable = true;
@@ -30,7 +31,7 @@
     database.createLocally = true;
     configureTika = true;
     settings = {
-      PAPERLESS_URL = "https://paperless-web.home.mayursaxena.com";
+      PAPERLESS_URL = "https://paperless-web.${domain}";
       PAPERLESS_USE_X_FORWARD_HOST = true;
       PAPERLESS_USE_X_FORWARD_PORT = true;
       PAPERLESS_PROXY_SSL_HEADER = ["HTTP_X_FORWARDED_PROTO" "https"];
@@ -40,7 +41,6 @@
   networking.firewall.allowedTCPPorts = [config.services.paperless.port];
 
   systemd.tmpfiles.rules = [
-    "d ${config.custom.impermanence.persistence-root}/var/lib/private 0700 root root"
     "d ${config.custom.impermanence.persistence-root}/${config.services.paperless.dataDir} 0755 paperless paperless"
     "d ${config.custom.impermanence.persistence-root}/${config.services.paperless.mediaDir} 0755 paperless paperless"
   ];

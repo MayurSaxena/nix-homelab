@@ -41,6 +41,10 @@ in {
     systemd.tmpfiles.rules = [
       "d ${cfg.persistence-root}/etc 0755 root root -"
       "d ${cfg.persistence-root}/etc/ssh 0700 root root -"
+      # Services using DynamicUser=true store state under /var/lib/private/.
+      # The impermanence bind-mount creates parent dirs with 755, but
+      # /var/lib/private must be 700 for systemd’s security model.
+      "d ${cfg.persistence-root}/var/lib/private 0700 root root -"
       # If persistent copy doesn’t exist, copy the ephemeral one
       "C ${cfg.persistence-root}/etc/machine-id - - - - /etc/machine-id"
       # This might be useful if we're upgrading a permanent system to an impermanent one

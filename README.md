@@ -1,116 +1,71 @@
-My journey through learning Nix is contained in this repo.
+# nix-homelab
 
-The motivation behind this is to have a declarative set up for my homelab VM's and LXC's so that I don't have to document anything.
+Declarative homelab infrastructure using NixOS, nix-darwin, and OpenTofu on Proxmox.
 
-For other configurations like MacOS, it's nice to have a script for if I ever set up a new Mac.
+Every host's configuration is self-documenting: if a machine dies, rebuild it from this repo.
 
-## Deploying on a new Mac
+## Repository Structure
 
-- Presumably `git` needs to be installed for Flakes.
-- Install Nix from Determinate Systems - but do the `--determinate` version because that works better with `nix-darwin`?
-- Run the Flake install command (making sure the hostname has an entry in `flake.nix`)
-  - `sudo nix run nix-darwin/master#darwin-rebuild -- switch` TODO: Put the git thing somewhere in here.
-- One of the YubiKeys must be plugged in so that we can get our secrets decrypted.
+```
+flake.nix              # Entry point — all hosts, inputs, and helpers
+hosts/                 # Per-host NixOS and macOS configurations
+modules/               # Reusable NixOS and macOS modules
+  nixos/               # Base NixOS config, impermanence, proxmox-lxc, etc.
+  macos/               # Base macOS config, packages, remote builds
+  home-manager/        # User-level dotfiles (zsh, git, ssh)
+  beszel-agent.nix     # Monitoring agent module
+overlays/              # nixpkgs overlays for packages not yet upstream
+packages/              # Custom package definitions (e.g. scrobblex)
+provisioning/          # OpenTofu configs for Proxmox LXC provisioning
+secrets/               # SOPS-encrypted secrets (age + YubiKey)
+assets/                # SSH keys, impermanence hookscript
+.github/workflows/     # CI: LXC image generation, flake.lock auto-update
+```
 
-### What It Does
- - Enables lots of settings, such as:
-   - Touch ID and Watch ID sudo
-   - Menu bar widgets like clock and battery percentage
-   - Minimal Dock
-   - More powerful Finder
-   - Installs Homebrew and some GUI casks and apps from the App Store
-   - Command line tools I use often enough
-   - `zsh` aliases and theme
-   - Imports my ED25519 keypair from secrets
-   - TODO: SSH config
-   - TODO: Some prebaked `nix` dev shells (e.g. Python)
-  
+## Key Design Decisions
 
-## Deploying a new NixOS System
+- **Impermanence**: Most LXC containers use an ephemeral rootfs that resets on every boot. Only `/nix`, `/persistent`, and `/boot` survive reboots. This forces all state to be declared in Nix.
+- **SOPS + age + YubiKey**: Secrets are encrypted at rest in the repo. Each host has an age key derived from its SSH host key; decryption requires either the host key or a YubiKey.
+- **Remote builds**: Most containers delegate builds to a dedicated `nix-builder` LXC to save RAM/CPU.
+- **Single domain variable**: All services share `custom.domain` (default: `home.mayursaxena.com`), defined once in `modules/nixos/default.nix`.
 
-1.  Boot up a new box (probably on Proxmox as an LXC)
-  - TODO: Let's get some Terraform or something going on.
+## Deploying a New NixOS LXC
 
------
+Provisioning is handled by OpenTofu in `provisioning/`:
 
-### Setting Up Impermanence With LXC
-Because what's the point of a declarative configuration if we're not going all in??
+1. Add a new module block in `provisioning/main.tf` with the desired specs.
+2. Add a host config in `hosts/<name>.nix`.
+3. Add the hostname to `nixosConfigurations` in `flake.nix`.
+4. Run `cd provisioning && tofu apply`.
+   - OpenTofu creates the LXC, derives its age key, and updates `.sops.yaml` automatically.
+5. Generate any new secrets: `sops secrets/<file>`.
+6. Push to GitHub, then on the container: `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab`
 
-TODO: How much of this can we script?
+### Setting Up Impermanence
 
-0. When making the LXC, we need to specify 3 mount points:
-  - `/boot` - around 1GB
-    - I'm not even sure this is entirely necessary but maybe it is for rollbacks.
-  - `/nix` - around 4GB
-    - This is what will hold all the meat (packages) of the OS.
-  - `/persistent` - around 4GB
-    - This will house files that should persist across reboots.
+For impermanent containers, OpenTofu handles:
+- Mount points: `/boot`, `/nix`, `/persistent`, `/sbin`, `/bin`
+- The hookscript (`assets/rootfs-impermanence.sh`) that rolls back the rootfs ZFS subvolume to `@blank` before each boot
 
-1. Snapshot the **rootfs** in a *blank* state
-  - The **rootfs** of a CT on ZFS roughly follows the format `rpool/data/subvol-<ctid>-disk-0`.
-    - Here, `rpool` is the name of the ZFS pool.
-    - The **rootfs** is always (probably) disk 0.
-  - `zfs snapshot rpool/data/subvol-<ctid>-disk-0@blank`
-    - This will create a snapshot at the base state. It's not exactly blank (i.e. it has enough to boot) but for the most part it's empty.
+The `/sbin` and `/bin` mounts are persistent volumes that survive rootfs wipes. NixOS populates `/sbin/init` (symlink → `/nix/var/nix/profiles/system/init`) at activation time; because `/nix` is also a persistent mount, the init chain is always valid without any special Proxmox entrypoint configuration.
 
-2. Enter a shell in the container using `pct enter <ctid>`.
+SSH host keys and `machine-id` are seeded automatically on first boot via `systemd-tmpfiles` rules in `modules/nixos/impermanence.nix` (`C` rules copy from the ephemeral paths if no persistent copy exists yet). No manual key generation is needed.
 
-3. Inside this shell, we will:
-  - Set our environment so we can issue commands.
-  - Make directories that will be persisted on our `/persistent` drive.
-  - Generate SSH keys and persist them.
-  - Persist the unique machine ID generated by `systemd` (I think).
-  - Generate the `age` key needed so we can decrypt secrets.
+### What The Base Image Provides
 
-  ```sh
-  . etc/set-environment
+- Firewall enabled
+- SSH with YubiKey-only root access (password auth disabled)
+- Root password via SOPS (for Proxmox console access)
+- Daily auto-upgrade from `github:MayurSaxena/nix-homelab` at ~4 AM AEST
+- Daily garbage collection (older than 7 days)
+- Impermanence: persists SSH host keys, machine-id, `/var/log`, `/var/lib/nixos`, `/var/lib/private`
+- Beszel monitoring agent on all hosts
 
-  mkdir -p /persistent/etc/ssh/
-  systemctl start sshd-keygen
+## Deploying on a New Mac
 
-  mv /etc/ssh/ssh_host_* /persistent/etc/ssh/
-  mv /etc/machine-id /persistent/etc/
+1. Install [Determinate Nix](https://determinate.systems/nix-installer/).
+2. Ensure the Mac's hostname has an entry in `flake.nix` under `darwinConfigurations`.
+3. Run: `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:MayurSaxena/nix-homelab`
+4. Plug in a YubiKey for secrets decryption.
 
-  nix shell "nixpkgs#ssh-to-age" --extra-experimental-features "nix-command flakes" --command ssh-to-age -i /persistent/etc/ssh/ssh_host_ed25519_key.pub
-  ```
-
-4. Save this `age` key for later and exit the `pct` shell.
-
-5. Add a hookscript to the CT so that on every boot the **rootfs** is reverted back to the *blank* snapshot.
-  - See the file at `assets/rootfs-impermanence.sh`.
-  - Place this file in `/var/lib/vz/snippets` on the PVE host, which likely corresponds with your `local` file storage.
-  - `chmod +x /var/lib/vz/snippets/rootfs-impermanence.sh`
-  - `pct set <ctid> --hookscript local:snippets/rootfs-impermanence.sh`
-
-6. Finally, we need to make sure that the LXC boots with the right `init` script for the NixOS generation.
-  - The default location `nixos-rebuild` ends up placing the script at is `/sbin/init`.
-  - This works fine, except for the fact that we don't persist `/sbin` so the next time we reboot we'll be starting up with the default `init` script. If we weren't doing impermanence, we could leave this as is.
-  - Rather than persist `/sbin`, I thought I'd make my life more complex by changing the LXC init command.
-  - Change the LXC config on the PVE host with the following command: `echo "lxc.init.cmd: /nix/var/nix/profiles/system/init" >> /etc/pve/nodes/proxmox/lxc/<ctid>.conf`
-
------
-
-2. Back on a dev system, make a new entry for the hostname in `flake.nix` - and any necessary files in `hosts/` and `services/`.
-
-3. Add the `age` key from above to `.sops.yaml` and run `cd secrets; sops updatekeys *`.
-
-4. Generate any new required secrets using `sops <filename>.yaml`.
-
-5. Push to Github.
-
-6. Re-enter a `pct` shell, run `. /etc/profile ; nixos-rebuild switch --flake github:MayurSaxena/nix-homelab`
-
-7. And now, you should be good to go with an impermanent set up. Test by creating a file somewhere (e.g. `/`) and rebooting.
-
-### What The Base Image Does
- - Enables the firewall
- - Adds my Yubikeys as authorized keys for root via SSH
- - Adds a password in case I never have my Yubikeys (for use through Proxmox console)
- - Enables SSH but disallows root password logins
- - Shell aliases
- - Auto update
- - Persists some critical files and folders for any impermanent image:
-    - SSH host keys
-    - Unique (systemd?) machine ID
-    - /var/log
-    - /var/lib/nixos
+This configures: Touch ID/Watch sudo, Homebrew casks, App Store apps, shell (zsh + starship), SSH keys, Dock/Finder preferences, and remote Nix builds.

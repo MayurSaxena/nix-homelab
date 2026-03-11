@@ -5,7 +5,6 @@
   makeWrapper,
   nodejs,
 }:
-
 buildNpmPackage rec {
   pname = "scrobblex";
   version = "1.5.1";
@@ -21,7 +20,7 @@ buildNpmPackage rec {
 
   dontNpmBuild = true;
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [makeWrapper];
 
   installPhase = ''
     runHook preInstall
@@ -45,7 +44,7 @@ buildNpmPackage rec {
     '';
     homepage = "https://github.com/ryck/scrobblex";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ msaxena ];
+    maintainers = with lib.maintainers; [msaxena];
     mainProgram = "scrobblex";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };

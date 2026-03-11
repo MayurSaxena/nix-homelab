@@ -26,11 +26,6 @@
     ];
   };
 
-  # So that dynamic-user folders stay private because impermanence default perms are 755
-  systemd.tmpfiles.rules = [
-    "d ${config.custom.impermanence.persistence-root}/var/lib/private 0700 root root"
-  ];
-
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
