@@ -262,13 +262,19 @@ module "servarr" {
   source             = "./modules/nixos-lxc"
   pve_node_name      = var.pve_node_name
   ct_description     = "Servarr (Terraform)"
+  # hostname is "servarr-test" to avoid conflicting with the existing non-NixOS
+  # servarr container. Rename to "servarr" once the live deployment is migrated.
   hostname           = "servarr-test"
   domain             = "home.internal"
   network_interfaces = { "eth0" = 20 }
   ipv4_settings      = "dhcp"
   ipv6_settings      = "auto"
-  memory_size_mb     = 2048
-  num_cpu_cores      = 2
+  memory_size_mb        = 2048
+  num_cpu_cores         = 2
+  # Each *arr service stores SQLite DBs and cache under /var/lib — 20GB gives
+  # comfortable headroom for four services plus index caches.
+  persistent_fs_size_gb = 20
+  nix_fs_size_gb        = 12
   additional_mount_points = [{
     vol     = "/mnt/MediaBox/"
     ct_path = "/media/IronWolf"

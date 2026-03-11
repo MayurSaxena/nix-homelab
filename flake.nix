@@ -17,7 +17,7 @@
     # For Determinate Nix
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
 
-    #Home-manager for user level configs (wonder if I really need this...)
+    # Home-manager for user-level config: zsh, git, SSH keys, sops secrets
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -46,8 +46,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Minecraft server module with Spigot/Paper support
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
 
+    # GeyserMC allows Bedrock (mobile/console) clients to connect to the Java
+    # server. Floodgate handles Bedrock player auth. Pinned directly because
+    # nix-minecraft doesn't package them and GeyserMC requires exact version
+    # matches between Geyser, Floodgate, and the server build.
     geysermc-geyser-spigot = {
       url = "https://download.geysermc.org/v2/projects/geyser/versions/2.9.2/builds/1022/downloads/spigot";
       flake = false;
@@ -100,11 +105,20 @@
     };
 
     # All NixOS builds go here, where key is hostname and value is the config file
-    nixosConfigurations = {
-      "base-lxc" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox.nix;
-      "base-lxc-impermanent" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent.nix;
-      "base-lxc-remote" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-remote.nix;
-      "base-lxc-impermanent-remote" = mkNixOSConfig ./hosts/base-nixos-lxc-proxmox-impermanent-remote.nix;
+    nixosConfigurations = let
+      baseLxc = ./hosts/base-nixos-lxc-proxmox.nix;
+    in {
+      # CI image variants — one base file, composed with inline overrides
+      "base-lxc" = mkNixOSConfig baseLxc;
+      "base-lxc-impermanent" = mkNixOSConfig [baseLxc {custom.impermanence.enable = true;}];
+      "base-lxc-remote" = mkNixOSConfig [baseLxc {custom.remote-builds.enable = true;}];
+      "base-lxc-impermanent-remote" = mkNixOSConfig [
+        baseLxc
+        {
+          custom.impermanence.enable = true;
+          custom.remote-builds.enable = true;
+        }
+      ];
 
       "nix-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
       "dns" = mkNixOSConfig ./hosts/dns-server.nix;
@@ -121,6 +135,7 @@
       "files" = mkNixOSConfig ./hosts/files.nix;
       "caddy" = mkNixOSConfig ./hosts/caddy.nix;
       "beszel-hub" = mkNixOSConfig ./hosts/beszel-hub.nix;
+      "servarr-test" = mkNixOSConfig ./hosts/servarr.nix;
     };
   };
 }

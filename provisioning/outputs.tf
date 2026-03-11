@@ -45,3 +45,7 @@ output "caddy" {
 output "beszel-hub" {
   value = "${module.beszel-hub.ct_id}: ${module.beszel-hub.ct_address.v4[0]} ${module.beszel-hub.ct_address.v6[0]}"
 }
+
+output "servarr" {
+  value = "${module.servarr-test.ct_id}: ${module.servarr-test.ct_address.v4[0]} ${module.servarr-test.ct_address.v6[0]}"
+}
