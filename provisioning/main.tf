@@ -264,7 +264,7 @@ module "servarr" {
   ct_description     = "Servarr (Terraform)"
   # hostname is "servarr-test" to avoid conflicting with the existing non-NixOS
   # servarr container. Rename to "servarr" once the live deployment is migrated.
-  hostname           = "servarr-test"
+  hostname           = "servarr"
   domain             = "home.internal"
   network_interfaces = { "eth0" = 20 }
   ipv4_settings      = "dhcp"
