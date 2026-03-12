@@ -21,84 +21,86 @@
     ../beszel-agent.nix
   ];
 
-  # Packages not yet in nixpkgs-unstable — remove once PRs merge.
-  nixpkgs.overlays = [(import ./../../overlays/default.nix)];
+  config = {
+    # Packages not yet in nixpkgs-unstable — remove once PRs merge.
+    nixpkgs.overlays = [(import ./../../overlays/default.nix)];
 
-  system.stateVersion = "25.11";
-  nixpkgs.config.allowUnfree = true;
-  nix = {
-    gc = {
-      # Automatic garbage collection every day
-      automatic = true;
-      dates = "daily";
-      options = "--delete-older-than 7d";
+    system.stateVersion = "25.11";
+    nixpkgs.config.allowUnfree = true;
+    nix = {
+      gc = {
+        # Automatic garbage collection every day
+        automatic = true;
+        dates = "daily";
+        options = "--delete-older-than 7d";
+      };
+      settings = {
+        # enable flakes
+        experimental-features = "nix-command flakes";
+        auto-optimise-store = true;
+        # allow root and sudoers
+        trusted-users = ["root" "@wheel"];
+      };
     };
-    settings = {
-      # enable flakes
-      experimental-features = "nix-command flakes";
-      auto-optimise-store = true;
-      # allow root and sudoers
-      trusted-users = ["root" "@wheel"];
+
+    time.timeZone = "Australia/Canberra";
+
+    # Every day around 4AM AEST so that I wake up to a nice surprise if it breaks.
+    system.autoUpgrade = {
+      enable = true;
+      dates = "*-*-* 18:00:00 UTC";
+      randomizedDelaySec = "90min";
+      flake = "github:MayurSaxena/nix-homelab";
+      flags = ["--refresh"];
+      runGarbageCollection = true;
     };
-  };
 
-  time.timeZone = "Australia/Canberra";
+    # enable the firewall
+    networking.firewall.enable = true;
 
-  # Every day around 4AM AEST so that I wake up to a nice surprise if it breaks.
-  system.autoUpgrade = {
-    enable = true;
-    dates = "*-*-* 18:00:00 UTC";
-    randomizedDelaySec = "90min";
-    flake = "github:MayurSaxena/nix-homelab";
-    flags = ["--refresh"];
-    runGarbageCollection = true;
-  };
-
-  # enable the firewall
-  networking.firewall.enable = true;
-
-  sops = {
-    defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
-    age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
-    validateSopsFiles = false;
-  };
-  # don't allow changes to users to persist
-  users.mutableUsers = false;
-  # Set root user login methods
-  users.users.root = {
-    openssh.authorizedKeys.keys = [
-      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBKp4APmkFKNrZiS2yYZsKOgkik5XehIbqU+Li2tsFwVAAAABHNzaDo= YubiRock"
-      "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIPRoNwOsZ2aVCvntOlrVKxVku+kXu8UigYvpEblIYqooAAAABHNzaDo= YubiBlack"
+    sops = {
+      defaultSopsFile = pkgs.lib.mkDefault ./../../secrets/common.yaml;
+      age.sshKeyPaths = ["/etc/ssh/ssh_host_ed25519_key"];
+      validateSopsFiles = false;
+    };
+    # don't allow changes to users to persist
+    users.mutableUsers = false;
+    # Set root user login methods
+    users.users.root = {
+      openssh.authorizedKeys.keys = [
+        "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIBKp4APmkFKNrZiS2yYZsKOgkik5XehIbqU+Li2tsFwVAAAABHNzaDo= YubiRock"
+        "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIPRoNwOsZ2aVCvntOlrVKxVku+kXu8UigYvpEblIYqooAAAABHNzaDo= YubiBlack"
+      ];
+    };
+    # system wide packages
+    environment.systemPackages = with pkgs; [
+      age
+      age-plugin-yubikey
+      sops
+      git
     ];
-  };
-  # system wide packages
-  environment.systemPackages = with pkgs; [
-    age
-    age-plugin-yubikey
-    sops
-    git
-  ];
 
-  environment.shellAliases = {
-    ll = "ls -al";
-    ".." = "cd ..";
-  };
-
-  # Configure SSH to be allowed through firewall, only allow key-based root access
-  services.openssh = {
-    enable = true;
-    startWhenNeeded = false;
-    openFirewall = true;
-    authorizedKeysInHomedir = false;
-    settings = {
-      PermitRootLogin = "prohibit-password";
-      PasswordAuthentication = false;
-      KbdInteractiveAuthentication = false;
-      X11Forwarding = false;
+    environment.shellAliases = {
+      ll = "ls -al";
+      ".." = "cd ..";
     };
-  };
 
-  # Accept SSH host keys automatically on first connection to simplify bootstrapping
-  # new hosts. Safe within the homelab network; avoid this in internet-facing configs.
-  programs.ssh.extraConfig = "StrictHostKeyChecking=accept-new";
+    # Configure SSH to be allowed through firewall, only allow key-based root access
+    services.openssh = {
+      enable = true;
+      startWhenNeeded = false;
+      openFirewall = true;
+      authorizedKeysInHomedir = false;
+      settings = {
+        PermitRootLogin = "prohibit-password";
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+        X11Forwarding = false;
+      };
+    };
+
+    # Accept SSH host keys automatically on first connection to simplify bootstrapping
+    # new hosts. Safe within the homelab network; avoid this in internet-facing configs.
+    programs.ssh.extraConfig = "StrictHostKeyChecking=accept-new";
+  };
 }
