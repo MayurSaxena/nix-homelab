@@ -137,7 +137,7 @@ HOSTNAME=${self.ipv4["eth0"]} #${self.initialization[0].hostname}.${self.initial
 age_key=$(nix shell nixpkgs#ssh-to-age --command sh -c "ssh-keyscan -t ed25519 $HOSTNAME | ssh-to-age")
 echo $age_key
 sed -i '' -r "/^.+&all-keys.*$/a\\
-    - &${self.initialization[0].hostname} $(echo $age_key | tr -d '\n')\\
+    - &${self.initialization[0].hostname} $(echo $age_key | tr -d '\n')
 " ../.sops.yaml
 sops updatekeys ../secrets/* -y
 # git add ../.sops.yaml ../secrets/* && git commit -m "Adding ${self.initialization[0].hostname} to .sops.yaml" && git push
