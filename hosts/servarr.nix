@@ -89,6 +89,8 @@
         automatically = false;
       };
     };
+    # Injects PROWLARR__AUTH__APIKEY — same reason as Radarr above.
+    environmentFiles = [config.sops.secrets."servarr-secrets".path];
   };
 
   # Radarr and Sonarr rename/move media files, so they need access to the
