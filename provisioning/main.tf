@@ -262,8 +262,6 @@ module "servarr" {
   source             = "./modules/nixos-lxc"
   pve_node_name      = var.pve_node_name
   ct_description     = "Servarr (Terraform)"
-  # hostname is "servarr-test" to avoid conflicting with the existing non-NixOS
-  # servarr container. Rename to "servarr" once the live deployment is migrated.
   hostname           = "servarr"
   domain             = "home.internal"
   network_interfaces = { "eth0" = 20 }
