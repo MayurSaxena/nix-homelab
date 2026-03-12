@@ -31,7 +31,7 @@ in {
     enable = true;
     openFirewall = true;
     listenPort = 8082;
-    environmentFile = config.sops.secrets."homepage-secrets".path;
+    environmentFiles = [config.sops.secrets."homepage-secrets".path];
     allowedHosts = "localhost:8082,127.0.0.1:8082,homepage.${domain}:8082,${domain}";
     widgets = [
       {
