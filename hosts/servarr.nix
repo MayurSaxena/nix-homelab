@@ -94,9 +94,11 @@
   };
 
   # Radarr and Sonarr rename/move media files, so they need access to the
-  # host-mounted media library. Bazarr and Prowlarr work over HTTP APIs only.
+  # host-mounted media library. Bazarr adds subtitles. Prowlarr works over
+  # HTTP APIs only.
   users.users.radarr.extraGroups = ["lxc_share"];
   users.users.sonarr.extraGroups = ["lxc_share"];
+  users.users.bazarr.extraGroups = ["lxc_share"];
 
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
