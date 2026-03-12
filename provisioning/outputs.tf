@@ -47,5 +47,5 @@ output "beszel-hub" {
 }
 
 output "servarr" {
-  value = "${module.servarr-test.ct_id}: ${module.servarr-test.ct_address.v4[0]} ${module.servarr-test.ct_address.v6[0]}"
+  value = "${module.servarr.ct_id}: ${module.servarr.ct_address.v4[0]} ${module.servarr.ct_address.v6[0]}"
 }

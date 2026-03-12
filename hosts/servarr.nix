@@ -28,8 +28,8 @@
       server.urlBase = "/radarr";
       auth = {
         # Keep auth enabled — access is via Caddy but login is still required.
-        authenticationMethod = "Forms";
-        authenticationRequired = "Enabled";
+        method = "Forms";
+        required = "Enabled";
       };
       update = {
         # NixOS manages the package; disable in-app update mechanism.
@@ -49,8 +49,8 @@
     settings = {
       server.urlBase = "/sonarr";
       auth = {
-        authenticationMethod = "Forms";
-        authenticationRequired = "Enabled";
+        method = "Forms";
+        required = "Enabled";
       };
       update = {
         mechanism = "external";
@@ -81,8 +81,8 @@
     settings = {
       server.urlBase = "/prowlarr";
       auth = {
-        authenticationMethod = "Forms";
-        authenticationRequired = "Enabled";
+        method = "Forms";
+        required = "Enabled";
       };
       update = {
         mechanism = "external";
@@ -117,10 +117,7 @@
         mode = "0750";
       }
       {
-        directory = "/var/lib/prowlarr";
-        user = "prowlarr";
-        group = "prowlarr";
-        mode = "0750";
+        directory = "/var/lib/private/prowlarr";
       }
     ];
   };
