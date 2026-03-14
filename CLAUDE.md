@@ -157,7 +157,6 @@ All local options live under `custom.*`:
 - `custom.impermanence.enable` / `custom.impermanence.persistence-root`
 - `custom.remote-builds.enable`
 - `custom.beszel-monitoring-agent.*`
-- `services.scrobblex.*` (custom service module, not under `custom.*`)
 
 ---
 
