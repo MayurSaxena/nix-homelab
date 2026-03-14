@@ -48,7 +48,7 @@ nix-homelab/
 | `modules/nixos/proxmox-lxc.nix` | Proxmox LXC tweaks (disables systemd-resolved, `lxc_share` group) |
 | `modules/nixos/remote-builds.nix` | Delegates nix builds to `nix-builder.home.internal` |
 | `modules/nixos/root-password.nix` | Sets root password via SOPS |
-| `modules/nixos/scrobblex.nix` | Custom Plex→Trakt scrobbler service module |
+| `modules/nixos/scrobblex.nix` | Custom `services.scrobblex` — Plex→Trakt scrobbler (Node.js webhook receiver) |
 | `modules/beszel-agent.nix` | Beszel monitoring agent with custom filesystem tracking |
 | `modules/macos/base.nix` | macOS: Touch ID sudo, Dock/Finder prefs, auto-updates |
 | `modules/home-manager/msaxena.nix` | User env: zsh, starship, git, SSH config, SOPS secrets |
@@ -155,7 +155,7 @@ All local options live under `custom.*`:
 - `custom.impermanence.enable` / `custom.impermanence.persistence-root`
 - `custom.remote-builds.enable`
 - `custom.beszel-agent.*`
-- `custom.scrobblex.*`
+- `services.scrobblex.*` (custom service module, not under `custom.*`)
 
 ---
 
