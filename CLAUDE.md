@@ -64,12 +64,12 @@ nix-homelab/
 | Host | Services | Impermanent | Remote Builds |
 |------|----------|-------------|---------------|
 | `nix-builder` | Nix remote build server | No | N/A (is the builder) |
-| `dns-server` | Technitium DNS | Yes | Yes |
+| `dns` | Technitium DNS | Yes | Yes |
 | `caddy` | Reverse proxy, ACME/TLS | Yes | Yes |
 | `actualbudget` | Finance tracking | Yes | Yes |
 | `sabnzbd` | Usenet downloader | Yes | Yes |
-| `homepage-dashboard` | Services dashboard | Yes | Yes |
-| `plex-server` | Plex media server | Yes | Yes |
+| `homepage` | Services dashboard | Yes | Yes |
+| `plex` | Plex media server | Yes | Yes |
 | `overseerr` | Media request manager | Yes | Yes |
 | `paperless` | Document management | Yes | Yes |
 | `minecraft` | Paper + Geyser/Floodgate | No | No |
@@ -88,13 +88,15 @@ nix-homelab/
 
 ```nix
 # In nixosConfigurations:
-my-new-host = mkNixOSConfig {
-  modules = [
-    ./hosts/my-new-host.nix
-    { custom.impermanence.enable = true; }     # optional
-    { custom.remote-builds.enable = true; }    # optional
-  ];
-};
+# Single file:
+my-new-host = mkNixOSConfig ./hosts/my-new-host.nix;
+
+# With inline overrides (pass a list):
+my-new-host = mkNixOSConfig [
+  ./hosts/my-new-host.nix
+  { custom.impermanence.enable = true; }     # optional
+  { custom.remote-builds.enable = true; }    # optional
+];
 ```
 
 ### Host File Pattern (`hosts/<name>.nix`)
@@ -154,7 +156,7 @@ All local options live under `custom.*`:
 - `custom.domain` — base domain (default: `home.mayursaxena.com`)
 - `custom.impermanence.enable` / `custom.impermanence.persistence-root`
 - `custom.remote-builds.enable`
-- `custom.beszel-agent.*`
+- `custom.beszel-monitoring-agent.*`
 - `services.scrobblex.*` (custom service module, not under `custom.*`)
 
 ---
@@ -190,10 +192,14 @@ All secrets in `secrets/` are SOPS-encrypted with age keys. Each host has its ow
 
 Hosts with `custom.impermanence.enable = true` have an ephemeral rootfs. On every boot, the root ZFS subvolume is reset to blank. Only `/persistent`, `/nix`, `/boot`, `/sbin`, `/bin` survive reboots.
 
-**What must be persisted:**
+**What the base module already persists** (in `modules/nixos/impermanence.nix`):
+- `/var/log`, `/var/lib/nixos`, `/var/lib/systemd`
+- `/etc/machine-id`
+- SSH host keys at `/persistent/etc/ssh/` (both RSA and ed25519) — also used as the SOPS age key source
+
+**What host configs must additionally persist:**
 - Service state directories: `/var/lib/<service>`
 - Config files that get modified at runtime: `/etc/<file>`
-- SSH host keys: already handled by `modules/nixos/impermanence.nix`
 
 **Pattern in host config:**
 ```nix
