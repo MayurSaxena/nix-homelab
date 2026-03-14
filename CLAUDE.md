@@ -69,7 +69,7 @@ nix-homelab/
 | `actualbudget` | Finance tracking | Yes | Yes |
 | `sabnzbd` | Usenet downloader | Yes | Yes |
 | `homepage` | Services dashboard | Yes | Yes |
-| `plex` | Plex media server | Yes | Yes |
+| `plex` | Plex media server, Scrobblex | Yes | Yes |
 | `overseerr` | Media request manager | Yes | Yes |
 | `paperless` | Document management | Yes | Yes |
 | `minecraft` | Paper + Geyser/Floodgate | No | No |
@@ -88,16 +88,10 @@ nix-homelab/
 
 ```nix
 # In nixosConfigurations:
-# Single file:
 my-new-host = mkNixOSConfig ./hosts/my-new-host.nix;
-
-# With inline overrides (pass a list):
-my-new-host = mkNixOSConfig [
-  ./hosts/my-new-host.nix
-  { custom.impermanence.enable = true; }     # optional
-  { custom.remote-builds.enable = true; }    # optional
-];
 ```
+
+> **Note:** Real hosts set `custom.*` flags inside their host file (see Host File Pattern below). Inline overrides via a list are only used for the CI base image variants in `flake.nix`.
 
 ### Host File Pattern (`hosts/<name>.nix`)
 
@@ -233,13 +227,18 @@ environment.persistence."${config.custom.impermanence.persistence-root}" = {
      # ... variables
    }
    ```
-2. Run `tofu apply` → creates LXC, outputs age key
-3. Update `.sops.yaml` with the new host's age key
-4. Add host config `hosts/my-host.nix`
-5. Register in `flake.nix` `nixosConfigurations`
-6. Create/encrypt secrets: `sops secrets/my-host.yaml`
-7. Commit and push
-8. On the container: `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab#my-host`
+2. Add host config `hosts/my-host.nix`
+3. Register in `flake.nix` `nixosConfigurations`
+4. Create/encrypt secrets if needed: `sops secrets/my-host.yaml`
+5. Commit and push
+6. Run `tofu apply` — this:
+   - Creates the LXC container
+   - SSH-scans the container to get its host ed25519 key
+   - Converts it to an age key (`ssh-to-age`) and patches `.sops.yaml` automatically
+   - Re-encrypts all secrets with `sops updatekeys`
+7. On the container: `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab#my-host`
+
+> `tofu destroy` also automatically removes the host's age key from `.sops.yaml` and re-encrypts secrets.
 
 ---
 
