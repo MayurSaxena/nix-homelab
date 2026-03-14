@@ -330,4 +330,4 @@ nix flake update nixpkgs
 - Do not add `security.sudo.wheelNeedsPassword = false` without good reason — hosts use YubiKey
 - Do not bypass impermanence for new services — always declare persistent directories
 - Do not add packages directly to `environment.systemPackages` in host files unless truly global; prefer service-specific package options
-- Do not modify `.sops.yaml` age keys manually after provisioning — use OpenTofu outputs
+- Do not modify `.sops.yaml` age keys manually after provisioning — `tofu apply`/`tofu destroy` handle this automatically via local-exec provisioners
