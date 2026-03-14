@@ -50,7 +50,7 @@ nix-homelab/
 | `modules/nixos/root-password.nix` | Sets root password via SOPS |
 | `modules/nixos/scrobblex.nix` | Custom `services.scrobblex` — Plex→Trakt scrobbler (Node.js webhook receiver) |
 | `modules/beszel-agent.nix` | Beszel monitoring agent with custom filesystem tracking |
-| `modules/macos/base.nix` | macOS: Touch ID sudo, Dock/Finder prefs, auto-updates |
+| `modules/macos/base.nix` | macOS: Touch ID + Watch ID sudo, Dock/Finder prefs, auto-updates, Determinate Nix |
 | `modules/home-manager/msaxena.nix` | User env: zsh, starship, git, SSH config, SOPS secrets |
 | `.sops.yaml` | Defines which age keys can decrypt which secret files |
 | `assets/rootfs-impermanence.sh` | Proxmox hookscript: rolls back ZFS subvolume before each boot |
@@ -154,9 +154,12 @@ let cfg = config.custom.my-feature; in {
 
 All local options live under `custom.*`:
 - `custom.domain` — base domain (default: `home.mayursaxena.com`)
+- `custom.proxmox-lxc.enable` — Proxmox LXC tweaks (network, resolvconf, `lxc_share` group)
 - `custom.impermanence.enable` / `custom.impermanence.persistence-root`
-- `custom.remote-builds.enable`
-- `custom.beszel-monitoring-agent.*`
+- `custom.remote-builds.enable` / `custom.remote-builds.remote-host` — NixOS only
+- `custom.remote-builds-mac.enable` / `custom.remote-builds-mac.remote-host` — macOS only
+- `custom.root-password.enable` — sets root password from SOPS `common.yaml`
+- `custom.beszel-monitoring-agent.enable` / `custom.beszel-monitoring-agent.extraFilesystems`
 
 ---
 
@@ -240,8 +243,8 @@ environment.persistence."${config.custom.impermanence.persistence-root}" = {
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `generate-lxc.yml` | `prod`/`nightly` tags | Builds 4 base LXC image variants via nixos-generators, releases as `.tar.xz` |
-| `update-flake-lock.yml` | Schedule | Auto-updates `flake.lock` and opens PR |
+| `generate-lxc.yml` | `prod`/`nightly` tags | Builds 4 base LXC image variants via nixos-generators, releases as `.tar.xz`. `prod` tag = stable release, `nightly` tag = prerelease |
+| `update-flake-lock.yml` | Daily (5PM UTC) | Runs `nix flake update`, commits `flake.lock` directly, and force-pushes the `nightly` tag — which cascades into triggering `generate-lxc.yml` |
 
 ### LXC Image Variants (CI)
 - `base-lxc` — Standard base
