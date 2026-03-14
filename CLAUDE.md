@@ -64,18 +64,18 @@ nix-homelab/
 | Host | Services | Impermanent | Remote Builds |
 |------|----------|-------------|---------------|
 | `nix-builder` | Nix remote build server | No | N/A (is the builder) |
-| `dns` | Technitium DNS | Yes | Yes |
-| `caddy` | Reverse proxy, ACME/TLS | No | No |
+| `dns-server` | Technitium DNS | Yes | Yes |
+| `caddy` | Reverse proxy, ACME/TLS | Yes | Yes |
 | `actualbudget` | Finance tracking | Yes | Yes |
-| `sabnzbd` | Usenet downloader | No | No |
-| `homepage` | Services dashboard | Yes | Yes |
-| `plex` | Plex media server | Yes | Yes |
+| `sabnzbd` | Usenet downloader | Yes | Yes |
+| `homepage-dashboard` | Services dashboard | Yes | Yes |
+| `plex-server` | Plex media server | Yes | Yes |
 | `overseerr` | Media request manager | Yes | Yes |
 | `paperless` | Document management | Yes | Yes |
 | `minecraft` | Paper + Geyser/Floodgate | No | No |
-| `files` | Samba + TimeMachine | No | No |
-| `beszel-hub` | Monitoring hub | No | No |
-| `servarr` | Radarr, Sonarr, Bazarr, Prowlarr | No | No |
+| `files` | Samba + TimeMachine | Yes | Yes |
+| `beszel-hub` | Monitoring hub | Yes | Yes |
+| `servarr` | Radarr, Sonarr, Bazarr, Prowlarr | Yes | Yes |
 
 ### macOS (nix-darwin)
 - `Mayurs-MacBook-Pro` — Personal laptop with homebrew, App Store apps, home-manager
