@@ -171,17 +171,33 @@ All secrets in `secrets/` are SOPS-encrypted with age keys. Each host has its ow
 
 ### Adding a Secret
 
-1. Ensure the host's age key is in `.sops.yaml` under the appropriate `path_regex` rule.
-2. Edit/create the secret file: `sops secrets/my-service.env`
-3. Reference in NixOS config:
-   ```nix
-   sops.secrets."key-name" = {
-     sopsFile = ./../secrets/my-service.env;
-     format = "dotenv";  # or "yaml", "binary"
-     owner = "service-user";  # if needed
-     restartUnits = [ "my-service.service" ];
-   };
-   ```
+If creating a **new secrets file**, first add a `path_regex` rule to `.sops.yaml`. Every rule must include `*msaxena-keys` plus only the hosts that need access:
+
+```yaml
+# Single host:
+- path_regex: secrets/my-service.env$
+  key_groups:
+    - age:
+      - *msaxena-keys
+      - *my-host
+
+# All hosts (use the *all-keys anchor):
+- path_regex: secrets/common.yaml$
+  key_groups:
+    - age: *all-keys
+```
+
+Then create/edit the file: `sops secrets/my-service.env`
+
+To reference in NixOS config:
+```nix
+sops.secrets."key-name" = {
+  sopsFile = ./../secrets/my-service.env;
+  format = "dotenv";  # or "yaml", "binary"
+  owner = "service-user";  # if needed
+  restartUnits = [ "my-service.service" ];
+};
+```
 
 ### Secret File Formats
 - `.env` files → `format = "dotenv"`
