@@ -46,7 +46,7 @@ nix-homelab/
 | `modules/nixos/default.nix` | Base NixOS config: firewall, SSH (YubiKey-only), auto-upgrade, GC, `custom.domain` option |
 | `modules/nixos/impermanence.nix` | Ephemeral rootfs with `/persistent` mount |
 | `modules/nixos/proxmox-lxc.nix` | Proxmox LXC tweaks (disables systemd-resolved, `lxc_share` group) |
-| `modules/nixos/remote-builds.nix` | Delegates nix builds to `nix-builder.home.internal` |
+| `modules/nixos/remote-builds.nix` | Delegates nix builds to `nix-builder.home.internal` and adds it as a binary cache substituter |
 | `modules/nixos/root-password.nix` | Sets root password via SOPS |
 | `modules/nixos/scrobblex.nix` | Custom `services.scrobblex` — Plex→Trakt scrobbler (Node.js webhook receiver) |
 | `modules/beszel-agent.nix` | Beszel monitoring agent with custom filesystem tracking |
@@ -102,11 +102,17 @@ my-new-host = mkNixOSConfig [
 ### Host File Pattern (`hosts/<name>.nix`)
 
 ```nix
-{ config, lib, pkgs, ... }:
+{ inputs, outputs, config, pkgs, ... }:
 let
   domain = config.custom.domain;  # "home.mayursaxena.com"
 in {
-  networking.hostName = "my-new-host";
+  nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
+
+  custom.proxmox-lxc.enable = true;
+  custom.impermanence.enable = true;
+  custom.remote-builds.enable = true;
+  custom.root-password.enable = true;
+  custom.beszel-monitoring-agent.enable = true;
 
   services.my-service = {
     enable = true;
@@ -260,7 +266,7 @@ environment.persistence."${config.custom.impermanence.persistence-root}" = {
 - **External domain:** `*.home.mayursaxena.com` (Cloudflare, ACME certs via Caddy)
 - **Reverse proxy:** All services behind Caddy (caddy host)
 - **Monitoring:** Beszel hub + agents on all hosts
-- **Remote builds:** All containers delegate to `nix-builder.home.internal`
+- **Remote builds:** Containers with `custom.remote-builds.enable = true` delegate builds to and pull substitutes from `nix-builder.home.internal` (exceptions: `minecraft` and `nix-builder` itself)
 
 ---
 
