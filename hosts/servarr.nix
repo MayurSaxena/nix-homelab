@@ -24,6 +24,7 @@
   services.radarr = {
     enable = true;
     openFirewall = true; # TCP 7878
+    group = "lxc_share";
     settings = {
       server.urlBase = "/radarr";
       auth = {
@@ -46,6 +47,7 @@
   services.sonarr = {
     enable = true;
     openFirewall = true; # TCP 8989
+    group = "lxc_share";
     settings = {
       server.urlBase = "/sonarr";
       auth = {
@@ -69,6 +71,7 @@
   services.bazarr = {
     enable = true;
     openFirewall = true; # TCP 6767
+    group = "lxc_share";
   };
 
   # ── Prowlarr (indexer manager) ───────────────────────────────────────────
