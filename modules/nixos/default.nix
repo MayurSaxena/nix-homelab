@@ -41,6 +41,7 @@
         # allow root and sudoers
         trusted-users = ["root" "@wheel"];
       };
+      optimise.automatic = true;
     };
 
     time.timeZone = "Australia/Canberra";
