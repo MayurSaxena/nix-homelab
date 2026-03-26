@@ -250,6 +250,7 @@ module "caddy" {
   memory_size_mb        = 1024
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
+  nix_fs_size_gb        = 8
   ct_template_id        = proxmox_virtual_environment_download_file.nixos-impermanent-remotebuild-nightly.id
   pool_id               = "production"
   startup_order         = 2
@@ -267,8 +268,8 @@ module "servarr" {
   network_interfaces = { "eth0" = 20 }
   ipv4_settings      = "dhcp"
   ipv6_settings      = "auto"
-  memory_size_mb        = 2048
-  num_cpu_cores         = 2
+  memory_size_mb     = 2048
+  num_cpu_cores      = 2
   # Each *arr service stores SQLite DBs and cache under /var/lib — 20GB gives
   # comfortable headroom for four services plus index caches.
   persistent_fs_size_gb = 20
