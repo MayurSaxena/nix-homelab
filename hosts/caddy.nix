@@ -46,7 +46,12 @@ in {
         reverse_proxy https://10.0.10.1 {
           transport http {
             tls_insecure_skip_verify
+            versions 1.1
           }
+          header_up Host {upstream_hostport}
+          header_up Origin "https://{upstream_hostport}"
+          header_up X-Forwarded-For {remote_host}
+          header_up X-Forwarded-Proto {scheme}
         }
         import use-external-dns-acme
       '';
