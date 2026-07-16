@@ -46,6 +46,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # NUR - community package repository
+    nur = {
+      url = "github:nix-community/NUR";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Minecraft server module with Spigot/Paper support
     nix-minecraft.url = "github:Infinidoge/nix-minecraft";
 

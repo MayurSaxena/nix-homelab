@@ -1,6 +1,11 @@
-{pkgs, ...}: {
+{
+  inputs,
+  pkgs,
+  ...
+}: {
   # By default on any new Mac install things in macos/packages.nix at the system level
   imports = [
+    inputs.nur.modules.darwin.default
     ./packages.nix
     ./remote-builds.nix
   ];
