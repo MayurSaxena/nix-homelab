@@ -126,7 +126,7 @@ module "plex-server" {
   ipv6_settings         = "auto"
   memory_size_mb        = 2048
   num_cpu_cores         = 4
-  persistent_fs_size_gb = 16
+  persistent_fs_size_gb = 32
   nix_fs_size_gb        = 12
   additional_mount_points = [{
     vol     = "/mnt/MediaBox/media/"
