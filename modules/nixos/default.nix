@@ -14,18 +14,15 @@
   imports = [
     inputs.sops-nix.nixosModules.sops
     inputs.nur.modules.nixos.default
+    inputs.nur.repos.msaxena.modules.nixos.scrobblex
     ./impermanence.nix
     ./proxmox-lxc.nix
     ./remote-builds.nix
     ./root-password.nix
-    ./scrobblex.nix
     ../beszel-agent.nix
   ];
 
   config = {
-    # Packages not yet in nixpkgs-unstable — remove once PRs merge.
-    nixpkgs.overlays = [(import ./../../overlays/default.nix)];
-
     system.stateVersion = "25.11";
     nixpkgs.config.allowUnfree = true;
     nix = {
