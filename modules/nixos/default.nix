@@ -53,6 +53,7 @@
       flags = ["--refresh"];
       runGarbageCollection = true;
     };
+    systemd.services.nixos-upgrade.serviceConfig.RemainAfterExit = "yes";
 
     # enable the firewall
     networking.firewall.enable = true;
