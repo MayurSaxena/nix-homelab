@@ -31,34 +31,14 @@ jobs:
                         echo "RP1=$RELEASE_PATH" >> $GITHUB_ENV
                     }
             
-            -   name: Generate impermanent NixOS configuration
-                run: |
-                    nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-impermanent | {
-                        read path
-                        FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-impermanent.tar.xz"
-                        cp $path $RELEASE_PATH
-                        echo "RP2=$RELEASE_PATH" >> $GITHUB_ENV
-                    }
-
-            -   name: Generate standard NixOS configuration with remote builder configured
+            -   name: Generate NixOS configuration with remote builder configured
                 run: |
                     nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-remote | {
                         read path
                         FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-standard-remotebuild.tar.xz"
+                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-remotebuild.tar.xz"
                         cp $path $RELEASE_PATH
-                        echo "RP3=$RELEASE_PATH" >> $GITHUB_ENV
-                    }
-
-            -   name: Generate impermanent NixOS configuration with remote builder configured
-                run: |
-                    nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-impermanent-remote | {
-                        read path
-                        FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-impermanent-remotebuild.tar.xz"
-                        cp $path $RELEASE_PATH
-                        echo "RP4=$RELEASE_PATH" >> $GITHUB_ENV
+                        echo "RP2=$RELEASE_PATH" >> $GITHUB_ENV
                     }
             
             -   name: Release

@@ -38,8 +38,38 @@ Provisioning is handled by OpenTofu in `provisioning/`:
 3. Add the hostname to `nixosConfigurations` in `flake.nix`.
 4. Run `cd provisioning && tofu apply`.
    - OpenTofu creates the LXC, derives its age key, and updates `.sops.yaml` automatically.
+   - Import the container from the plain `base-lxc` release image — it doesn't
+     need impermanence or remote-builds pre-baked in (see below).
 5. Generate any new secrets: `sops secrets/<file>`.
-6. Push to GitHub, then on the container: `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab`
+6. Push to GitHub, then bootstrap the real config onto the container. Since
+   these LXCs are only allocated as much RAM as their service needs, building
+   locally on the container can hit the OOM killer. `nixos-rebuild` reads the
+   *currently active* system's `nix.conf` to decide where to build, not the
+   target config, so a freshly-imported vanilla container has no build
+   machines configured yet. Build on `nix-builder` instead and ship the
+   closure over SSH, run from your Mac or any machine that can reach both:
+
+   ```
+   nixos-rebuild switch \
+     --flake github:MayurSaxena/nix-homelab#<host> \
+     --build-host nix@nix-builder.home.internal \
+     --target-host root@<container-ip> \
+     --use-remote-sudo
+   ```
+
+   Evaluation happens locally, the build happens on `nix-builder`, and only
+   the finished closure gets copied to the container and activated — no local
+   compilation on the low-RAM box. Every host's own flake sets
+   `custom.remote-builds.enable = true` (except `nix-builder` and `minecraft`),
+   so once this first switch lands, the daily auto-upgrade timer on the
+   container keeps delegating builds to `nix-builder` on its own.
+
+   If you don't have SSH reach to `nix-builder` from wherever you're deploying,
+   fall back to importing the `base-lxc-remote` release image instead (built
+   in CI alongside `base-lxc`) — it has `custom.remote-builds.enable = true`
+   pre-baked in, so you can SSH directly into the container and run a bare
+   `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab#<host>` there
+   without OOMing on the first build.
 
 ### Setting Up Impermanence
 
