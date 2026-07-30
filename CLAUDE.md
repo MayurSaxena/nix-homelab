@@ -99,11 +99,11 @@ The `services.scrobblex` module (Plex→Trakt webhook scrobbler) is sourced from
 
 ### Host File Pattern (`hosts/<name>.nix`)
 
+The minimal skeleton — always present:
+
 ```nix
-{ inputs, outputs, config, pkgs, ... }:
-let
-  domain = config.custom.domain;  # "home.mayursaxena.com"
-in {
+{ inputs, outputs, config, ... }:
+{
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
   custom.proxmox-lxc.enable = true;
@@ -116,24 +116,50 @@ in {
     enable = true;
     openFirewall = true;
   };
-
-  # For secrets:
-  sops.secrets."my-service-secrets" = {
-    sopsFile = ./../secrets/my-service.env;
-    format = "dotenv";
-    restartUnits = [ "my-service.service" ];
-  };
-  services.my-service.environmentFile = config.sops.secrets."my-service-secrets".path;
-
-  # For impermanent hosts — declare every directory the service writes to:
-  environment.persistence."${config.custom.impermanence.persistence-root}" = {
-    directories = [
-      { directory = "/var/lib/my-service"; user = "my-service"; group = "my-service"; mode = "0750"; }
-      # DynamicUser services write to /var/lib/private/<name> — use this pattern:
-      { directory = "/var/lib/private/my-service"; }
-    ];
-  };
 }
+```
+
+Add each of the following only when the service actually needs it:
+
+**`pkgs` in args** — only when referencing packages directly (e.g. `pkgs.caddy.withPlugins`):
+```nix
+{ inputs, outputs, config, pkgs, ... }:
+```
+
+**`let domain = config.custom.domain;`** — only when service config embeds the domain in URLs or hostnames:
+```nix
+let domain = config.custom.domain; in {
+  services.my-service.settings.hostWhitelist = "my-service.${domain}";
+}
+```
+
+**`imports`** — only when the host needs a module not in the standard set (e.g. `inputs.nix-minecraft.nixosModules.minecraft-servers`):
+```nix
+{ inputs, outputs, config, ... }:
+{
+  imports = [ inputs.some-flake.nixosModules.something ];
+  ...
+}
+```
+
+**`sops.secrets`** — only when the service needs encrypted secrets:
+```nix
+sops.secrets."my-service-secrets" = {
+  sopsFile = ./../secrets/my-service.env;
+  format = "dotenv";
+  restartUnits = [ "my-service.service" ];
+};
+services.my-service.environmentFile = config.sops.secrets."my-service-secrets".path;
+```
+
+**`environment.persistence`** — only for impermanent hosts, for every directory the service writes state to:
+```nix
+environment.persistence."${config.custom.impermanence.persistence-root}" = {
+  directories = [
+    { directory = "/var/lib/my-service"; user = "my-service"; group = "my-service"; mode = "0750"; }
+    { directory = "/var/lib/private/my-service"; }  # DynamicUser pattern
+  ];
+};
 ```
 
 ### Module Pattern
