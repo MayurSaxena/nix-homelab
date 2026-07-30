@@ -13,7 +13,7 @@
   custom.root-password.enable = true;
   custom.beszel-monitoring-agent.enable = true;
 
-  services.overseerr = {
+  services.seerr = {
     enable = true;
     openFirewall = true;
     port = 5055;
@@ -22,7 +22,7 @@
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
-        directory = "/var/lib/private/overseerr";
+        directory = "/var/lib/private/jellyseerr";
       }
     ];
   };
