@@ -40,15 +40,16 @@
         trusted-users = ["root" "@wheel"];
       };
       optimise.automatic = true;
+      
     };
-
+    systemd.services.nix-optimise.serviceConfig.RemainAfterExit = "yes";
     time.timeZone = "Australia/Canberra";
 
     # Every day around 4AM AEST so that I wake up to a nice surprise if it breaks.
     system.autoUpgrade = {
       enable = true;
       dates = "*-*-* 18:00:00 UTC";
-      randomizedDelaySec = "90min";
+      randomizedDelaySec = "120min";
       flake = "github:MayurSaxena/nix-homelab";
       flags = ["--refresh"];
       runGarbageCollection = true;
