@@ -78,8 +78,8 @@ util/                  pve-auth.sh — sourced, not executed, for 2FA against th
 ```
 
 There is no `overlays/` or `packages/` directory — scrobblex moved out to NUR. Do not
-recreate them; third-party packages come from a flake input or NUR, and an overlay that a
-host genuinely needs is applied from an inline module list in `flake.nix`.
+recreate them; see *When a package isn't in nixpkgs*. An overlay that a host genuinely needs
+is applied from an inline module list in `flake.nix`.
 
 ---
 
@@ -507,6 +507,48 @@ Judgement inside that shape:
 - **Does it need a Terraform counterpart?** If it changes storage or boot behaviour, yes —
   `custom.impermanence` is meaningless without `rootfs_impermanence`, `custom_hookscript` and
   sized volumes on the tofu side.
+
+---
+
+## When a package isn't in nixpkgs
+
+Work down this list; don't skip a rung because the one below is quicker.
+
+1. **It's in nixpkgs** — just use it. `flake.lock` moves daily, so check the current pin
+   rather than assuming from memory.
+2. **It isn't, but it could be** — package it for nixpkgs and upstream it. That's the
+   preferred home for anything genuinely reusable: it gets CI, review, and other people
+   maintaining it after you.
+3. **It can't go to nixpkgs** — package it in the owner's own NUR repo,
+   [`MayurSaxena/nurpkgs`](https://github.com/MayurSaxena/nurpkgs), registered in NUR as
+   `msaxena`.
+4. **Never** recreate a local `packages/` or `overlays/` directory. Both existed once, for
+   scrobblex, and were deliberately removed when it moved to NUR.
+
+The usual reasons something fails rung 2 are worth knowing, because they're the test for
+whether to jump to rung 3: unfree or unredistributable binaries, no tagged releases or stable
+versioning, vendored dependencies that can't be fixed-output-hashed, a build that needs
+network access, or software too personal or niche to be worth anyone else's maintenance
+burden.
+
+### Consuming it
+
+NUR is a flake input (`github:nix-community/NUR`, with `nixpkgs` followed), and its module is
+imported on **both** platforms — `inputs.nur.modules.nixos.default` in
+`modules/nixos/default.nix`, `inputs.nur.modules.darwin.default` in `modules/macos/base.nix`.
+So two shapes are available anywhere without further wiring:
+
+- **A package** — `pkgs.nur.repos.msaxena.<name>`. Nothing in the repo uses one yet, so
+  you'd be setting the precedent.
+- **A NixOS module** — `inputs.nur.repos.msaxena.modules.nixos.<name>`, imported like any
+  other module. `services.scrobblex` is the live example, and it's imported by the *base*
+  module, which is why the option exists on every host while only `plex` enables it.
+
+Import a NUR module from the base module only when every host should see the option;
+otherwise put it in the one host's `imports`.
+
+Read `nurpkgs` itself for its layout and conventions before adding to it — this document
+deliberately doesn't mirror them, since they belong to that repo and would go stale here.
 
 ---
 
