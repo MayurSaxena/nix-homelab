@@ -637,14 +637,9 @@ copy them as precedent:
 - `sabnzbd.nix` (`/var/lib/sabnzbd`) and `files.nix` (`/var/lib/samba`) persist bare, while
   caddy, plex, paperless and servarr spell out `user`/`group`/`mode`. Both are safe — their
   units set `StateDirectory=` — just less explicit than their neighbours.
-- `servarr.nix` sets `services.{radarr,sonarr,bazarr}.group = "lxc_share"` so those services
-  can reach the shared `/mnt/MediaBox` PVE mount, but its persistence entries still name
-  `group = "radarr"` / `"sonarr"` / `"bazarr"`. At the pinned nixpkgs all three modules guard
-  group creation with `lib.mkIf (cfg.group == "<service>")`, so **none of those three groups
-  exist on that host**. The group doesn't gate the service's access to its own state
-  directory — the service's *user* does — but it is still passed to impermanence's
-  `chown "$user:$group"`, which runs when the persistent directory is first created. Naming
-  `lxc_share` (the effective `Group=`) would match reality.
+- `sabnzbd.nix` and `servarr.nix` both set a service's own `group` *and* add the same group
+  via `users.users.<x>.extraGroups`. The former already makes it the process's primary group,
+  so the latter is redundant — existing noise, not a pattern to copy.
 - `provisioning/main.tf:4` — the `proxmox_virtual_environment_file` resource that uploads
   `assets/rootfs-impermanence.sh` hardcodes `node_name = "proxmox"`, while every `module`
   block below it passes `pve_node_name = var.pve_node_name`. A second node or a rename would

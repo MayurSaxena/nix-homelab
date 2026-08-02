@@ -103,24 +103,29 @@
   users.users.sonarr.extraGroups = ["lxc_share"];
   users.users.bazarr.extraGroups = ["lxc_share"];
 
+  # The group here must be each service's *effective* Group=, which is lxc_share
+  # (set above), not "<service>". The upstream modules only create a "<service>"
+  # group when their own group option is left at its default, so radarr/sonarr/
+  # bazarr groups don't exist on this host — and impermanence chowns these
+  # directories to "$user:$group" when it first creates them.
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
         directory = "/var/lib/radarr";
         user = "radarr";
-        group = "radarr";
+        group = "lxc_share";
         mode = "0750";
       }
       {
         directory = "/var/lib/sonarr";
         user = "sonarr";
-        group = "sonarr";
+        group = "lxc_share";
         mode = "0750";
       }
       {
         directory = "/var/lib/bazarr";
         user = "bazarr";
-        group = "bazarr";
+        group = "lxc_share";
         mode = "0750";
       }
       {
