@@ -18,6 +18,14 @@
     # after migration. Create with: sops secrets/servarr.env
     format = "dotenv";
     sopsFile = ./../secrets/servarr.env;
+    # Every unit that reads this file, so a rotated key takes effect without a
+    # manual restart. Bazarr is absent deliberately — its module has no
+    # environmentFiles support, so it never reads this secret.
+    restartUnits = [
+      "radarr.service"
+      "sonarr.service"
+      "prowlarr.service"
+    ];
   };
 
   # ── Radarr (movies) ───────────────────────────────────────────────────────
@@ -97,11 +105,11 @@
   };
 
   # Radarr and Sonarr rename/move media files, so they need access to the
-  # host-mounted media library. Bazarr adds subtitles. Prowlarr works over
-  # HTTP APIs only.
-  users.users.radarr.extraGroups = ["lxc_share"];
-  users.users.sonarr.extraGroups = ["lxc_share"];
-  users.users.bazarr.extraGroups = ["lxc_share"];
+  # host-mounted media library, and Bazarr writes subtitles alongside them —
+  # hence group = "lxc_share" on all three above. Setting the service's own
+  # group option already makes it the process's primary group, so no
+  # users.users.<x>.extraGroups line is needed. Prowlarr works over HTTP APIs
+  # only and needs no filesystem access.
 
   # The group here must be each service's *effective* Group=, which is lxc_share
   # (set above), not "<service>". The upstream modules only create a "<service>"

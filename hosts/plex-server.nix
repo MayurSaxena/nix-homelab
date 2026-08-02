@@ -17,6 +17,8 @@
     "scrobblex-secrets" = {
       format = "dotenv";
       sopsFile = ./../secrets/scrobblex.env;
+      # Plex itself reads no secret; only scrobblex consumes this file.
+      restartUnits = ["scrobblex.service"];
     };
   };
 

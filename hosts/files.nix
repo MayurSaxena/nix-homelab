@@ -26,6 +26,10 @@
     ];
   };
 
+  # No restartUnits here: these two are read by the sambaUsers activation
+  # script below, not by any unit. smbpasswd writes them into Samba's passdb,
+  # which smbd re-reads live, so restarting smbd would change nothing — the
+  # activation script is what has to re-run, and it does on every switch.
   sops.secrets = {
     "passwords/timemachine" = {
       sopsFile = ./../secrets/fileserver.yaml;
@@ -174,7 +178,14 @@
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
+        # smbd/nmbd/winbindd all run as root — the upstream module sets no
+        # User=/Group= — and /var/lib/samba is created as a plain root-owned
+        # parent. Samba manages the stricter modes on its own subdirectories
+        # (notably private/, which holds the passdb) from inside this mount.
         directory = "/var/lib/samba";
+        user = "root";
+        group = "root";
+        mode = "0755";
       }
     ];
   };

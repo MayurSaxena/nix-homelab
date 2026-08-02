@@ -87,13 +87,21 @@ in {
     };
   };
 
-  # So that the user running the program can access the host mount
-  users.users.${config.services.sabnzbd.user}.extraGroups = ["lxc_share"];
+  # group = "lxc_share" above already makes lxc_share the process's primary
+  # group, which is what grants access to the host mount — no extraGroups
+  # line is needed on top of it.
 
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
         directory = "/var/lib/sabnzbd";
+        # Derived so a change to services.sabnzbd.user/group can't desync.
+        # The unit sets StateDirectory=sabnzbd, so systemd re-applies these on
+        # every start regardless; spelling them out documents the intent and
+        # gets the bind mount right the first time it is created.
+        user = config.services.sabnzbd.user;
+        group = config.services.sabnzbd.group;
+        mode = "0755";
       }
     ];
   };

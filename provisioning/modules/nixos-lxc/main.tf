@@ -132,12 +132,34 @@ resource "proxmox_virtual_environment_container" "ct" {
 
   provisioner "local-exec" {
     command = <<EOT
-sleep 5
 HOSTNAME=${self.ipv4["eth0"]} #${self.initialization[0].hostname}.${self.initialization[0].dns[0].domain}
-age_key=$(nix shell nixpkgs#ssh-to-age --command sh -c "ssh-keyscan -t ed25519 $HOSTNAME | ssh-to-age")
-echo $age_key
+# Poll until sshd actually offers an ed25519 host key. A fixed sleep raced the
+# container's first boot: ssh-keyscan would come back empty, ssh-to-age would
+# emit nothing, and an anchor with an empty key got spliced into .sops.yaml —
+# which then silently encrypts nothing to this host. Fail loudly instead.
+age_key=""
+attempt=1
+while [ "$attempt" -le 30 ]; do
+  candidate=$(nix shell nixpkgs#ssh-to-age --command sh -c "ssh-keyscan -t ed25519 -T 5 $HOSTNAME 2>/dev/null | ssh-to-age" 2>/dev/null | head -n1 || true)
+  case "$candidate" in
+    age1*)
+      age_key=$candidate
+      break
+      ;;
+  esac
+  echo "waiting for sshd on $HOSTNAME to offer a host key (attempt $attempt/30)"
+  attempt=$((attempt + 1))
+  sleep 2
+done
+if [ -z "$age_key" ]; then
+  echo "ERROR: could not derive an age key for ${self.initialization[0].hostname} at $HOSTNAME." >&2
+  echo "The container exists but never offered an ed25519 host key. Nothing was written to" >&2
+  echo ".sops.yaml. Check the container is booted and reachable, then re-run tofu apply." >&2
+  exit 1
+fi
+echo "derived age key for ${self.initialization[0].hostname}: $age_key"
 sed -i '' -r "/^.+&all-keys.*$/a\\
-    - &${self.initialization[0].hostname} $(echo $age_key | tr -d '\n')
+    - &${self.initialization[0].hostname} $age_key
 " ../.sops.yaml
 sops updatekeys ../secrets/* -y
 # git add ../.sops.yaml ../secrets/* && git commit -m "Adding ${self.initialization[0].hostname} to .sops.yaml" && git push

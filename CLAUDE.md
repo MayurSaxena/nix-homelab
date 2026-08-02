@@ -77,8 +77,9 @@ assets/                Files committed in the clear — hookscript, pubkeys, and
 util/                  pve-auth.sh — sourced, not executed, for 2FA against the PVE API
 ```
 
-There is no `overlays/` or `packages/` directory. The README still mentions them; it is
-stale. Do not recreate them.
+There is no `overlays/` or `packages/` directory — scrobblex moved out to NUR. Do not
+recreate them; third-party packages come from a flake input or NUR, and an overlay that a
+host genuinely needs is applied from an inline module list in `flake.nix`.
 
 ---
 
@@ -357,9 +358,13 @@ The symptom that you need it is a permission failure on first boot after a rollb
 If the service reads or writes storage that lives on the Proxmox host, it needs to be in the
 `lxc_share` group. Two spellings exist and which is available depends on upstream: set the
 service's own `group = "lxc_share"` option, or append via `users.users.<x>.extraGroups`.
-Setting the service's own `group` already makes it the process's primary group, so the
-`extraGroups` line on top is redundant — both `sabnzbd` and `servarr` carry the redundant
-pair. Treat that as existing noise; pick one deliberately.
+
+**Use the module's own `group` when it has one** — that sets the process's primary group, so
+an `extraGroups` line on top of it is redundant. Reach for `extraGroups` only when the
+service's group is pinned to something else you need to keep. `plex` is the live example:
+`services.plex.group = "plex"` owns its state directory, so `lxc_share` has to arrive as a
+supplementary group. `files.nix` likewise, since `timemachine` and `msaxena` are plain
+`isNormalUser` accounts with no service `group` option at all.
 
 ---
 
@@ -420,15 +425,18 @@ declared as `"homepage-secrets"` on a host whose flake key is `homepage`.
   only `hashedPasswordFile` (required because `/run/secrets` isn't populated yet at the point
   activation creates users). It relocates the secret to `/run/secrets-for-users` and forbids
   a non-root owner, so never combine it with `owner`. The root password is the only instance.
-- **`restartUnits`** — **set it on any secret a systemd unit reads at startup.** The intent is
-  that a service picks up a rotated secret (env var, token, API key) without anyone
-  restarting it by hand. Today only `homepage` and `sabnzbd` do; caddy, files, paperless,
-  plex and servarr are drift, not precedent. For a file several services share, list every
-  unit that reads it. The unit name is *not* derivable from the secret name or the
-  `services.*` attribute — it's whatever unit the module actually defines.
-  It does **not** apply to secrets no unit consumes: `passwords/root` is read during user
-  creation (`neededForUsers`), and `files.nix`'s samba passwords are read by an activation
-  script.
+- **`restartUnits`** — **set it on any secret a systemd unit reads at startup**, so a rotated
+  value takes effect without a manual restart. Every such secret in the repo now does. For a
+  file several services share, list *every* unit that reads it — `servarr.env` names radarr,
+  sonarr and prowlarr but not bazarr, whose module has no `environmentFiles` support.
+  The unit name is *not* derivable from the secret name or the `services.*` attribute: it's
+  whatever unit the module actually defines, and there may be several. `services.paperless`
+  puts `environmentFile` in a shared `defaultServiceConfig` consumed by four units and
+  defines no `paperless.service` at all.
+  It does **not** apply to secrets no unit consumes. Two live exceptions: `passwords/root`
+  is read while users are created (`neededForUsers`), and `files.nix`'s samba passwords are
+  read by an activation script that runs on every switch — restarting smbd would change
+  nothing, since smbpasswd has already written them into the passdb.
 
 ### How the path gets consumed
 
@@ -630,22 +638,13 @@ nixos-rebuild switch --flake .#<host> --target-host root@<ip>
 Things that are currently inconsistent, so you don't "fix" them into the wrong shape or
 copy them as precedent:
 
-- `README.md` documents `overlays/` and `packages/` directories that no longer exist.
-- `restartUnits` is set only on `sabnzbd` and `homepage-dashboard`; absent on caddy, files,
-  paperless, plex and servarr. The intent is that every service restarts when its secrets
-  change, so treat those as unfinished rather than as a deliberate opt-out.
-- `sabnzbd.nix` (`/var/lib/sabnzbd`) and `files.nix` (`/var/lib/samba`) persist bare, while
-  caddy, plex, paperless and servarr spell out `user`/`group`/`mode`. Both are safe — their
-  units set `StateDirectory=` — just less explicit than their neighbours.
-- `sabnzbd.nix` and `servarr.nix` both set a service's own `group` *and* add the same group
-  via `users.users.<x>.extraGroups`. The former already makes it the process's primary group,
-  so the latter is redundant — existing noise, not a pattern to copy.
-- `provisioning/main.tf:4` — the `proxmox_virtual_environment_file` resource that uploads
-  `assets/rootfs-impermanence.sh` hardcodes `node_name = "proxmox"`, while every `module`
-  block below it passes `pve_node_name = var.pve_node_name`. A second node or a rename would
-  break the hookscript upload only.
-- The create-time provisioner's only readiness guard before `ssh-keyscan` is a 5-second
-  sleep; on a slow node it can write an empty age key into `.sops.yaml`.
-- `sops.templates` is available via sops-nix but used nowhere, so there's no in-repo
-  precedent for embedding a secret inside an otherwise-declarative config file. Today the
-  ad-hoc answer is an activation script (`files.nix`).
+- **`sops.templates` is available via sops-nix but used nowhere.** It renders a file whose
+  *content* is a Nix string with `config.sops.placeholder."<name>"` markers substituted at
+  activation, so a config file can stay fully declarative while embedding a secret that never
+  reaches the world-readable Nix store. There is no in-repo precedent, so if you hit "this
+  service wants one config file containing both plain settings and a credential", you're
+  choosing between introducing it and copying `files.nix`'s activation-script approach.
+  Prefer `sops.templates` for anything new — the activation script exists because samba keeps
+  its own out-of-band passdb, not because it's the better pattern.
+- `minecraft`'s two disabled toggles and `nix-builder`'s remote-builds and root-password
+  carry no explanatory comment, unlike `nix-builder`'s impermanence. Comment yours anyway.

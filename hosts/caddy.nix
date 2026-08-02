@@ -19,6 +19,8 @@ in {
     "caddy-secrets" = {
       format = "dotenv";
       sopsFile = ./../secrets/caddy.env;
+      # Holds CF_API_TOKEN, interpolated into the Caddyfile's DNS-01 block.
+      restartUnits = ["caddy.service"];
     };
   };
 

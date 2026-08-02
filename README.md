@@ -2,52 +2,83 @@
 
 Declarative homelab infrastructure using NixOS, nix-darwin, and OpenTofu on Proxmox.
 
-Every host's configuration is self-documenting: if a machine dies, rebuild it from this repo.
+Thirteen NixOS hosts run as unprivileged LXC containers on a single Proxmox node, plus one
+nix-darwin Mac. Every host's configuration lives here: if a machine dies, rebuild it from
+this repo. If a change only works because of state created by hand on a running box, it's a
+bug.
+
+> Working on this repo with an AI assistant? [`CLAUDE.md`](CLAUDE.md) documents the mental
+> model and the decision procedures — how to pick a persistence shape, where a secret
+> belongs, how to size a container — in more depth than this README.
 
 ## Repository Structure
 
 ```
-flake.nix              # Entry point — all hosts, inputs, and helpers
+flake.nix              # Entry point — inputs, both config builders, every host
 hosts/                 # Per-host NixOS and macOS configurations
-modules/               # Reusable NixOS and macOS modules
-  nixos/               # Base NixOS config, impermanence, proxmox-lxc, etc.
+modules/
+  nixos/               # Base NixOS module + the custom.* capability modules
   macos/               # Base macOS config, packages, remote builds
-  home-manager/        # User-level dotfiles (zsh, git, ssh)
-  beszel-agent.nix     # Monitoring agent module
-overlays/              # nixpkgs overlays for packages not yet upstream
-packages/              # Custom package definitions (e.g. scrobblex)
+  home-manager/        # The Mac user's dotfiles and personal secrets
+  beszel-agent.nix     # Monitoring agent (shared, imported by the NixOS base)
 provisioning/          # OpenTofu configs for Proxmox LXC provisioning
 secrets/               # SOPS-encrypted secrets (age + YubiKey)
-assets/                # SSH keys, impermanence hookscript
+assets/                # Committed in the clear — hookscript, pubkeys, builder key
+util/                  # pve-auth.sh — sourced, not executed, for 2FA against the PVE API
 .github/workflows/     # CI: LXC image generation, flake.lock auto-update
 ```
 
+## How It Fits Together
+
+Four systems hand off to each other:
+
+1. **OpenTofu creates the container.** `tofu apply` builds the LXC, then SSH-scans it,
+   converts its ed25519 host key to an age key, splices that into `.sops.yaml`, and re-runs
+   `sops updatekeys`. `tofu destroy` removes the key and re-encrypts. `.sops.yaml`'s age
+   anchors are machine-managed — don't hand-edit them.
+2. **The container boots a CI base image.** Just enough NixOS to be SSH-reachable and
+   sops-capable. A bootstrap, not the host.
+3. **The first `nixos-rebuild switch` makes it itself.** Impermanence turns on, services
+   start, secrets decrypt against the host key OpenTofu already registered.
+4. **`system.autoUpgrade` keeps it current.** Each host pulls this repo daily and switches.
+   A separate workflow updates `flake.lock` on main and re-tags `nightly`, rebuilding the
+   images.
+
+Pushing to main therefore deploys. There is no staging step.
+
 ## Key Design Decisions
 
-- **Impermanence**: Most LXC containers use an ephemeral rootfs that resets on every boot. Only `/nix`, `/persistent`, and `/boot` survive reboots. This forces all state to be declared in Nix.
-- **SOPS + age + YubiKey**: Secrets are encrypted at rest in the repo. Each host has an age key derived from its SSH host key; decryption requires either the host key or a YubiKey.
-- **Remote builds**: Most containers delegate builds to a dedicated `nix-builder` LXC to save RAM/CPU.
-- **Single domain variable**: All services share `custom.domain` (default: `home.mayursaxena.com`), defined once in `modules/nixos/default.nix`.
+- **Impermanence**: most containers use an ephemeral rootfs that resets on every boot. Only
+  the separate volumes survive — `/boot`, `/nix`, `/persistent`, `/sbin`, `/bin` — and of
+  those only `/persistent` is backed up. This forces state to be declared in Nix.
+- **SOPS + age + YubiKey**: secrets are encrypted at rest. Each host has an age key derived
+  from its SSH host key; a file is encrypted to the operator's YubiKeys plus only the hosts
+  that need it at runtime.
+- **Remote builds**: most containers delegate builds to a dedicated `nix-builder` LXC, which
+  also serves as a binary cache substituter. Containers are sized for their service, not for
+  compiling.
+- **Single domain variable**: services share `custom.domain` (default
+  `home.mayursaxena.com`), defined once in `modules/nixos/default.nix`.
+- **`custom.*` namespace**: every repo-local option lives under `custom.*`. Five toggles form
+  the standard host preamble — `proxmox-lxc`, `impermanence`, `remote-builds`,
+  `root-password`, `beszel-monitoring-agent`.
 
 ## Deploying a New NixOS LXC
 
-Provisioning is handled by OpenTofu in `provisioning/`:
-
-1. Add a new module block in `provisioning/main.tf` with the desired specs.
-2. Add a host config in `hosts/<name>.nix`.
-3. Add the hostname to `nixosConfigurations` in `flake.nix`.
-4. Run `cd provisioning && tofu apply`.
-   - OpenTofu creates the LXC, derives its age key, and updates `.sops.yaml` automatically.
-   - Import the container from the plain `base-lxc` release image — it doesn't
-     need impermanence or remote-builds pre-baked in (see below).
-5. Generate any new secrets: `sops secrets/<file>`.
-6. Push to GitHub, then bootstrap the real config onto the container. Since
-   these LXCs are only allocated as much RAM as their service needs, building
-   locally on the container can hit the OOM killer. `nixos-rebuild` reads the
-   *currently active* system's `nix.conf` to decide where to build, not the
-   target config, so a freshly-imported vanilla container has no build
-   machines configured yet. Build on `nix-builder` instead and ship the
-   closure over SSH, run from your Mac or any machine that can reach both:
+1. Write `hosts/<name>.nix` and register it in `nixosConfigurations` in `flake.nix`.
+2. Add a module block in `provisioning/main.tf`. `hostname` must equal the flake attribute
+   key.
+3. If it needs secrets, add a `path_regex` rule to `.sops.yaml`, then `sops secrets/<file>`.
+4. Commit and push — `autoUpgrade` and the flake URL read from GitHub, not your worktree.
+5. `cd provisioning && tofu apply`
+   - Creates the LXC, derives its age key, and updates `.sops.yaml` automatically.
+   - Import from the plain `base-lxc` release image; impermanence and remote-builds don't
+     need pre-baking (see below).
+6. Bootstrap the real config. These LXCs get only as much RAM as their service needs, so
+   building on the container can hit the OOM killer. `nixos-rebuild` reads the *currently
+   active* system's `nix.conf` to decide where to build — not the target config — so a
+   freshly-imported container has no build machines configured yet. Build on `nix-builder`
+   and ship the closure, from your Mac or anything that can reach both:
 
    ```
    nixos-rebuild switch \
@@ -57,45 +88,98 @@ Provisioning is handled by OpenTofu in `provisioning/`:
      --use-remote-sudo
    ```
 
-   Evaluation happens locally, the build happens on `nix-builder`, and only
-   the finished closure gets copied to the container and activated — no local
-   compilation on the low-RAM box. Every host's own flake sets
-   `custom.remote-builds.enable = true` (except `nix-builder` and `minecraft`),
-   so once this first switch lands, the daily auto-upgrade timer on the
-   container keeps delegating builds to `nix-builder` on its own.
+   Evaluation happens locally, the build on `nix-builder`, and only the finished closure is
+   copied over and activated. Once this first switch lands, the host's own
+   `custom.remote-builds.enable = true` keeps the daily auto-upgrade delegating builds.
 
-   If you don't have SSH reach to `nix-builder` from wherever you're deploying,
-   fall back to importing the `base-lxc-remote` release image instead (built
-   in CI alongside `base-lxc`) — it has `custom.remote-builds.enable = true`
-   pre-baked in, so you can SSH directly into the container and run a bare
-   `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab#<host>` there
-   without OOMing on the first build.
+   If you can't reach `nix-builder` from where you're deploying, import the `base-lxc-remote`
+   image instead — it has remote-builds pre-baked, so a bare
+   `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab#<host>` on the container
+   works without OOMing.
+
+### Base Images
+
+CI publishes two images per release tag (`prod` and `nightly`), so four template resources in
+`provisioning/images.tf`:
+
+| Image | Contents | Use when |
+|---|---|---|
+| `base-lxc` → `nixos-proxmox-lxc-standard.tar.xz` | plain base | you can reach `nix-builder` from your deploy machine (preferred) |
+| `base-lxc-remote` → `nixos-proxmox-lxc-remotebuild.tar.xz` | + `custom.remote-builds.enable` | you can't, and need the container to build for itself |
+
+Impermanence is not an image dimension: OpenTofu creates the persistent mounts, and the
+host's own flake enables impermanence on first switch. Use `prod` for hosts everything else
+bootstraps through (`nix-builder`, `dns`) and `nightly` otherwise.
+
+Changing a host's `ct_template_id` later is safe — the module sets `ignore_changes` on
+`operating_system["template_file_id"]`, so it only affects newly-created containers.
 
 ### Setting Up Impermanence
 
 For impermanent containers, OpenTofu handles:
-- Mount points: `/boot`, `/nix`, `/persistent`, `/sbin`, `/bin`
-- The hookscript (`assets/rootfs-impermanence.sh`) that rolls back the rootfs ZFS subvolume to `@blank` before each boot
 
-The `/sbin` and `/bin` mounts are persistent volumes that survive rootfs wipes. NixOS populates `/sbin/init` (symlink → `/nix/var/nix/profiles/system/init`) at activation time; because `/nix` is also a persistent mount, the init chain is always valid without any special Proxmox entrypoint configuration.
+- Mount points `/boot`, `/nix`, `/persistent`, `/sbin`, `/bin` (only `/persistent` is backed
+  up)
+- The hookscript (`assets/rootfs-impermanence.sh`) that rolls the rootfs ZFS subvolume back
+  to `@blank` before each boot
 
-SSH host keys and `machine-id` are seeded automatically on first boot via `systemd-tmpfiles` rules in `modules/nixos/impermanence.nix` (`C` rules copy from the ephemeral paths if no persistent copy exists yet). No manual key generation is needed.
+`custom_hookscript` is a separate variable from `rootfs_impermanence` and defaults to null —
+set only the latter and you get the volumes with no rollback, i.e. a host that is impermanent
+in name only.
 
-### What The Base Image Provides
+`/sbin` and `/bin` are persistent volumes that survive the wipe. NixOS populates `/sbin/init`
+(symlink → `/nix/var/nix/profiles/system/init`) at activation; because `/nix` is also
+persistent, the init chain stays valid without special Proxmox entrypoint configuration.
 
-- Firewall enabled
-- SSH with YubiKey-only root access (password auth disabled)
-- Root password via SOPS (for Proxmox console access)
-- Daily auto-upgrade from `github:MayurSaxena/nix-homelab` at ~4 AM AEST
-- Daily garbage collection (older than 7 days)
-- Impermanence: persists SSH host keys, machine-id, `/var/log`, `/var/lib/nixos`, `/var/lib/private`
-- Beszel monitoring agent on all hosts
+SSH host keys and `machine-id` are seeded on first boot by `systemd-tmpfiles` `C` rules in
+`modules/nixos/impermanence.nix`, which copy from the ephemeral paths when no persistent copy
+exists. No manual key generation is needed.
+
+`custom.impermanence` persists `/var/log`, `/var/lib/nixos`, `/var/lib/systemd`,
+`/etc/machine-id` and the SSH host keys. **Anything else a service writes must be declared by
+its host file** — the failure is silent and only shows up after a reboot. It also creates
+`/persistent/var/lib/private` at `0700`, which is where `DynamicUser` services land; that
+directory is created, not persisted, and each host still declares its own child under it.
+
+### What Every NixOS Host Gets
+
+From `modules/nixos/default.nix`, which `mkNixOSConfig` injects into every host — don't
+re-declare any of it in a host file:
+
+- Firewall enabled; SSH with YubiKey-only root access, password auth disabled
+- Daily auto-upgrade from `github:MayurSaxena/nix-homelab` (18:00 UTC + jitter, ~4 AM AEST)
+- Daily garbage collection (older than 7 days) and store optimisation
+- `sops.defaultSopsFile` / `sops.age.sshKeyPaths`, `users.mutableUsers = false`,
+  `nixpkgs.config.allowUnfree`, timezone, `system.stateVersion`
+
+The two CI base images additionally set `custom.proxmox-lxc.enable` (and, for
+`base-lxc-remote`, `custom.remote-builds.enable`). Everything else — impermanence, the root
+password, the monitoring agent — comes from the host's own file on the first switch, not from
+the image.
 
 ## Deploying on a New Mac
 
 1. Install [Determinate Nix](https://determinate.systems/nix-installer/).
-2. Ensure the Mac's hostname has an entry in `flake.nix` under `darwinConfigurations`.
-3. Run: `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:MayurSaxena/nix-homelab`
+2. Ensure the Mac's hostname has an entry under `darwinConfigurations` in `flake.nix`. The
+   host file must import `modules/macos/base.nix` itself — unlike the NixOS builder,
+   `mkDarwinConfig` does not inject a base module.
+3. `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:MayurSaxena/nix-homelab`
 4. Plug in a YubiKey for secrets decryption.
 
-This configures: Touch ID/Watch sudo, Homebrew casks, App Store apps, shell (zsh + starship), SSH keys, Dock/Finder preferences, and remote Nix builds.
+This configures Touch ID / Watch sudo, Homebrew casks, App Store apps, zsh + starship, SSH
+keys, Dock/Finder preferences, and remote Nix builds.
+
+Note that under Determinate Nix the nix-darwin `nix.*` options are inert — daemon settings
+are written by activation scripts instead. See `modules/macos/remote-builds.nix`.
+
+## Common Operations
+
+```bash
+nix fmt .                                                       # alejandra
+nix build .#nixosConfigurations.<host>.config.system.toplevel   # check without switching
+nix eval .#nixosConfigurations.<host>.config.systemd.services.<unit>.serviceConfig
+nix flake update [<input>]
+sops secrets/<file>
+nixos-rebuild switch --flake .#<host> --target-host root@<ip>
+cd provisioning && tofu apply
+```

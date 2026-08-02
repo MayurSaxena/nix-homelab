@@ -18,6 +18,15 @@ in {
     "paperless-secrets" = {
       format = "dotenv";
       sopsFile = ./../secrets/paperless.env;
+      # There is no paperless.service. environmentFile lands in the module's
+      # shared defaultServiceConfig, which these four units consume; the
+      # exporter unit builds its own serviceConfig and does not.
+      restartUnits = [
+        "paperless-scheduler.service"
+        "paperless-task-queue.service"
+        "paperless-consumer.service"
+        "paperless-web.service"
+      ];
     };
   };
 
