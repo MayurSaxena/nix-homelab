@@ -105,10 +105,11 @@ Three things follow, and all three catch people out:
   `minecraft`, which is how `nixpkgs.overlays` gets applied since host files are forbidden
   from setting it.
 
-`specialArgs` is the whole extra-args surface: `inputs` and `outputs`. No *NixOS* host file
-reads `outputs` — it's destructured there for uniformity. The one real consumer is
-`hosts/Mayurs-MacBook-Pro.nix`, which forwards it into home-manager via `extraSpecialArgs`,
-so don't strip it from that file.
+`specialArgs` is the whole extra-args surface: `inputs` and `outputs`. **Nothing in the repo
+actually reads `outputs`** — every host destructures it for uniformity, and
+`hosts/Mayurs-MacBook-Pro.nix` forwards it into home-manager via `extraSpecialArgs` where
+`modules/home-manager/msaxena.nix` ignores it too. Keep passing it for consistency; don't go
+looking for a consumer.
 
 ### What every NixOS host already has
 
@@ -141,7 +142,7 @@ All repo-local options live under `custom.*`. Five toggles are the standard host
 | `custom.proxmox-lxc.enable` | Disables resolved/resolvconf so Proxmox's resolv.conf wins; creates the `lxc_share` group at gid 10000 (maps to 110000 on the PVE host) | Never — every host sets it |
 | `custom.impermanence.enable` | Persists SSH host keys, machine-id, `/var/log`, `/var/lib/{nixos,systemd}`; creates `/persistent/var/lib/private` at 0700 | When the host genuinely needs a large mutable rootfs |
 | `custom.remote-builds.enable` | Delegates builds to `nix-builder.home.internal` **and** adds it as a substituter | On `nix-builder` itself (would point at itself) |
-| `custom.root-password.enable` | Root password from `secrets/common.yaml` via `neededForUsers` | Headless hosts with no console consumer |
+| `custom.root-password.enable` | Root password from `secrets/common.yaml` via `neededForUsers` | Only `nix-builder` turns it off, uncommented — treat as unexplained drift, not a rule. The password's only consumer is PVE console login |
 | `custom.beszel-monitoring-agent.enable` | Monitoring agent; also takes `extraFilesystems` | Never — every host sets it |
 
 Plus `custom.domain` (default `home.mayursaxena.com`) and, on macOS only,
@@ -278,17 +279,30 @@ environment.persistence."${config.custom.impermanence.persistence-root}" = {
 ```
 
 **Do you *have* to spell out `user`/`group`/`mode` for a static-user service?** It depends on
-whether the unit sets `StateDirectory=`:
+whether *anything upstream* re-asserts ownership after the bind mount appears. Three cases:
 
-- If it does, systemd chowns the directory at every start, so the bind-mounted directory's
-  own ownership self-corrects and the explicit values are belt-and-braces. `sabnzbd.nix`
-  relies on exactly this and persists `/var/lib/sabnzbd` bare.
-- If it doesn't — the directory is created by a `preStart`, a tmpfiles rule, or the
-  application itself — nothing fixes ownership, the bind mount stays root-owned, and the
-  service fails on first boot after a rollback. Then the explicit values are load-bearing.
+1. **The unit sets `StateDirectory=`** — systemd creates and chowns the directory to
+   `User`/`Group` on every start, so ownership self-corrects. Your explicit values are
+   belt-and-braces.
+2. **The module ships a `systemd.tmpfiles` `d` entry carrying user/group** — a `d` line
+   adjusts mode and ownership on a directory that already exists, and tmpfiles runs every
+   boot after the bind mounts. This also self-corrects. Several nixpkgs modules do this
+   *instead of* `StateDirectory=`, so "no StateDirectory" does not imply "broken".
+3. **Only a create-if-missing `preStart`, or the application itself** — e.g. an
+   `ExecStartPre` that runs `install -d` guarded by `! test -d` never touches an existing
+   directory. Nothing self-corrects, the bind mount stays root-owned, and the service fails
+   on first boot after a rollback. Here the explicit values are the only thing that works.
 
-Since you can't tell which without checking, and being explicit also documents intent, the
-repo's dominant style is to spell them out. Do that unless you've confirmed otherwise.
+You cannot tell which case you're in without checking, and being explicit also documents
+intent, so the repo's dominant style is to spell them out. Do that unless you've confirmed
+otherwise.
+
+**The `group` you name must be the unit's *effective* `Group=`, and must actually exist.**
+Many nixpkgs modules only define `<service>` as a group when the module's own `group` option
+is left at its default — override `group` (e.g. to `lxc_share`) and the `<service>` group is
+never created. impermanence's `create-directories.bash` runs `chown "$user:$group"` under
+`set -o errexit`, so naming a group that doesn't exist fails when the persistent directory is
+first created. Read the module's `users.groups` block, don't assume `user == group`.
 
 `servarr.nix` is the proof that this is per-service: four *arr services on one host, and
 radarr/sonarr/bazarr take the first form while prowlarr takes the second. A doc that told you
@@ -299,22 +313,28 @@ radarr/sonarr/bazarr take the first form while prowlarr takes the second. A doc 
 It is the systemd `StateDirectory`, which frequently differs from the NixOS option name, the
 package name, the host name, and the flake key. Real divergences in this repo:
 
-- `services.seerr` → `/var/lib/private/jellyseerr`, on a host named `overseerr`
+- `services.seerr` → `/var/lib/private/jellyseerr`, on a host named `overseerr` — and the
+  upstream module gates that name on `system.stateVersion`, so it changes at 26.05. Exactly
+  why you read the module instead of memorising names.
 - `services.actual` → `actual`, on a host named `actualbudget`
 - `services.paperless.configureTika = true` → `tika`, a name appearing nowhere in the config you wrote
 
 Getting this wrong fails silently: the bind mount points at an unused directory and the real
 state still evaporates on reboot.
 
-### Step 5 — enumerate every unit the option set created
+### Step 5 — enumerate every state directory the option set created
 
-One `enable = true` can oblige several entries. `services.paperless` with
-`database.createLocally` and `configureTika` produces four — paperless, redis-paperless,
-postgresql, tika — each with different ownership. (`configureTika` also starts Gotenberg,
-correctly persisted nowhere because it's stateless.)
+One `enable = true` can oblige several entries, and **unit names and state-directory names do
+not line up**. `services.paperless` with `database.createLocally` and `configureTika` yields
+four persistence entries — paperless, redis-paperless, postgresql, tika — but produces
+roughly nine units to get there (`paperless-scheduler`, `paperless-task-queue`,
+`paperless-consumer`, `paperless-web`, `paperless-secret-key`, plus redis-paperless,
+postgresql, tika and gotenberg). There is no `paperless.service` at all, so Step 2's eval has
+to name a real unit. Gotenberg is correctly persisted nowhere — it's a stateless converter.
 
 To enumerate: diff `nix eval .#nixosConfigurations.<host>.config.systemd.services --apply builtins.attrNames`
-against a build without your service.
+against a build without your service, then map each unit to its `StateDirectory` — several
+units routinely share one directory.
 
 ### Step 6 — mode
 
@@ -336,7 +356,9 @@ The symptom that you need it is a permission failure on first boot after a rollb
 If the service reads or writes storage that lives on the Proxmox host, it needs to be in the
 `lxc_share` group. Two spellings exist and which is available depends on upstream: set the
 service's own `group = "lxc_share"` option, or append via `users.users.<x>.extraGroups`.
-Pick one deliberately (`sabnzbd` redundantly does both).
+Setting the service's own `group` already makes it the process's primary group, so the
+`extraGroups` line on top is redundant — both `sabnzbd` and `servarr` carry the redundant
+pair. Treat that as existing noise; pick one deliberately.
 
 ---
 
@@ -355,8 +377,8 @@ Ask whether more than one host needs the value **at runtime**.
   `*msaxena-keys` plus that one host, so compromising one container doesn't expose another's
   credentials. One file per *host* is right even when several services share it
   (`servarr.env` feeds radarr, sonarr and prowlarr, each picking its own variable by prefix).
-- **`secrets/msaxena.yaml`** — `*msaxena-keys` only, no host key, decrypted interactively by
-  YubiKey via home-manager on the Mac.
+- **`secrets/msaxena.yaml`** — `*msaxena-keys` only, no host key, decrypted by a plugged-in
+  YubiKey (no PIN or touch prompt) via home-manager on the Mac.
 
 **A new secret file needs a `path_regex` rule added to `.sops.yaml` by hand, before you
 create it.** Always include `*msaxena-keys`, plus only the hosts that need runtime access:
@@ -394,23 +416,28 @@ declared as `"homepage-secrets"` on a host whose flake key is `homepage`.
   `config.services.<x>.user` so a rename can't desync. You usually do *not* need them for
   `environmentFile`, because systemd reads that as root before dropping privileges.
 - **`neededForUsers = true`** — only for values consumed while users are created, in practice
-  only `hashedPasswordFile` (required here because `users.mutableUsers = false`). It
-  relocates the secret to `/run/secrets-for-users` and forbids a non-root owner, so never
-  combine it with `owner`. The root password is the only instance.
-- **`restartUnits`** — **set it.** The intent is that a service picks up a rotated secret
-  (env var, token, API key) without anyone restarting it by hand, so any unit that reads the
-  secret at startup belongs in the list. Only `homepage` and `sabnzbd` currently set it;
-  caddy, paperless, plex and servarr are drift, not precedent. For a file several services
-  share, list every unit that reads it. The unit name is *not* derivable from the secret name
-  or the `services.*` attribute — it's whatever unit the module actually defines.
+  only `hashedPasswordFile` (required because `/run/secrets` isn't populated yet at the point
+  activation creates users). It relocates the secret to `/run/secrets-for-users` and forbids
+  a non-root owner, so never combine it with `owner`. The root password is the only instance.
+- **`restartUnits`** — **set it on any secret a systemd unit reads at startup.** The intent is
+  that a service picks up a rotated secret (env var, token, API key) without anyone
+  restarting it by hand. Today only `homepage` and `sabnzbd` do; caddy, files, paperless,
+  plex and servarr are drift, not precedent. For a file several services share, list every
+  unit that reads it. The unit name is *not* derivable from the secret name or the
+  `services.*` attribute — it's whatever unit the module actually defines.
+  It does **not** apply to secrets no unit consumes: `passwords/root` is read during user
+  creation (`neededForUsers`), and `files.nix`'s samba passwords are read by an activation
+  script.
 
 ### How the path gets consumed
 
-Entirely upstream's API, with no repo convention. Five shapes already exist:
+Entirely upstream's API, with no repo convention. Six shapes already exist:
 `environmentFile` (singular string), `environmentFiles` (list), `secretFiles` (list, paired
-with `configFile = null`), `hashedPasswordFile`, and an explicit `path =` relocation in
-home-manager. Some modules accept none at all (bazarr) — then the honest answer is a
-documented manual migration, not a workaround.
+with `configFile = null`), `hashedPasswordFile`, an explicit `path =` relocation in
+home-manager, and a raw read of the decrypted path from an activation script (`files.nix`,
+which hardcodes `/run/secrets/passwords/$user` — don't copy the hardcoding). Some modules
+accept none at all (bazarr) — then the honest answer is a documented manual migration, or an
+activation script where there's nothing to migrate.
 
 The file's *internal* shape is dictated by the consuming application and fails silently at
 runtime, not at build time: dotenv variable names must be exactly what the app reads
@@ -425,7 +452,9 @@ Reach for one when a *capability* should be switchable per host — the test is 
 would ever want it off. Shared values that are always present can be a bare option on
 `default.nix` (that's what `custom.domain` is).
 
-The observed pattern:
+The shape to write (note the in-repo modules all use the wider head
+`{inputs, config, pkgs, lib, ...}` and carry `inputs`/`pkgs` even where unused —
+`root-password.nix` uses neither; trim yours to what you actually reference):
 
 ```nix
 {config, lib, pkgs, ...}: let
@@ -492,17 +521,21 @@ numbers written here — they're tuned per service and change.
 - **Disks** — which variables apply depends on impermanence. If impermanent, leave
   `rootfs_size_gb` at its default and set `nix_fs_size_gb` (to the closure size) and
   `persistent_fs_size_gb` (to the service's state). If not, size `rootfs_size_gb`.
-  These have defaults (2 and 4), so **omitting them under-provisions silently** rather than
-  erroring — `beszel-hub` already does this and gets a 4GB `/nix`.
+  `nix_fs_size_gb` defaults to 4 and `persistent_fs_size_gb` to 2 (as does `rootfs_size_gb`),
+  so **omitting them under-provisions silently** rather than erroring — `beszel-hub` already
+  does this and gets a 4GB `/nix`.
 - **`custom_hookscript`** — the genuinely dangerous omission. It also defaults to null, and
   without it a host is impermanent in name only: the flake enables impermanence but nothing
   ever rolls the subvolume back.
-- **`additional_mount_points`** — only for storage on the PVE host. Three coupled follow-ups:
-  point the service at the container-side path, add its user to `lxc_share`, and optionally
-  register the path in `custom.beszel-monitoring-agent.extraFilesystems`. The path choice
-  itself is a judgement call — servarr mounts all of `/mnt/MediaBox` while sabnzbd mounts only
-  `/mnt/MediaBox/usenet`, deliberately, so completed downloads can be hardlinked within one
-  filesystem.
+- **`additional_mount_points`** — only for storage on the PVE host. Follow-ups: point the
+  service at the container-side path; add its user to `lxc_share` **if** the share is owned
+  by the PVE-side `lxc_share` gid (paperless's consume dir is the counterexample — it only
+  reads, and takes no group); and optionally register the path in
+  `custom.beszel-monitoring-agent.extraFilesystems` to graph it. The path choice
+  itself is a judgement call — servarr mounts all of `/mnt/MediaBox` so it can hardlink
+  completed downloads into the library within one filesystem, while sabnzbd mounts only
+  `/mnt/MediaBox/usenet`, scoped to what it needs. (The rationale isn't recorded in
+  `main.tf`; if you rely on it, add a comment there.)
 - **`tags`** — only two rules are mechanical: `terraform` first, and `host-mount` iff
   `additional_mount_points` is set. The rest is an open vocabulary.
 
@@ -597,12 +630,16 @@ Things that are currently inconsistent, so you don't "fix" them into the wrong s
 copy them as precedent:
 
 - `README.md` documents `overlays/` and `packages/` directories that no longer exist.
-- `restartUnits` is missing on caddy, paperless, plex and servarr. The intent is that every
-  service restarts when its secrets change, so treat those as unfinished rather than as a
-  deliberate opt-out.
-- `sabnzbd.nix` persists `/var/lib/sabnzbd` bare while every comparable static-user host
-  spells out `user`/`group`/`mode`. It is safe — the unit sets `StateDirectory=`, so systemd
-  chowns on start — just less explicit than its neighbours.
+- `restartUnits` is set only on `sabnzbd` and `homepage-dashboard`; absent on caddy, files,
+  paperless, plex and servarr. The intent is that every service restarts when its secrets
+  change, so treat those as unfinished rather than as a deliberate opt-out.
+- `sabnzbd.nix` (`/var/lib/sabnzbd`) and `files.nix` (`/var/lib/samba`) persist bare, while
+  caddy, plex, paperless and servarr spell out `user`/`group`/`mode`. Both are safe — their
+  units set `StateDirectory=` — just less explicit than their neighbours.
+- `servarr.nix` sets `services.{radarr,sonarr,bazarr}.group = "lxc_share"` but its
+  persistence entries name `group = "radarr"` / `"sonarr"` / `"bazarr"`. Most nixpkgs *arr
+  modules only create the `<service>` group when `group` is left at its default, so those
+  groups may not exist. **Unverified** — needs a `nix eval` on the built config to confirm.
 - `provisioning/main.tf:4` — the `proxmox_virtual_environment_file` resource that uploads
   `assets/rootfs-impermanence.sh` hardcodes `node_name = "proxmox"`, while every `module`
   block below it passes `pve_node_name = var.pve_node_name`. A second node or a rename would
