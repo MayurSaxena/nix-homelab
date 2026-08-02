@@ -269,7 +269,8 @@ That second point is the whole reason the two shapes differ: for a `DynamicUser`
 environment.persistence."${config.custom.impermanence.persistence-root}" = {
   directories = [
     # Static user — the user exists at activation, so you can name it.
-    { directory = "/var/lib/radarr"; user = "radarr"; group = "radarr"; mode = "0750"; }
+    # (caddy leaves services.caddy.group at its default, so the caddy group exists.)
+    { directory = "/var/lib/caddy"; user = "caddy"; group = "caddy"; mode = "0755"; }
 
     # DynamicUser — bare attrset, NO user/group/mode. Naming one is impossible;
     # systemd allocates the UID at runtime and manages ownership itself.
@@ -636,10 +637,14 @@ copy them as precedent:
 - `sabnzbd.nix` (`/var/lib/sabnzbd`) and `files.nix` (`/var/lib/samba`) persist bare, while
   caddy, plex, paperless and servarr spell out `user`/`group`/`mode`. Both are safe — their
   units set `StateDirectory=` — just less explicit than their neighbours.
-- `servarr.nix` sets `services.{radarr,sonarr,bazarr}.group = "lxc_share"` but its
-  persistence entries name `group = "radarr"` / `"sonarr"` / `"bazarr"`. Most nixpkgs *arr
-  modules only create the `<service>` group when `group` is left at its default, so those
-  groups may not exist. **Unverified** — needs a `nix eval` on the built config to confirm.
+- `servarr.nix` sets `services.{radarr,sonarr,bazarr}.group = "lxc_share"` so those services
+  can reach the shared `/mnt/MediaBox` PVE mount, but its persistence entries still name
+  `group = "radarr"` / `"sonarr"` / `"bazarr"`. At the pinned nixpkgs all three modules guard
+  group creation with `lib.mkIf (cfg.group == "<service>")`, so **none of those three groups
+  exist on that host**. The group doesn't gate the service's access to its own state
+  directory — the service's *user* does — but it is still passed to impermanence's
+  `chown "$user:$group"`, which runs when the persistent directory is first created. Naming
+  `lxc_share` (the effective `Group=`) would match reality.
 - `provisioning/main.tf:4` — the `proxmox_virtual_environment_file` resource that uploads
   `assets/rootfs-impermanence.sh` hardcodes `node_name = "proxmox"`, while every `module`
   block below it passes `pve_node_name = var.pve_node_name`. A second node or a rename would
