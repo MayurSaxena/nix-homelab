@@ -252,21 +252,43 @@ nixpkgs module at the pinned revision.
 
 ### Step 3 — pick the shape from `DynamicUser`
 
-This choice is decided **entirely** by whether the upstream unit sets `DynamicUser = true`,
-and cannot be inferred from the service's name, family or popularity.
+`DynamicUser` and `StateDirectory` are two different axes and it's worth keeping them apart:
+
+- **`StateDirectory=<name>`** gives you the *name*. systemd creates the directory and chowns
+  it to the unit's `User`/`Group` on every start.
+- **`DynamicUser=true`** changes the *path and the ownership model*. There is no such user at
+  activation time — systemd allocates a UID when the unit starts — so state goes to
+  `/var/lib/private/<name>` with a `/var/lib/<name>` symlink, and systemd owns permissions
+  inside the `0700` parent the base module creates.
+
+That second point is the whole reason the two shapes differ: for a `DynamicUser` service you
+**cannot** name an owner, because the user doesn't exist yet.
 
 ```nix
 environment.persistence."${config.custom.impermanence.persistence-root}" = {
   directories = [
-    # Static user: spell out ownership and mode.
+    # Static user — the user exists at activation, so you can name it.
     { directory = "/var/lib/radarr"; user = "radarr"; group = "radarr"; mode = "0750"; }
 
-    # DynamicUser: bare attrset, NO user/group/mode. systemd allocates the UID at
-    # runtime and owns permissions inside the 0700 parent the base module creates.
+    # DynamicUser — bare attrset, NO user/group/mode. Naming one is impossible;
+    # systemd allocates the UID at runtime and manages ownership itself.
     { directory = "/var/lib/private/prowlarr"; }
   ];
 };
 ```
+
+**Do you *have* to spell out `user`/`group`/`mode` for a static-user service?** It depends on
+whether the unit sets `StateDirectory=`:
+
+- If it does, systemd chowns the directory at every start, so the bind-mounted directory's
+  own ownership self-corrects and the explicit values are belt-and-braces. `sabnzbd.nix`
+  relies on exactly this and persists `/var/lib/sabnzbd` bare.
+- If it doesn't — the directory is created by a `preStart`, a tmpfiles rule, or the
+  application itself — nothing fixes ownership, the bind mount stays root-owned, and the
+  service fails on first boot after a rollback. Then the explicit values are load-bearing.
+
+Since you can't tell which without checking, and being explicit also documents intent, the
+repo's dominant style is to spell them out. Do that unless you've confirmed otherwise.
 
 `servarr.nix` is the proof that this is per-service: four *arr services on one host, and
 radarr/sonarr/bazarr take the first form while prowlarr takes the second. A doc that told you
@@ -375,11 +397,12 @@ declared as `"homepage-secrets"` on a host whose flake key is `homepage`.
   only `hashedPasswordFile` (required here because `users.mutableUsers = false`). It
   relocates the secret to `/run/secrets-for-users` and forbids a non-root owner, so never
   combine it with `owner`. The root password is the only instance.
-- **`restartUnits`** — applied inconsistently across the repo (homepage and sabnzbd set it;
-  caddy, paperless, plex and servarr don't). Treat its absence in older files as drift rather
-  than a signal, and decide on merit: does rotating this value need to take effect without a
-  manual restart? The unit name is *not* derivable from the secret name — it's whatever unit
-  the module actually defines.
+- **`restartUnits`** — **set it.** The intent is that a service picks up a rotated secret
+  (env var, token, API key) without anyone restarting it by hand, so any unit that reads the
+  secret at startup belongs in the list. Only `homepage` and `sabnzbd` currently set it;
+  caddy, paperless, plex and servarr are drift, not precedent. For a file several services
+  share, list every unit that reads it. The unit name is *not* derivable from the secret name
+  or the `services.*` attribute — it's whatever unit the module actually defines.
 
 ### How the path gets consumed
 
@@ -574,12 +597,16 @@ Things that are currently inconsistent, so you don't "fix" them into the wrong s
 copy them as precedent:
 
 - `README.md` documents `overlays/` and `packages/` directories that no longer exist.
-- `restartUnits` is set on some secrets and not others with no clear rule.
-- `sabnzbd.nix` persists `/var/lib/sabnzbd` bare despite running as a static user, unlike
-  every comparable host. It works because upstream uses `StateDirectory=`, but it's the
-  repo's least consistent entry — don't copy it as the pattern.
-- `provisioning/main.tf`'s hookscript resource hardcodes `node_name = "proxmox"` where every
-  other resource uses `var.pve_node_name`.
+- `restartUnits` is missing on caddy, paperless, plex and servarr. The intent is that every
+  service restarts when its secrets change, so treat those as unfinished rather than as a
+  deliberate opt-out.
+- `sabnzbd.nix` persists `/var/lib/sabnzbd` bare while every comparable static-user host
+  spells out `user`/`group`/`mode`. It is safe — the unit sets `StateDirectory=`, so systemd
+  chowns on start — just less explicit than its neighbours.
+- `provisioning/main.tf:4` — the `proxmox_virtual_environment_file` resource that uploads
+  `assets/rootfs-impermanence.sh` hardcodes `node_name = "proxmox"`, while every `module`
+  block below it passes `pve_node_name = var.pve_node_name`. A second node or a rename would
+  break the hookscript upload only.
 - The create-time provisioner's only readiness guard before `ssh-keyscan` is a 5-second
   sleep; on a slow node it can write an empty age key into `.sops.yaml`.
 - `sops.templates` is available via sops-nix but used nowhere, so there's no in-repo
