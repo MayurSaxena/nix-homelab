@@ -162,10 +162,11 @@ sed -i '' -r "/^.+&all-keys.*$/a\\
     - &${self.initialization[0].hostname} $age_key
 " ../.sops.yaml
 sops updatekeys ../secrets/* -y
-# git add ../.sops.yaml ../secrets/* && git commit -m "Adding ${self.initialization[0].hostname} to .sops.yaml" && git push
-# sleep 5
-# # echo "Hopefully YubiKey was inserted and waiting for touch."
-# ssh root@$HOSTNAME nixos-rebuild switch --flake github:MayurSaxena/nix-homelab
+# A git push and a multi-minute remote build/switch don't belong in a
+# provisioner that gates `tofu apply`'s success/failure — a slow SSH session
+# or a delayed YubiKey touch would hang or fail the whole apply with no
+# rollback. Finish onboarding by hand (or have Claude do it) instead:
+echo "Next: ./onboard-host.sh ${self.initialization[0].hostname} $HOSTNAME"
 EOT
   }
   provisioner "local-exec" {
@@ -173,7 +174,7 @@ EOT
     command = <<EOT
 sed -i '' -r '/^.+[&\*]${self.initialization[0].hostname}( +age.+)?$/d' ../.sops.yaml
 sops updatekeys ../secrets/* -y
-# git add ../.sops.yaml ../secrets/* && git commit -m "Removing ${self.initialization[0].hostname} from .sops.yaml" && git push
+echo "Next: git -C .. add .sops.yaml secrets/ && git -C .. commit -m 'Remove ${self.initialization[0].hostname} from .sops.yaml' && git -C .. push"
 EOT
   }
 

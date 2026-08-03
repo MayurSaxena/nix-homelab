@@ -20,7 +20,7 @@ module "nix-builder" {
   memory_size_mb     = 4096
   num_cpu_cores      = 4
   rootfs_size_gb     = 32
-  ct_template_id     = proxmox_virtual_environment_download_file.nixos-standard-prod.id
+  ct_template_id     = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   startup_order      = 3
   tags               = ["terraform", "builder"]
 }
@@ -39,7 +39,7 @@ module "dns-server" {
   num_cpu_cores         = 2
   persistent_fs_size_gb = 2
   nix_fs_size_gb        = 8
-  ct_template_id        = proxmox_virtual_environment_download_file.nixos-remotebuild-prod.id
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id               = "production"
   startup_order         = 1
   rootfs_impermanence   = true
@@ -60,7 +60,7 @@ module "actualbudget" {
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
   nix_fs_size_gb        = 10
-  ct_template_id        = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id               = "production"
   startup_order         = 3
   rootfs_impermanence   = true
@@ -86,7 +86,7 @@ module "sabnzbd" {
     ct_path = "/data"
     backup  = false
   }]
-  ct_template_id      = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id             = "production"
   startup_order       = 3
   rootfs_impermanence = true
@@ -107,7 +107,7 @@ module "homepage" {
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
   nix_fs_size_gb        = 8
-  ct_template_id        = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id               = "production"
   startup_order         = 3
   rootfs_impermanence   = true
@@ -133,7 +133,7 @@ module "plex-server" {
     ct_path = "/media/IronWolf"
     backup  = false
   }]
-  ct_template_id      = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id             = "production"
   startup_order       = 3
   rootfs_impermanence = true
@@ -154,7 +154,7 @@ module "overseerr" {
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
   nix_fs_size_gb        = 16
-  ct_template_id        = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id               = "production"
   startup_order         = 3
   rootfs_impermanence   = true
@@ -180,7 +180,7 @@ module "paperless" {
     ct_path = "/mnt/paperless-consume"
     backup  = false
   }]
-  ct_template_id      = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id             = "production"
   startup_order       = 3
   rootfs_impermanence = true
@@ -230,7 +230,7 @@ module "fileserver" {
       ct_path = "/media/NetShare"
       backup  = false
   }]
-  ct_template_id      = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id             = "production"
   startup_order       = 3
   rootfs_impermanence = true
@@ -251,7 +251,7 @@ module "caddy" {
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
   nix_fs_size_gb        = 8
-  ct_template_id        = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id               = "production"
   startup_order         = 2
   rootfs_impermanence   = true
@@ -279,7 +279,7 @@ module "servarr" {
     ct_path = "/media/IronWolf"
     backup  = false
   }]
-  ct_template_id      = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id             = "production"
   startup_order       = 3
   rootfs_impermanence = true
@@ -299,7 +299,7 @@ module "beszel-hub" {
   memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 8
-  ct_template_id        = proxmox_virtual_environment_download_file.nixos-remotebuild-nightly.id
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   pool_id               = "production"
   startup_order         = 2
   rootfs_impermanence   = true

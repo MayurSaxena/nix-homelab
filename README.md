@@ -35,7 +35,10 @@ Four systems hand off to each other:
 1. **OpenTofu creates the container.** `tofu apply` builds the LXC, then SSH-scans it,
    converts its ed25519 host key to an age key, splices that into `.sops.yaml`, and re-runs
    `sops updatekeys`. `tofu destroy` removes the key and re-encrypts. `.sops.yaml`'s age
-   anchors are machine-managed — don't hand-edit them.
+   anchors are machine-managed — don't hand-edit them. The provisioner stops there: committing
+   `.sops.yaml`/`secrets/*` and doing the first switch are `provisioning/onboard-host.sh`'s job
+   instead, since a multi-minute remote build and a YubiKey prompt don't belong inside a
+   provisioner that gates `apply`'s success or failure.
 2. **The container boots a CI base image.** Just enough NixOS to be SSH-reachable and
    sops-capable. A bootstrap, not the host.
 3. **The first `nixos-rebuild switch` makes it itself.** Impermanence turns on, services
@@ -72,44 +75,30 @@ Pushing to main therefore deploys. There is no staging step.
 4. Commit and push — `autoUpgrade` and the flake URL read from GitHub, not your worktree.
 5. `cd provisioning && tofu apply`
    - Creates the LXC, derives its age key, and updates `.sops.yaml` automatically.
-   - Import from the plain `base-lxc` release image; impermanence and remote-builds don't
-     need pre-baking (see below).
-6. Bootstrap the real config. These LXCs get only as much RAM as their service needs, so
-   building on the container can hit the OOM killer. `nixos-rebuild` reads the *currently
-   active* system's `nix.conf` to decide where to build — not the target config — so a
-   freshly-imported container has no build machines configured yet. Build on `nix-builder`
-   and ship the closure, from your Mac or anything that can reach both:
-
-   ```
-   nixos-rebuild switch \
-     --flake github:MayurSaxena/nix-homelab#<host> \
-     --build-host nix@nix-builder.home.internal \
-     --target-host root@<container-ip> \
-     --use-remote-sudo
-   ```
-
-   Evaluation happens locally, the build on `nix-builder`, and only the finished closure is
-   copied over and activated. Once this first switch lands, the host's own
-   `custom.remote-builds.enable = true` keeps the daily auto-upgrade delegating builds.
-
-   If you can't reach `nix-builder` from where you're deploying, import the `base-lxc-remote`
-   image instead — it has remote-builds pre-baked, so a bare
-   `nixos-rebuild switch --flake github:MayurSaxena/nix-homelab#<host>` on the container
-   works without OOMing.
+   - Imports the single `base-lxc` release image; impermanence and remote-builds don't need
+     pre-baking (see below).
+6. `./onboard-host.sh <flake-host-key> <container-ip>` — commits/pushes the `.sops.yaml`
+   change from step 5 if it's still pending, then bootstraps the real config. These LXCs get
+   only as much RAM as their service needs, so building on the container itself can hit the OOM
+   killer; the script always delegates the build to `nix-builder` explicitly instead
+   (`--build-host`/`--target-host`), the same way the daily auto-upgrade does once
+   `custom.remote-builds.enable = true` takes effect from the host's own first switch.
+   `<flake-host-key>` is the attribute name in `nixosConfigurations` — it isn't always the same
+   as the module name in `provisioning/main.tf` (`dns-server` → `dns`, `plex-server` → `plex`,
+   `fileserver` → `files`). Root SSH is YubiKey-hardware-key-only on every host, so this step
+   needs someone at the keyboard — run it yourself, or ask Claude to.
 
 ### Base Images
 
-CI publishes two images per release tag (`prod` and `nightly`), so four template resources in
-`provisioning/images.tf`:
-
-| Image | Contents | Use when |
-|---|---|---|
-| `base-lxc` → `nixos-proxmox-lxc-standard.tar.xz` | plain base | you can reach `nix-builder` from your deploy machine (preferred) |
-| `base-lxc-remote` → `nixos-proxmox-lxc-remotebuild.tar.xz` | + `custom.remote-builds.enable` | you can't, and need the container to build for itself |
+CI publishes a single image, rebuilt on every push of the `nightly` tag: `base-lxc` →
+`nixos-proxmox-lxc-standard.tar.xz`, tracked as one template resource,
+`nixos-standard-nightly`, in `provisioning/images.tf`. Every host's `ct_template_id` points at
+it — there used to be a `prod` tag and a `remotebuild` variant, both gone (see
+`provisioning/images.tf`'s header comment for why).
 
 Impermanence is not an image dimension: OpenTofu creates the persistent mounts, and the
-host's own flake enables impermanence on first switch. Use `prod` for hosts everything else
-bootstraps through (`nix-builder`, `dns`) and `nightly` otherwise.
+host's own flake enables impermanence on first switch. Remote-builds isn't pre-baked either —
+`onboard-host.sh` always passes `--build-host` explicitly on the first switch.
 
 Changing a host's `ct_template_id` later is safe — the module sets `ignore_changes` on
 `operating_system["template_file_id"]`, so it only affects newly-created containers.
@@ -152,10 +141,9 @@ re-declare any of it in a host file:
 - `sops.defaultSopsFile` / `sops.age.sshKeyPaths`, `users.mutableUsers = false`,
   `nixpkgs.config.allowUnfree`, timezone, `system.stateVersion`
 
-The two CI base images additionally set `custom.proxmox-lxc.enable` (and, for
-`base-lxc-remote`, `custom.remote-builds.enable`). Everything else — impermanence, the root
-password, the monitoring agent — comes from the host's own file on the first switch, not from
-the image.
+The CI base image additionally sets `custom.proxmox-lxc.enable`. Everything else —
+impermanence, remote-builds, the root password, the monitoring agent — comes from the host's
+own file on the first switch, not from the image.
 
 ## Deploying on a New Mac
 
@@ -182,4 +170,5 @@ nix flake update [<input>]
 sops secrets/<file>
 nixos-rebuild switch --flake .#<host> --target-host root@<ip>
 cd provisioning && tofu apply
+./provisioning/onboard-host.sh <flake-host-key> <container-ip>          # finish a new host
 ```

@@ -33,7 +33,11 @@ host. On apply it creates the LXC, and a `local-exec` provisioner SSH-scans the 
 converts its ed25519 host key to an age key with `ssh-to-age`, splices that key into
 `.sops.yaml`, and runs `sops updatekeys` over `secrets/*`. A matching destroy-time
 provisioner removes the key and re-encrypts. **You never edit `.sops.yaml` age keys by
-hand** — apply and destroy own that file's anchor list.
+hand** — apply and destroy own that file's anchor list. The provisioner deliberately stops
+there: it never commits, pushes, or runs the first switch, because a multi-minute remote
+build and a YubiKey-gated SSH prompt don't belong inside a provisioner that gates `apply`'s
+success or failure. That's `provisioning/onboard-host.sh`'s job — run by hand, or by Claude,
+once `tofu apply` finishes.
 
 For impermanent hosts the module also creates the separate volumes that survive the
 rootfs wipe (`/boot`, `/nix`, `/persistent`, `/sbin`, `/bin`). Only `/persistent` is set
@@ -41,9 +45,9 @@ rootfs wipe (`/boot`, `/nix`, `/persistent`, `/sbin`, `/bin`). Only `/persistent
 ungated variable** (`custom_hookscript`) — `rootfs_impermanence = true` alone gets you the
 volumes and no rollback. See Provisioning.
 
-**2. The container boots a CI base image.** GitHub Actions builds two LXC images per
-release tag via nixos-generators and attaches them to a GitHub Release. These are just
-enough NixOS to be SSH-reachable and sops-capable — they are a bootstrap, not the host.
+**2. The container boots a CI base image.** GitHub Actions builds one LXC image on every push
+of the `nightly` tag via nixos-generators and attaches it to a GitHub Release. This is just
+enough NixOS to be SSH-reachable and sops-capable — a bootstrap, not the host.
 
 **3. The first `nixos-rebuild switch` applies the real config.** This is where the host
 becomes itself: impermanence turns on, services start, secrets get decrypted using the
@@ -101,10 +105,8 @@ Three things follow, and all three catch people out:
 - **No `system` argument is passed**, which is why every host file must set
   `nixpkgs.hostPlatform` itself.
 - **`lib.toList` means the argument may be a path or a list of modules.** Bare path is the
-  rule — there are exactly two list-form call sites in the whole flake: the `base-lxc-remote`
-  CI variant (which toggles `custom.remote-builds.enable` on the shared base file), and
-  `minecraft`, which is how `nixpkgs.overlays` gets applied since host files are forbidden
-  from setting it.
+  rule — there is exactly one list-form call site in the whole flake: `minecraft`, which is
+  how `nixpkgs.overlays` gets applied since host files are forbidden from setting it.
 
 `specialArgs` is the whole extra-args surface: `inputs` and `outputs`. **Nothing in the repo
 actually reads `outputs`** — every host destructures it for uniformity, and
@@ -592,23 +594,14 @@ numbers written here — they're tuned per service and change.
 
 ### Choosing `ct_template_id`
 
-CI publishes **two** images, each for the `prod` and `nightly` tags — four resources in
-`provisioning/images.tf`. Impermanence is no longer a template dimension: tofu creates the
-persistent mounts itself and the host's own flake enables impermanence on first switch.
-
-- **Axis 1 — `standard` vs `remotebuild`.** This is purely a bootstrap question: can you
-  reach `nix-builder` over SSH from the machine you're deploying *from*? If yes, `standard`
-  is correct for any host, and you do the first switch with `--build-host`/`--target-host`.
-  `remotebuild` pre-bakes `custom.remote-builds.enable` and is the fallback for when you
-  can't. It matters because `nixos-rebuild` reads the *currently active* system's `nix.conf`
-  to decide where to build — a freshly-imported vanilla container has no build machines yet,
-  and these LXCs are sized for their service, not for compiling.
-- **Axis 2 — `prod` vs `nightly`.** `prod` for hosts everything else bootstraps through
-  (today `nix-builder` and `dns`); `nightly` otherwise.
-
-Derive the valid resource names by reading `images.tf`, and cross-check its URLs against the
-`RELEASE_PATH=` basenames in `.github/workflows/generate-lxc.yml` — those two must agree or
-apply fails on a 404.
+There's no choice to make. CI publishes a single image, rebuilt on every push of the
+`nightly` tag — one resource, `nixos-standard-nightly`, in `provisioning/images.tf` — and
+every host's `ct_template_id` points at it. There used to be a `prod` tag (never automated;
+only a human could push it, and it had gone stale) and a `remotebuild` variant (pre-baked
+`custom.remote-builds.enable` for hosts that couldn't reach `nix-builder` during bootstrap);
+both are gone now that the first-switch workflow (`provisioning/onboard-host.sh`) always
+passes `--build-host`/`--target-host` explicitly, so nothing needs remote-builds pre-baked
+into the image.
 
 Changing `ct_template_id` on an existing host is safe: the module sets
 `ignore_changes = [operating_system["template_file_id"]]`, so it only affects newly-created
@@ -621,7 +614,9 @@ containers.
 3. If it needs secrets, add the `.sops.yaml` rule and create the file.
 4. Commit and push (autoUpgrade and the flake URL both read from GitHub, not your worktree).
 5. `cd provisioning && tofu apply` — creates the LXC and registers its age key automatically.
-6. First switch, from a machine that can reach both:
+6. `provisioning/onboard-host.sh <flake-host-key> <container-ip>` — commits the pending
+   `.sops.yaml` change if there is one, then runs the first switch from a machine that can
+   reach both nix-builder and the container:
 
    ```bash
    nixos-rebuild switch \
@@ -630,6 +625,11 @@ containers.
      --target-host root@<container-ip> \
      --use-remote-sudo
    ```
+
+   `<flake-host-key>` is the `nixosConfigurations` attribute name, which isn't always the
+   `provisioning/main.tf` module name (`dns-server` → `dns`, `plex-server` → `plex`,
+   `fileserver` → `files`). Root SSH is YubiKey-hardware-key-only on every host, so this step
+   needs someone at the keyboard.
 
 `tofu destroy` removes the host's age key and re-encrypts on the way out.
 

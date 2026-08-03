@@ -40,7 +40,6 @@
         trusted-users = ["root" "@wheel"];
       };
       optimise.automatic = true;
-      
     };
     systemd.services.nix-optimise.serviceConfig.RemainAfterExit = "yes";
     time.timeZone = "Australia/Canberra";

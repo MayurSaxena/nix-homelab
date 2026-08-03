@@ -114,14 +114,12 @@
     nixosConfigurations = let
       baseLxc = ./hosts/base-nixos-lxc-proxmox.nix;
     in {
-      # CI image variants — one base file, composed with inline overrides.
-      # Impermanence doesn't need to be pre-baked (OpenTofu sets up the
-      # persistent mounts independent of the template, and the host's own
-      # flake enables it on the first switch), so the only variant worth
-      # pre-building is remote-builds — kept as a fallback for bootstrapping
-      # without `--build-host`/`--target-host` (see README).
+      # CI image — one base file, no variants. Impermanence isn't pre-baked
+      # (OpenTofu creates the persistent mounts, and the host's own flake
+      # turns it on during the first switch); remote-builds isn't pre-baked
+      # either, now that the first-switch workflow always passes
+      # --build-host/--target-host explicitly (see provisioning/onboard-host.sh).
       "base-lxc" = mkNixOSConfig baseLxc;
-      "base-lxc-remote" = mkNixOSConfig [baseLxc {custom.remote-builds.enable = true;}];
 
       "nix-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
       "dns" = mkNixOSConfig ./hosts/dns-server.nix;

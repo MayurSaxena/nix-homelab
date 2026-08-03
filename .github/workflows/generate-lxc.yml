@@ -3,7 +3,6 @@ name: Generate LXC Images
 on:
     push:
         tags:
-            - prod
             - nightly
 permissions:
     contents: write
@@ -31,21 +30,11 @@ jobs:
                         echo "RP1=$RELEASE_PATH" >> $GITHUB_ENV
                     }
             
-            -   name: Generate NixOS configuration with remote builder configured
-                run: |
-                    nix run github:nix-community/nixos-generators -- -f proxmox-lxc --flake .#base-lxc-remote | {
-                        read path
-                        FILENAME="$(basename $path)"
-                        RELEASE_PATH="${{ github.workspace }}/nixos-proxmox-lxc-remotebuild.tar.xz"
-                        cp $path $RELEASE_PATH
-                        echo "RP2=$RELEASE_PATH" >> $GITHUB_ENV
-                    }
-            
             -   name: Release
                 uses: softprops/action-gh-release@v2
                 if: github.ref_type == 'tag'
                 with:
-                    prerelease: ${{ github.ref_name != 'prod' }}
+                    prerelease: true
                     preserve_order: false
                     files: |
                         ${{ github.workspace }}/*.tar.xz
