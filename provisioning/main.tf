@@ -17,8 +17,8 @@ module "nix-builder" {
   network_interfaces = { "eth0" = 20 }
   ipv4_settings      = "dhcp"
   ipv6_settings      = "auto"
-  memory_size_mb     = 4096
-  num_cpu_cores      = 4
+  memory_size_mb     = 8192
+  num_cpu_cores      = 8
   rootfs_size_gb     = 32
   ct_template_id     = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
   startup_order      = 3
