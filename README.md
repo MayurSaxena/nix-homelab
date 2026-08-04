@@ -169,6 +169,7 @@ nix eval .#nixosConfigurations.<host>.config.systemd.services.<unit>.serviceConf
 nix flake update [<input>]
 sops secrets/<file>
 nixos-rebuild switch --flake .#<host> --target-host root@<ip>
+source util/pve-auth.sh                                                 # auth for tofu (see CLAUDE.md)
 cd provisioning && tofu apply
 ./provisioning/onboard-host.sh <flake-host-key> <container-ip>          # finish a new host
 ```

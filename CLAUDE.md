@@ -607,6 +607,35 @@ Changing `ct_template_id` on an existing host is safe: the module sets
 `ignore_changes = [operating_system["template_file_id"]]`, so it only affects newly-created
 containers.
 
+### Authenticating to the Proxmox API
+
+`provisioning/provider.tf` authenticates as `root@pam` with a password/ticket, not an API
+token. **Don't try to move this to a token** — PVE hard-codes several operations, including
+setting a container's hookscript (`hook_script_file_id`, which 11 of the 13 hosts set), to
+literally require the `root@pam` identity. No role or privilege grant on a token bypasses
+this; it's a PVE limitation, not a provider one ([provider issue #570][pve-570],
+[PVE bugzilla #2582][pve-bz-2582], unlikely to be fixed). Since almost every host needs a
+hookscript, there's no host mix here where token auth would avoid the requirement.
+
+`root@pam` has TOTP enabled, so a plain password isn't enough either. The provider's own
+`otp` argument is deprecated and not the right tool — the correct mechanism is a pre-fetched
+auth ticket. `util/pve-auth.sh` drives that exchange (calls `/access/ticket`, detects
+`NeedTFA`, re-authenticates with `password=totp:<code>`) and exports
+`PROXMOX_VE_AUTH_TICKET`/`PROXMOX_VE_CSRF_PREVENTION_TOKEN` for tofu to pick up. Source it
+before `tofu plan`/`apply`, from anywhere inside the repo:
+
+```bash
+source util/pve-auth.sh
+```
+
+The live TOTP code is derived automatically — the script decrypts `proxmox/root_pam-totp-secret`
+from `secrets/msaxena.yaml` and computes the current code with `oathtool`, so nothing needs
+to be typed in from a phone or authenticator app. Passing a code manually as `$1` still works
+as a fallback (`source util/pve-auth.sh 123456`) if the secret isn't set up yet.
+
+[pve-570]: https://github.com/bpg/terraform-provider-proxmox/issues/570
+[pve-bz-2582]: https://bugzilla.proxmox.com/show_bug.cgi?id=2582
+
 ### Adding a container
 
 1. Write `hosts/<name>.nix`, register it in `flake.nix`.
