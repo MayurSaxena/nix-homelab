@@ -1,7 +1,27 @@
 #! /usr/bin/env /bin/sh
 
-## assume vars are set: PROXMOX_VE_ENDPOINT, PROXMOX_VE_USERNAME, PROXMOX_VE_PASSWORD
+## self-contained: no need to source provisioning/.envrc first. ENDPOINT/USERNAME/INSECURE
+## default below (override by exporting them yourself first, e.g. via provisioning/.envrc);
+## PASSWORD, if not already set, is decrypted from secrets/msaxena.yaml.
 ## end-goal: automatically set PROXMOX_VE_AUTH_TICKET and PROXMOX_VE_CSRF_PREVENTION_TOKEN
+
+repo_root=$(git rev-parse --show-toplevel)
+
+: "${PROXMOX_VE_ENDPOINT:=https://10.0.10.3:8006/}"
+: "${PROXMOX_VE_USERNAME:=root@pam}"
+: "${PROXMOX_VE_INSECURE:=true}"
+export PROXMOX_VE_ENDPOINT PROXMOX_VE_USERNAME PROXMOX_VE_INSECURE
+
+_password_derived=0
+if [ -z "${PROXMOX_VE_PASSWORD}" ]; then
+  PROXMOX_VE_PASSWORD=$(sops -d --extract '["proxmox"]["root_pam-password"]' "${repo_root}/secrets/msaxena.yaml")
+  _password_derived=1
+  if [ -z "${PROXMOX_VE_PASSWORD}" ]; then
+    echo "ERROR: could not decrypt proxmox/root_pam-password from secrets/msaxena.yaml." >&2
+    echo "See CLAUDE.md's 'Authenticating to the Proxmox API' section, or export PROXMOX_VE_PASSWORD yourself." >&2
+    return 1
+  fi
+fi
 
 _user_totp_password=$1 ## optional: pass a live code to skip the sops/oathtool lookup below
 
@@ -17,7 +37,6 @@ if [[ $(jq -r '.data.NeedTFA' <<<"${resp}") == 1 ]]; then
   if [ -z "${_user_totp_password}" ]; then
     ## derive the live code from the TOTP seed in secrets/msaxena.yaml instead of asking a
     ## human to type one in from their phone/authenticator app each time.
-    repo_root=$(git rev-parse --show-toplevel)
     totp_secret=$(sops -d --extract '["proxmox"]["root_pam-totp-secret"]' "${repo_root}/secrets/msaxena.yaml")
     if [ -z "${totp_secret}" ]; then
       echo "ERROR: could not decrypt proxmox/root_pam-totp-secret from secrets/msaxena.yaml." >&2
@@ -33,3 +52,9 @@ fi
 
 export PROXMOX_VE_AUTH_TICKET="${auth_ticket}"
 export PROXMOX_VE_CSRF_PREVENTION_TOKEN="${resp_csrf}"
+
+## the ticket is what tofu actually authenticates with from here; don't leave a derived
+## plaintext password sitting in the shell any longer than the exchange above needed it for.
+if [ "${_password_derived}" = 1 ]; then
+  unset PROXMOX_VE_PASSWORD
+fi

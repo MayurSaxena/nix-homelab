@@ -633,6 +633,12 @@ from `secrets/msaxena.yaml` and computes the current code with `oathtool`, so no
 to be typed in from a phone or authenticator app. Passing a code manually as `$1` still works
 as a fallback (`source util/pve-auth.sh 123456`) if the secret isn't set up yet.
 
+The script is fully self-contained — `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_USERNAME`/
+`PROXMOX_VE_INSECURE` default inside it and `PROXMOX_VE_PASSWORD` decrypts from
+`proxmox/root_pam-password` in the same secrets file, so `provisioning/.envrc` is no longer a
+prerequisite. It's still there as an optional override (e.g. a different endpoint) — anything
+you export yourself before sourcing wins over the script's defaults.
+
 [pve-570]: https://github.com/bpg/terraform-provider-proxmox/issues/570
 [pve-bz-2582]: https://bugzilla.proxmox.com/show_bug.cgi?id=2582
 
