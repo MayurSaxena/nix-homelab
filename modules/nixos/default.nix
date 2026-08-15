@@ -41,7 +41,6 @@
       };
       optimise.automatic = true;
     };
-    systemd.services.nix-optimise.serviceConfig.RemainAfterExit = "yes";
     time.timeZone = "Australia/Canberra";
 
     # Every day around 4AM AEST so that I wake up to a nice surprise if it breaks.
@@ -53,7 +52,6 @@
       flags = ["--refresh"];
       runGarbageCollection = true;
     };
-    systemd.services.nixos-upgrade.serviceConfig.RemainAfterExit = "yes";
 
     # enable the firewall
     networking.firewall.enable = true;
