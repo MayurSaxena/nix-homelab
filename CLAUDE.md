@@ -664,17 +664,43 @@ first avoids the trap entirely rather than working around it.
    `.sops.yaml` rule (see *Secrets → Which file*) and `sops`-encrypt the file directly — the
    anchor already exists, so this is one step, not a bootstrap dance.
 4. If the service is proxied through the shared `caddy` host, add its `virtualHosts` entry in
-   `hosts/caddy.nix` now too — its own switch happens separately, in step 8.
+   `hosts/caddy.nix` now too — its own switch happens separately, in step 6.
 5. `nix fmt .`, sanity-build: `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`.
-6. Commit and push everything (autoUpgrade and the flake URL both read from GitHub, not your
-   worktree).
-7. `provisioning/onboard-host.sh <flake-host-key> <container-ip>` — commits any leftover
-   `.sops.yaml`/`secrets/` change if there is one (usually a no-op now, since step 3 already
-   committed it), then runs the first switch from a machine that can reach both nix-builder
-   and the container. Add `--local` before `<flake-host-key>` to deploy from this working
-   tree instead of GitHub and skip the commit/push entirely — useful for verifying a change
-   works before pushing it, on this host or any already-onboarded one. autoUpgrade will
-   silently revert a `--local` deploy the next time it runs, since nothing was committed.
+   This only proves the config *evaluates and builds* — it says nothing about whether the
+   service actually runs, so don't treat it as sufficient on its own; step 6 is the real test.
+6. **Deploy and verify locally, before committing anything:**
+   `provisioning/onboard-host.sh --local <flake-host-key> <container-ip>`. `--local` deploys
+   from this working tree (`--flake .`) instead of GitHub and skips the commit/push step
+   entirely, so the very first real switch — the one that actually proves the service starts,
+   stays up, and does what it's supposed to — happens *before* anything reaches origin, not
+   after. Do all of the following before moving on:
+   - Check `systemctl --failed` on the target is empty (beyond the known machine-id quirk
+     below, which the script already self-heals).
+   - Actually exercise the service, not just its unit status — `active (running)` is not
+     proof of correctness. (Concretely: yamtrack's units were all healthy while every
+     registration attempt 403'd; the real bug — a hardcoded `X-Real-IP` header requirement
+     several layers down in django-allauth's rate limiter — only showed up by reproducing the
+     actual request and reading its logs, not by checking `systemctl status`.)
+   - Run the exact same `--local` command a **second time** and confirm it completes cleanly
+     with no new failures — this is the "rebuilds" check: a config can work on a first
+     activation by accident of ordering (impermanence's own machine-id unit is a live example
+     upstream) and only reveal an idempotency bug on the activation after that, which
+     `autoUpgrade` will trigger daily against every host forever.
+   - If step 4 added a caddy vhost, verify that too, the same way, before pushing:
+     `provisioning/onboard-host.sh --local caddy <caddy-ip>`. Caddy fronts every other
+     service, so this deserves the same local proof before its config reaches origin.
+
+   autoUpgrade will silently revert a `--local` deploy the next time it runs, since nothing
+   was committed — that's expected, not a bug; the point is testing before push, not a
+   persistent deployment mode.
+
+7. Once step 6 passes, commit and push everything (autoUpgrade and the flake URL both read
+   from GitHub, not your worktree) — this now includes the host, secrets, and any caddy vhost
+   change together, since none of it was committed during local verification.
+8. Optionally, re-run `provisioning/onboard-host.sh <flake-host-key> <container-ip>` (no
+   `--local` this time) to confirm what's actually on GitHub matches what you just verified —
+   should be a no-op activation, since the committed tree is byte-identical to what `--local`
+   already built and tested. Runs the same first-switch machine-id self-heal either way:
 
    ```bash
    nixos-rebuild switch \
@@ -692,8 +718,8 @@ first avoids the trap entirely rather than working around it.
 
    `<flake-host-key>` is the `nixosConfigurations` attribute name, which isn't always the
    `provisioning/main.tf` module name (`dns-server` → `dns`, `plex-server` → `plex`,
-   `fileserver` → `files`). Root SSH is YubiKey-hardware-key-only on every host, so this step
-   needs someone at the keyboard — for *both* legs: `root@nix-builder` reuses the same
+   `fileserver` → `files`). Root SSH is YubiKey-hardware-key-only on every host, so both steps
+   6 and 8 need someone at the keyboard — for *both* legs: `root@nix-builder` reuses the same
    YubiKey-gated identity already required for `root@<container-ip>`, rather than the
    `nix@nix-builder` account, whose key (`/etc/nix/remote-builder-key`) is deliberately
    root-only-readable locally and reserved for the unattended `custom.remote-builds`/
@@ -710,16 +736,13 @@ first avoids the trap entirely rather than working around it.
    reporting itself as still "active (running)". The exact cause wasn't confirmed (the file
    content was identical before and after), but restarting it is cheap and safe regardless.
 
-8. If step 4 added a caddy vhost, switch `caddy` too — it won't route to the new host until
-   its own config is rebuilt (or the next daily `autoUpgrade` picks it up, within a day).
-   Caddy fronts every other service, so this deserves its own deliberate switch, not folded
-   into step 7's script. **Known possible gotcha:** `hosts/caddy.nix`'s `caddy.withPlugins`
-   pins a `hash` for the Cloudflare DNS-01 plugin's vendored Go modules; because `nixpkgs`
-   moves daily via the flake-lock auto-update, caddy's own upstream source can occasionally
-   drift and change that fixed-output hash even though nothing in this repo changed. This is
-   uncommon, not something to expect on every switch — most caddy switches build fine. If one
-   ever does fail with `hash mismatch in fixed-output derivation`, that's expected drift, not
-   a real problem — update `hash = "sha256-...";` to the reported `got:` value and retry.
+**Known possible gotcha:** `hosts/caddy.nix`'s `caddy.withPlugins` pins a `hash` for the
+Cloudflare DNS-01 plugin's vendored Go modules; because `nixpkgs` moves daily via the
+flake-lock auto-update, caddy's own upstream source can occasionally drift and change that
+fixed-output hash even though nothing in this repo changed. This is uncommon, not something
+to expect on every switch — most caddy switches build fine. If one ever does fail with
+`hash mismatch in fixed-output derivation`, that's expected drift, not a real problem —
+update `hash = "sha256-...";` to the reported `got:` value and retry.
 
 `tofu destroy` removes the host's age key and re-encrypts on the way out.
 
