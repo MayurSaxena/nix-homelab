@@ -127,7 +127,9 @@ in {
         import use-external-dns-acme
       '';
       "yamtrack.${domain}".extraConfig = ''
-        reverse_proxy http://yamtrack.home.internal:8000
+        reverse_proxy http://yamtrack.home.internal:8000 {
+          header_up X-Real-IP {remote_host}
+        }
         import use-external-dns-acme
       '';
     };
