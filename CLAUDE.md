@@ -677,8 +677,15 @@ first avoids the trap entirely rather than working around it.
    nixos-rebuild switch \
      --flake github:MayurSaxena/nix-homelab#<host> \
      --build-host root@nix-builder.home.internal \
-     --target-host root@<container-ip>
+     --target-host root@<container-ip> \
+     --refresh
    ```
+
+   `--refresh` is required, not optional: a `github:` flake ref is subject to Nix's
+   tarball-ttl caching, so a switch run shortly after a push can silently rebuild the
+   *previous* commit with no error or warning — only a diff against the store path actually
+   deployed reveals it. This applies to *any* manual switch against a `github:` ref for this
+   repo, not just onboarding (e.g. redeploying `caddy` right after pushing a fix).
 
    `<flake-host-key>` is the `nixosConfigurations` attribute name, which isn't always the
    `provisioning/main.tf` module name (`dns-server` → `dns`, `plex-server` → `plex`,

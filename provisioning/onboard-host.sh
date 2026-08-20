@@ -71,11 +71,17 @@ fi
 
 echo "==> Building ${host} on nix-builder and switching root@${ip}"
 echo "    (YubiKey required for both root@nix-builder and root@${ip} — touch it when it blinks)"
+# --refresh is required, not optional: a github: flake ref is subject to
+# Nix's tarball-ttl caching, so a switch run shortly after a push can
+# silently rebuild the *previous* commit with no error or warning at all --
+# only a diff against the store path actually deployed reveals it. This bit
+# us live while switching caddy right after pushing a fix.
 set +e
 nixos-rebuild switch \
   --flake "github:MayurSaxena/nix-homelab#${host}" \
   --build-host root@nix-builder.home.internal \
-  --target-host "root@${ip}"
+  --target-host "root@${ip}" \
+  --refresh
 switch_status=$?
 set -e
 
