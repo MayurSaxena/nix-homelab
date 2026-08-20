@@ -14,6 +14,10 @@
   # nix.* options in nix-darwin are a no-op when determinateNix.enable = true.
   determinateNix.enable = true;
 
+  # claude-code is unfree; NixOS hosts get this from modules/nixos/default.nix,
+  # but mkDarwinConfig doesn't inject a shared base, so it's set here instead.
+  nixpkgs.config.allowUnfree = true;
+
   # Enable Touch ID and Watch ID for sudo
   security.pam.services.sudo_local = {
     touchIdAuth = true;

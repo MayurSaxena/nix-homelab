@@ -17,6 +17,7 @@
       opentofu
       starship
       devenv
+      claude-code
     ];
 
     # Set the home directory differently based on platform
