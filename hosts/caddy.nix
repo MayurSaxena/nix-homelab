@@ -126,6 +126,10 @@ in {
         reverse_proxy http://plex.home.internal:3090
         import use-external-dns-acme
       '';
+      "yamtrack.${domain}".extraConfig = ''
+        reverse_proxy http://yamtrack.home.internal:8000
+        import use-external-dns-acme
+      '';
     };
   };
 

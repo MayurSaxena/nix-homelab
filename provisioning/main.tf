@@ -306,3 +306,26 @@ module "beszel-hub" {
   custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
   tags                  = ["terraform", "monitoring"]
 }
+
+module "yamtrack" {
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "Yamtrack Media Tracker (Terraform)"
+  hostname              = "yamtrack"
+  domain                = "home.internal"
+  network_interfaces    = { "eth0" = 20 }
+  ipv4_settings         = "dhcp"
+  ipv6_settings         = "auto"
+  memory_size_mb        = 1024
+  num_cpu_cores         = 2
+  persistent_fs_size_gb = 4
+  # Yamtrack's Python dependency set (Django, Celery, Pillow, etc.) is
+  # bigger than actualbudget's Node closure, so give /nix more room.
+  nix_fs_size_gb      = 12
+  ct_template_id      = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
+  pool_id             = "production"
+  startup_order       = 3
+  rootfs_impermanence = true
+  custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                = ["terraform", "media"]
+}

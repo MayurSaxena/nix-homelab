@@ -67,3 +67,9 @@ creation_rules:
       - age: 
         - *msaxena-keys
         - *servarr
+
+  - path_regex: secrets/yamtrack.env$
+    key_groups:
+      - age:
+        - *msaxena-keys
+        - *yamtrack
