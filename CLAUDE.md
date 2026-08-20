@@ -671,7 +671,10 @@ first avoids the trap entirely rather than working around it.
 7. `provisioning/onboard-host.sh <flake-host-key> <container-ip>` — commits any leftover
    `.sops.yaml`/`secrets/` change if there is one (usually a no-op now, since step 3 already
    committed it), then runs the first switch from a machine that can reach both nix-builder
-   and the container:
+   and the container. Add `--local` before `<flake-host-key>` to deploy from this working
+   tree instead of GitHub and skip the commit/push entirely — useful for verifying a change
+   works before pushing it, on this host or any already-onboarded one. autoUpgrade will
+   silently revert a `--local` deploy the next time it runs, since nothing was committed.
 
    ```bash
    nixos-rebuild switch \
@@ -701,18 +704,22 @@ first avoids the trap entirely rather than working around it.
    The script also self-heals a known first-switch quirk: impermanence's machine-id
    persistence unit almost always fails on a brand-new host's very first activation (the base
    image's first boot already wrote a real `/etc/machine-id` before impermanence gets a
-   chance to run its own placeholder workaround), and the script removes the stray file and
-   restarts that one unit once it confirms the persisted copy already matches.
+   chance to run its own placeholder workaround). The script removes the stray file, retries
+   the mount, and restarts `systemd-journald` too — observed once (onboarding `yamtrack`) to
+   silently stop logging anything at all system-wide right after the machine-id swap, despite
+   reporting itself as still "active (running)". The exact cause wasn't confirmed (the file
+   content was identical before and after), but restarting it is cheap and safe regardless.
 
 8. If step 4 added a caddy vhost, switch `caddy` too — it won't route to the new host until
    its own config is rebuilt (or the next daily `autoUpgrade` picks it up, within a day).
    Caddy fronts every other service, so this deserves its own deliberate switch, not folded
-   into step 7's script. **Known gotcha:** `hosts/caddy.nix`'s `caddy.withPlugins` pins a
-   `hash` for the Cloudflare DNS-01 plugin's vendored Go modules; because `nixpkgs` moves
-   daily via the flake-lock auto-update, caddy's own upstream source can drift and change
-   that fixed-output hash even though nothing in this repo changed. A caddy switch failing
-   with `hash mismatch in fixed-output derivation` is expected drift, not a real problem —
-   update `hash = "sha256-...";` to the reported `got:` value and retry.
+   into step 7's script. **Known possible gotcha:** `hosts/caddy.nix`'s `caddy.withPlugins`
+   pins a `hash` for the Cloudflare DNS-01 plugin's vendored Go modules; because `nixpkgs`
+   moves daily via the flake-lock auto-update, caddy's own upstream source can occasionally
+   drift and change that fixed-output hash even though nothing in this repo changed. This is
+   uncommon, not something to expect on every switch — most caddy switches build fine. If one
+   ever does fail with `hash mismatch in fixed-output derivation`, that's expected drift, not
+   a real problem — update `hash = "sha256-...";` to the reported `got:` value and retry.
 
 `tofu destroy` removes the host's age key and re-encrypts on the way out.
 
