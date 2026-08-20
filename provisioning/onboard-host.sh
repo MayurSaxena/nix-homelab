@@ -119,10 +119,23 @@ set -e
 # chance to run its own placeholder workaround (see nix-community/impermanence
 # PR #242). Self-heal it here rather than making every onboarding rediscover
 # the fix by hand.
+#
+# This check (and its fix, when needed) runs as plain `ssh` calls, separate
+# from whatever socket nixos-rebuild switch just used for the same host --
+# without multiplexing, that's a third YubiKey touch on every single
+# invocation, on top of the two nixos-rebuild switch already needs for its
+# own build-host/target-host legs. ControlPersist keeps this connection
+# alive briefly after the script exits too, so a follow-up run against the
+# same host (e.g. the idempotency check in CLAUDE.md's local-verification
+# step) can reuse it instead of prompting again.
+ssh_control_dir="/tmp/nix-homelab-ssh-mux"
+mkdir -p "${ssh_control_dir}"
+ssh_mux_opts=(-o ControlMaster=auto -o "ControlPath=${ssh_control_dir}/%r@%h:%p" -o ControlPersist=10m)
+
 unit='persist-persistent-etc-machine\x2did.service'
-if ssh "root@${ip}" "systemctl is-failed '${unit}'" 2>/dev/null | grep -q '^failed$'; then
+if ssh "${ssh_mux_opts[@]}" "root@${ip}" "systemctl is-failed '${unit}'" 2>/dev/null | grep -q '^failed$'; then
   echo "==> Known quirk: ${unit} failed on first activation, checking if it's safe to self-heal"
-  if ssh "root@${ip}" 'diff -q /etc/machine-id /persistent/etc/machine-id' >/dev/null 2>&1; then
+  if ssh "${ssh_mux_opts[@]}" "root@${ip}" 'diff -q /etc/machine-id /persistent/etc/machine-id' >/dev/null 2>&1; then
     echo "==> /etc/machine-id matches the persisted copy -- removing the stray file, retrying the mount, and restarting journald"
     # journald appears to open/cache /etc/machine-id at its own startup and
     # doesn't notice the swap from a plain file to this bind mount, even
@@ -131,7 +144,7 @@ if ssh "root@${ip}" "systemctl is-failed '${unit}'" 2>/dev/null | grep -q '^fail
     # for the whole host, with journald itself still "active (running)".
     # Restarting it is cheap and idempotent either way, so do it
     # unconditionally here rather than trying to detect the symptom first.
-    ssh "root@${ip}" "rm -f /etc/machine-id && systemctl restart '${unit}' && systemctl restart systemd-journald"
+    ssh "${ssh_mux_opts[@]}" "root@${ip}" "rm -f /etc/machine-id && systemctl restart '${unit}' && systemctl restart systemd-journald"
   else
     echo "WARNING: ${unit} failed but /etc/machine-id doesn't match the persisted copy." >&2
     echo "Not auto-fixing -- investigate by hand on root@${ip}." >&2
