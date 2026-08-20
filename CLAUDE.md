@@ -403,6 +403,11 @@ create it.** Always include `*msaxena-keys`, plus only the hosts that need runti
 
 Then `sops secrets/my-service.env`.
 
+**For a brand-new host**, that host's anchor doesn't exist until `tofu apply` creates it —
+see *Provisioning → Adding a container*, which provisions the container before any of its
+secrets specifically to avoid a `.sops.yaml` chicken-and-egg deadlock. This only matters for
+a host's *first* secret; adding a secret to an already-onboarded host has no such trap.
+
 ### Extension → `format` → what the secret NAME means
 
 These are one decision, and it's the most load-bearing rule here:
@@ -644,27 +649,63 @@ you export yourself before sourcing wins over the script's defaults.
 
 ### Adding a container
 
-1. Write `hosts/<name>.nix`, register it in `flake.nix`.
-2. Add the module block to `provisioning/main.tf`.
-3. If it needs secrets, add the `.sops.yaml` rule and create the file.
-4. Commit and push (autoUpgrade and the flake URL both read from GitHub, not your worktree).
-5. `cd provisioning && tofu apply` — creates the LXC and registers its age key automatically.
-6. `provisioning/onboard-host.sh <flake-host-key> <container-ip>` — commits the pending
-   `.sops.yaml` change if there is one, then runs the first switch from a machine that can
-   reach both nix-builder and the container:
+If the host needs secrets, provision it *before* creating any of them — otherwise a
+`.sops.yaml` rule referencing the new host's (not-yet-existing) age-key anchor makes
+`.sops.yaml` unparseable for every `sops` invocation in the repo until the anchor exists,
+including `util/pve-auth.sh` itself (it needs `sops` to decrypt the Proxmox credentials
+required to run `tofu apply` — the one thing that *creates* the anchor). Doing the tofu step
+first avoids the trap entirely rather than working around it.
+
+1. Add the module block to `provisioning/main.tf`.
+2. `cd provisioning && tofu apply -target=module.<name>` — creates the LXC and splices its
+   age key into `.sops.yaml` automatically. The anchor now exists, so this host's secrets can
+   be added normally with no ordering trap.
+3. Write `hosts/<name>.nix`, register it in `flake.nix`. If it needs secrets: add the
+   `.sops.yaml` rule (see *Secrets → Which file*) and `sops`-encrypt the file directly — the
+   anchor already exists, so this is one step, not a bootstrap dance.
+4. If the service is proxied through the shared `caddy` host, add its `virtualHosts` entry in
+   `hosts/caddy.nix` now too — its own switch happens separately, in step 8.
+5. `nix fmt .`, sanity-build: `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`.
+6. Commit and push everything (autoUpgrade and the flake URL both read from GitHub, not your
+   worktree).
+7. `provisioning/onboard-host.sh <flake-host-key> <container-ip>` — commits any leftover
+   `.sops.yaml`/`secrets/` change if there is one (usually a no-op now, since step 3 already
+   committed it), then runs the first switch from a machine that can reach both nix-builder
+   and the container:
 
    ```bash
    nixos-rebuild switch \
      --flake github:MayurSaxena/nix-homelab#<host> \
-     --build-host nix@nix-builder.home.internal \
-     --target-host root@<container-ip> \
-     --use-remote-sudo
+     --build-host root@nix-builder.home.internal \
+     --target-host root@<container-ip>
    ```
 
    `<flake-host-key>` is the `nixosConfigurations` attribute name, which isn't always the
    `provisioning/main.tf` module name (`dns-server` → `dns`, `plex-server` → `plex`,
    `fileserver` → `files`). Root SSH is YubiKey-hardware-key-only on every host, so this step
-   needs someone at the keyboard.
+   needs someone at the keyboard — for *both* legs: `root@nix-builder` reuses the same
+   YubiKey-gated identity already required for `root@<container-ip>`, rather than the
+   `nix@nix-builder` account, whose key (`/etc/nix/remote-builder-key`) is deliberately
+   root-only-readable locally and reserved for the unattended `custom.remote-builds`/
+   `autoUpgrade` daemon path. Using that account here would force the whole command under
+   `sudo`, which then hits a second problem: root's own local `known_hosts` is essentially
+   empty, so even `--target-host` fails host-key verification non-interactively.
+
+   The script also self-heals a known first-switch quirk: impermanence's machine-id
+   persistence unit almost always fails on a brand-new host's very first activation (the base
+   image's first boot already wrote a real `/etc/machine-id` before impermanence gets a
+   chance to run its own placeholder workaround), and the script removes the stray file and
+   restarts that one unit once it confirms the persisted copy already matches.
+
+8. If step 4 added a caddy vhost, switch `caddy` too — it won't route to the new host until
+   its own config is rebuilt (or the next daily `autoUpgrade` picks it up, within a day).
+   Caddy fronts every other service, so this deserves its own deliberate switch, not folded
+   into step 7's script. **Known gotcha:** `hosts/caddy.nix`'s `caddy.withPlugins` pins a
+   `hash` for the Cloudflare DNS-01 plugin's vendored Go modules; because `nixpkgs` moves
+   daily via the flake-lock auto-update, caddy's own upstream source can drift and change
+   that fixed-output hash even though nothing in this repo changed. A caddy switch failing
+   with `hash mismatch in fixed-output derivation` is expected drift, not a real problem —
+   update `hash = "sha256-...";` to the reported `got:` value and retry.
 
 `tofu destroy` removes the host's age key and re-encrypts on the way out.
 
@@ -674,7 +715,7 @@ you export yourself before sourcing wins over the script's defaults.
 
 ```bash
 nix fmt .                                                    # alejandra
-nix build .#nixosConfigurations.<host>.config.system.toplevel  # check without switching
+nix build .#nixosConfigurations.<host>.config.system.build.toplevel  # check without switching
 nix eval .#nixosConfigurations.<host>.config.systemd.services.<unit>.serviceConfig
 nix flake update [<input>]
 sops secrets/<file>
