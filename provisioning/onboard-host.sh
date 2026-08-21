@@ -152,9 +152,27 @@ if ssh "${ssh_mux_opts[@]}" "root@${ip}" "systemctl is-failed '${unit}'" 2>/dev/
 fi
 
 if [ "${switch_status}" -ne 0 ]; then
-  echo "ERROR: nixos-rebuild switch exited ${switch_status}. Check the output above" >&2
-  echo "(the machine-id quirk alone shouldn't cause this -- something else failed)." >&2
-  exit "${switch_status}"
+  # nixos-rebuild switch returns non-zero if *any* unit failed during
+  # activation -- including the known machine-id quirk above, even when its
+  # self-heal fully fixed it. Re-check the target's actual state rather than
+  # trusting this stale exit code: if nothing is failed anymore, the heal was
+  # the whole story and this isn't a real error. Fail closed if the recheck
+  # itself can't reach the host -- an unreachable host is not evidence of
+  # health, so don't let that masquerade as "nothing failed".
+  ssh_check_ok=1
+  remaining_failed=$(ssh "${ssh_mux_opts[@]}" "root@${ip}" 'systemctl --failed --no-legend' 2>/dev/null) || ssh_check_ok=0
+  if [ "${ssh_check_ok}" -eq 1 ] && [ -z "${remaining_failed}" ]; then
+    echo "==> nixos-rebuild switch exited ${switch_status}, but no units are failed on ${host} now -- the self-heal above resolved it."
+  else
+    echo "ERROR: nixos-rebuild switch exited ${switch_status}. Check the output above" >&2
+    if [ "${ssh_check_ok}" -eq 1 ]; then
+      echo "Still-failed units on ${host}:" >&2
+      echo "${remaining_failed}" >&2
+    else
+      echo "(couldn't re-check ${host}'s unit status to confirm)" >&2
+    fi
+    exit "${switch_status}"
+  fi
 fi
 
 if [ "${local_mode}" -eq 1 ]; then
