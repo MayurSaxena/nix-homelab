@@ -130,6 +130,10 @@ in {
         reverse_proxy http://yamtrack.home.internal:8000
         import use-external-dns-acme
       '';
+      "trek.${domain}".extraConfig = ''
+        reverse_proxy http://trek.home.internal:3000
+        import use-external-dns-acme
+      '';
     };
   };
 

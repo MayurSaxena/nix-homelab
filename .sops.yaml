@@ -1,5 +1,6 @@
 keys:
   - &all-keys
+    - &trek age1cw2p9lljqsjlrq6hqhms0nctkkff2zz6x9q008ceq3gxedxvlewqnrgdfw
     - &yamtrack age1kvfz00p8q49lcwe2zq6ra8rp3nxz79wf26k0g5uchs50c2djf3hq9fvnfm
     - &servarr age1ee4kq0dz6fat6qqjpu6pwsp2n26cddzjld2uhcyrt5hvur6v6q2spytnts
     - &beszel-hub age1mxk8n50wg4q4uv49zd522vyvlcn0393cger23yeq00pgf9898ayqumpynk
@@ -74,3 +75,9 @@ creation_rules:
       - age:
         - *msaxena-keys
         - *yamtrack
+
+  - path_regex: secrets/trek.env$
+    key_groups:
+      - age:
+        - *msaxena-keys
+        - *trek

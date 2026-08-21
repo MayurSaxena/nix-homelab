@@ -138,6 +138,7 @@
       "beszel-hub" = mkNixOSConfig ./hosts/beszel-hub.nix;
       "servarr" = mkNixOSConfig ./hosts/servarr.nix;
       "yamtrack" = mkNixOSConfig ./hosts/yamtrack.nix;
+      "trek" = mkNixOSConfig ./hosts/trek.nix;
     };
   };
 }

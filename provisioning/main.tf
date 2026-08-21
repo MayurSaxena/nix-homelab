@@ -329,3 +329,24 @@ module "yamtrack" {
   custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
   tags                = ["terraform", "media"]
 }
+
+module "trek" {
+  source                = "./modules/nixos-lxc"
+  pve_node_name         = var.pve_node_name
+  ct_description        = "TREK Travel Planner (Terraform)"
+  hostname              = "trek"
+  domain                = "home.internal"
+  network_interfaces    = { "eth0" = 20 }
+  ipv4_settings         = "dhcp"
+  ipv6_settings         = "auto"
+  memory_size_mb        = 1024
+  num_cpu_cores         = 2
+  persistent_fs_size_gb = 8
+  nix_fs_size_gb        = 10
+  ct_template_id        = proxmox_virtual_environment_download_file.nixos-standard-nightly.id
+  pool_id               = "production"
+  startup_order         = 3
+  rootfs_impermanence   = true
+  custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                  = ["terraform", "travel"]
+}
