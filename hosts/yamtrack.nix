@@ -5,7 +5,6 @@
   ...
 }: let
   domain = config.custom.domain;
-  staticProxyPort = 8000;
 in {
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "x86_64-linux";
 
@@ -31,8 +30,17 @@ in {
 
   services.yamtrack = {
     enable = true;
+    # The module now bundles its own co-located Caddy (mirroring upstream's
+    # Docker image, which bundles nginx) that serves static assets and sets
+    # X-Real-IP itself -- gunicorn is no longer directly reachable, and
+    # host/port now describe that proxy instead. It defaults to 127.0.0.1,
+    # matching upstream's single-container assumption, but the shared caddy
+    # fronting this host lives in a different container, so it needs to be
+    # reachable over the LAN.
+    host = "0.0.0.0";
     timeZone = "Australia/Canberra";
     urls = ["https://yamtrack.${domain}"];
+    openFirewall = true;
     environmentFiles = [config.sops.secrets."yamtrack-secrets".path];
     # SQLite is enough for a single-user personal tracker (Yamtrack's own
     # recommendation); flip database.createLocally on for Postgres later
@@ -45,24 +53,6 @@ in {
     bind = "127.0.0.1";
   };
 
-  # gunicorn doesn't serve its own static assets (no whitenoise; see the
-  # module's `host` option doc) and Caddy lives on a separate host with no
-  # access to this container's /nix/store, so a small local Caddy serves
-  # /static/ from the package output and proxies everything else to
-  # gunicorn. Keeps the shared Caddy's vhost a single reverse_proxy line.
-  services.caddy = {
-    enable = true;
-    virtualHosts."http://:${toString staticProxyPort}".extraConfig = ''
-      handle_path /static/* {
-        root * ${config.services.yamtrack.package}/share/yamtrack/src/staticfiles
-        file_server
-      }
-      reverse_proxy 127.0.0.1:${toString config.services.yamtrack.port}
-    '';
-  };
-
-  networking.firewall.allowedTCPPorts = [staticProxyPort];
-
   environment.persistence."${config.custom.impermanence.persistence-root}" = {
     directories = [
       {
@@ -72,8 +62,8 @@ in {
         mode = "0750";
       }
       # redis-yamtrack holds only cache/broker data (module's own doc: not
-      # a concern for impermanence) and the local caddy above does no ACME
-      # (HTTP-only, no domain) -- neither needs a persistence entry.
+      # a concern for impermanence); the module's own co-located proxy is
+      # stateless too -- neither needs a persistence entry.
     ];
   };
 }
