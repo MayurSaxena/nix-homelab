@@ -316,7 +316,7 @@ module "yamtrack" {
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
-  memory_size_mb        = 1024
+  memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
   # Yamtrack's Python dependency set (Django, Celery, Pillow, etc.) is
@@ -339,7 +339,7 @@ module "trek" {
   network_interfaces    = { "eth0" = 20 }
   ipv4_settings         = "dhcp"
   ipv6_settings         = "auto"
-  memory_size_mb        = 1024
+  memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 8
   nix_fs_size_gb        = 10
