@@ -574,8 +574,23 @@ numbers written here — they're tuned per service and change.
   on `20`. Unless a host is clearly one of those two special cases, it's `20`. Tags do not
   predict VLAN.
 - **Memory / CPU** — derive from the nearest analogue. 2 cores is standard; 4 only for
-  genuinely parallel or transcoding work. Because builds are delegated to `nix-builder`, you
-  do **not** size RAM for compilation.
+  genuinely parallel or transcoding work. Because *building* is delegated to `nix-builder`,
+  you don't need to size RAM for compilation — but Nix *evaluation* (parsing and evaluating
+  the flake and the whole NixOS module system, to work out what needs building in the first
+  place) is a separate, unavoidably-local cost that delegation does nothing for:
+  `system.autoUpgrade` runs `nixos-rebuild switch` directly on the host itself, not via
+  `--build-host`/`--target-host`, so evaluation happens on the container being upgraded,
+  using its own RAM, every single day — confirmed this isn't fixable by adding `--build-host`
+  to `autoUpgrade.flags` either, since that flag only wraps the subsequent *build* step in
+  SSH; the `nix eval` call it makes first still always runs locally regardless. 700–800MB of
+  evaluation RAM for a real host in this repo (sops-nix + NUR + impermanence + a handful of
+  `custom.*`/service options) is normal, not a sign anything is misconfigured. Budget
+  `memory_size_mb` for the service's own runtime needs *plus* headroom for this daily
+  evaluation cost — a host sized only for its application can OOM-kill its own autoUpgrade
+  (observed on `yamtrack` and `trek`, both since bumped). `zramSwap.enable = true` is a
+  lighter-weight mitigation worth knowing about (compressed in-RAM swap so evaluation spills
+  instead of hard-OOMing) if bumping real RAM isn't wanted, but isn't currently used anywhere
+  in this repo.
 - **Disks** — which variables apply depends on impermanence. If impermanent, leave
   `rootfs_size_gb` at its default and set `nix_fs_size_gb` (to the closure size) and
   `persistent_fs_size_gb` (to the service's state). If not, size `rootfs_size_gb`.
