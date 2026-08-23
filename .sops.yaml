@@ -75,3 +75,7 @@ creation_rules:
       - age:
         - *msaxena-keys
         - *trek
+
+  - path_regex: secrets/beszel-agent.env$
+    key_groups:
+      - age: *all-keys
