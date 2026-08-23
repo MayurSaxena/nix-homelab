@@ -128,8 +128,8 @@ before adding anything system-wide:
 `programs.ssh.extraConfig` · `custom.domain`
 
 Also in scope automatically, via the base module's imports: sops-nix, NUR (`pkgs.nur`), the
-out-of-tree `services.scrobblex` option, the upstream impermanence module (pulled in
-transitively by `modules/nixos/impermanence.nix`), and all five `custom.*` modules.
+upstream impermanence module (pulled in transitively by `modules/nixos/impermanence.nix`), and
+all five `custom.*` modules.
 
 **Never set `networking.hostName`** — `proxmox-lxc.nix` sets `manageHostName = false` and
 Proxmox supplies it.
@@ -221,7 +221,7 @@ proxied and none of them reference `domain`. Don't add an unused binding.
 
 Almost never. Exactly one host has one (`minecraft`, for `inputs.nix-minecraft.nixosModules.minecraft-servers`).
 Anything in nixpkgs needs no import, and the base module already brings in sops-nix, NUR,
-scrobblex, impermanence and the `custom.*` modules. Adding a third-party module is a
+impermanence and the `custom.*` modules. Adding a third-party module is a
 three-place change: flake input, host `imports`, and — if it needs an overlay — an inline
 module list in `flake.nix`, never `nixpkgs.overlays` in the host file.
 
@@ -548,8 +548,8 @@ So two shapes are available anywhere without further wiring:
 - **A package** — `pkgs.nur.repos.msaxena.<name>`. Nothing in the repo uses one yet, so
   you'd be setting the precedent.
 - **A NixOS module** — `inputs.nur.repos.msaxena.modules.nixos.<name>`, imported like any
-  other module. `services.scrobblex` is the live example, and it's imported by the *base*
-  module, which is why the option exists on every host while only `plex` enables it.
+  other module. Nothing in the repo uses one currently (the `services.scrobblex` module that
+  used to be the live example was removed along with the service).
 
 Import a NUR module from the base module only when every host should see the option;
 otherwise put it in the one host's `imports`.
