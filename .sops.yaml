@@ -58,12 +58,6 @@ creation_rules:
         - *msaxena-keys
         - *sabnzbd
 
-  - path_regex: secrets/scrobblex.env$
-    key_groups:
-      - age: 
-        - *msaxena-keys
-        - *plex
-
   - path_regex: secrets/servarr.env$
     key_groups:
       - age: 

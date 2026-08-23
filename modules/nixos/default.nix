@@ -14,7 +14,6 @@
   imports = [
     inputs.sops-nix.nixosModules.sops
     inputs.nur.modules.nixos.default
-    inputs.nur.repos.msaxena.modules.nixos.scrobblex
     ./impermanence.nix
     ./proxmox-lxc.nix
     ./remote-builds.nix
