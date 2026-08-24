@@ -298,7 +298,7 @@ in {
               widget = {
                 type = "gamedig";
                 serverType = "minecraft";
-                url = "udp://minecraft.home.internal:25565";
+                url = "udp://pixelheim.mayursaxena.com:25565";
                 fields = [
                   "status"
                   "currentPlayers"
