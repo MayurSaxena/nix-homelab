@@ -79,12 +79,23 @@ in {
       headerStyle = "clean";
       startUrl = "https://${domain}";
       target = "_self";
+      # Ordered top-to-bottom by how often it gets used day-to-day: things
+      # watched/read/played daily, then the tools behind them, then
+      # life-admin apps, then infrastructure and monitoring at the bottom.
       layout = [
         {
-          "Core Network" = {
-            icon = "mdi-lan-connect";
+          "Media" = {
+            icon = "mdi-multimedia";
             style = "row";
-            columns = 2;
+            columns = 3;
+          };
+        }
+
+        {
+          "Media Tools" = {
+            icon = "mdi-play-network-outline";
+            style = "row";
+            columns = 4;
           };
         }
 
@@ -96,16 +107,23 @@ in {
         }
 
         {
-          "Media" = {
-            icon = "mdi-multimedia";
+          "Life & Productivity" = {
+            icon = "mdi-briefcase-outline";
             style = "row";
-            columns = 2;
+            columns = 3;
           };
         }
 
         {
-          "Media Tools" = {
-            icon = "mdi-play-network-outline";
+          "Games" = {
+            icon = "mdi-gamepad-variant-outline";
+            style = "row";
+          };
+        }
+
+        {
+          "Infrastructure" = {
+            icon = "mdi-lan-connect";
             style = "row";
             columns = 3;
           };
@@ -115,59 +133,45 @@ in {
           "Monitoring" = {
             icon = "mdi-monitor-dashboard";
             style = "row";
-            columns = 2;
-          };
-        }
-
-        {
-          "Apps" = {
-            icon = "mdi-application-brackets-outline";
-            style = "column";
-            rows = 2;
-            useEqualHeights = true;
           };
         }
       ];
     };
     services = [
       {
-        "Core Network" = [
+        "Media" = [
           {
-            Proxmox = {
-              description = "Hypervisor";
-              href = "https://proxmox-web.${domain}";
-              icon = "proxmox";
-              # ping = "proxmox.${domain}";
+            Plex = {
+              description = "Media Library";
+              href = "https://plex-web.${domain}";
+              icon = "plex";
+              #ping = "plex.${domain}";
               widget = {
-                fields = [
-                  "vms"
-                  "lxc"
-                ];
-                password = "{{HOMEPAGE_VAR_PROXMOX_PASSWORD}}";
-                type = "proxmox";
-                url = "https://proxmox-web.${domain}";
-                username = "{{HOMEPAGE_VAR_PROXMOX_USERNAME}}";
+                key = "{{HOMEPAGE_VAR_PLEX_KEY}}";
+                type = "plex";
+                url = "https://plex-web.${domain}";
               };
             };
           }
           {
-            DNS = {
-              description = "Technitium DNS";
-              href = "https://dns-web.${domain}";
-              icon = "technitium";
-              #ping = "dns.${domain}";
+            Overseerr = {
+              description = "Media Requests";
+              href = "https://overseerr-web.${domain}";
+              icon = "overseerr";
+              #ping = "overseerr.${domain}";
               widget = {
-                fields = [
-                  "totalQueries"
-                  "totalBlocked"
-                  "totalCached"
-                  "totalServerFailure"
-                ];
-                key = "{{HOMEPAGE_VAR_TECHNITIUM_KEY}}";
-                range = "LastHour";
-                type = "technitium";
-                url = "https://dns-web.${domain}";
+                key = "{{HOMEPAGE_VAR_OVERSEERR_KEY}}";
+                type = "overseerr";
+                url = "https://overseerr-web.${domain}";
               };
+            };
+          }
+          {
+            Yamtrack = {
+              description = "Watch/Read Tracker";
+              href = "https://yamtrack.${domain}";
+              icon = "yamtrack";
+              #ping = "yamtrack.${domain}";
             };
           }
         ];
@@ -230,36 +234,6 @@ in {
         ];
       }
       {
-        "Media" = [
-          {
-            Plex = {
-              description = "Media Library";
-              href = "https://plex-web.${domain}";
-              icon = "plex";
-              #ping = "plex.${domain}";
-              widget = {
-                key = "{{HOMEPAGE_VAR_PLEX_KEY}}";
-                type = "plex";
-                url = "https://plex-web.${domain}";
-              };
-            };
-          }
-          {
-            Overseerr = {
-              description = "Media Requests";
-              href = "https://overseerr-web.${domain}";
-              icon = "overseerr";
-              #ping = "overseerr.${domain}";
-              widget = {
-                key = "{{HOMEPAGE_VAR_OVERSEERR_KEY}}";
-                type = "overseerr";
-                url = "https://overseerr-web.${domain}";
-              };
-            };
-          }
-        ];
-      }
-      {
         "Downloads" = [
           {
             SABnzbd = {
@@ -277,26 +251,7 @@ in {
         ];
       }
       {
-        "Monitoring" = [
-          {
-            Beszel = {
-              description = "Monitoring Dashboard";
-              href = "https://beszel.${domain}";
-              icon = "beszel";
-              # widget = {
-              #   type = "beszel";
-              #   url = "https://beszel.${domain}";
-              #   username = "{{HOMEPAGE_VAR_BESZEL_USERNAME}}";
-              #   password = "{{HOMEPAGE_VAR_BESZEL_PASSWORD}}";
-              #   version = 2;
-              #   fields = [];
-              # };
-            };
-          }
-        ];
-      }
-      {
-        "Apps" = [
+        "Life & Productivity" = [
           {
             "Actual Budget" = {
               description = "Budgeting";
@@ -320,6 +275,108 @@ in {
                 type = "paperlessngx";
                 url = "https://paperless-web.${domain}";
               };
+            };
+          }
+          {
+            Trek = {
+              description = "Trip Planner";
+              href = "https://trek.${domain}";
+              icon = "mdi-airplane";
+              #ping = "trek.${domain}";
+            };
+          }
+        ];
+      }
+      {
+        "Games" = [
+          {
+            Minecraft = {
+              description = "Pixelheim — Java & Bedrock";
+              icon = "minecraft";
+              # No web UI to link to; the gamedig widget below is the
+              # useful bit — live player count straight off the wire.
+              widget = {
+                type = "gamedig";
+                serverType = "minecraft";
+                url = "udp://pixelheim.mayursaxena.com:25565";
+                fields = [
+                  "status"
+                  "currentPlayers"
+                  "maxPlayers"
+                  "ping"
+                ];
+              };
+            };
+          }
+        ];
+      }
+      {
+        "Infrastructure" = [
+          {
+            Proxmox = {
+              description = "Hypervisor";
+              href = "https://proxmox-web.${domain}";
+              icon = "proxmox";
+              # ping = "proxmox.${domain}";
+              widget = {
+                fields = [
+                  "vms"
+                  "lxc"
+                ];
+                password = "{{HOMEPAGE_VAR_PROXMOX_PASSWORD}}";
+                type = "proxmox";
+                url = "https://proxmox-web.${domain}";
+                username = "{{HOMEPAGE_VAR_PROXMOX_USERNAME}}";
+              };
+            };
+          }
+          {
+            DNS = {
+              description = "Technitium DNS";
+              href = "https://dns-web.${domain}";
+              icon = "technitium";
+              #ping = "dns.${domain}";
+              widget = {
+                fields = [
+                  "totalQueries"
+                  "totalBlocked"
+                  "totalCached"
+                  "totalServerFailure"
+                ];
+                key = "{{HOMEPAGE_VAR_TECHNITIUM_KEY}}";
+                range = "LastHour";
+                type = "technitium";
+                url = "https://dns-web.${domain}";
+              };
+            };
+          }
+          {
+            Files = {
+              description = "Network Share (SMB)";
+              # Samba isn't reverse-proxied through caddy (no HTTP to
+              # front), so this links straight to the LAN host and opens
+              # in Finder/Explorer via the smb:// handler.
+              href = "smb://files.home.internal/NetShare";
+              icon = "mdi-nas";
+            };
+          }
+        ];
+      }
+      {
+        "Monitoring" = [
+          {
+            Beszel = {
+              description = "Monitoring Dashboard";
+              href = "https://beszel.${domain}";
+              icon = "beszel";
+              # widget = {
+              #   type = "beszel";
+              #   url = "https://beszel.${domain}";
+              #   username = "{{HOMEPAGE_VAR_BESZEL_USERNAME}}";
+              #   password = "{{HOMEPAGE_VAR_BESZEL_PASSWORD}}";
+              #   version = 2;
+              #   fields = [];
+              # };
             };
           }
         ];
