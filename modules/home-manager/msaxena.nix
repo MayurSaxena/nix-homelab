@@ -22,8 +22,8 @@
 
     # Set the home directory differently based on platform
     homeDirectory = lib.mkMerge [
-      (lib.mkIf pkgs.stdenv.isLinux "/home/${username}")
-      (lib.mkIf pkgs.stdenv.isDarwin "/Users/${username}")
+      (lib.mkIf pkgs.stdenv.hostPlatform.isLinux "/home/${username}")
+      (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin "/Users/${username}")
     ];
 
     # Plaintext files that can be mirrored or set.
@@ -39,7 +39,7 @@
     };
 
     # Environment variables to be set.
-    sessionVariables = lib.mkIf pkgs.stdenv.isDarwin {
+    sessionVariables = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
       SOPS_AGE_KEY_FILE = "$HOME/.config/sops/age/keys.txt";
     };
   };
@@ -87,7 +87,20 @@
     ssh = {
       enable = true;
       package = pkgs.openssh;
-      extraConfig = "StrictHostKeyChecking accept-new";
+      enableDefaultConfig = false;
+      settings."*" = {
+        ForwardAgent = false;
+        AddKeysToAgent = "no";
+        Compression = false;
+        ServerAliveInterval = 0;
+        ServerAliveCountMax = 3;
+        HashKnownHosts = false;
+        UserKnownHostsFile = "~/.ssh/known_hosts";
+        ControlMaster = "no";
+        ControlPath = "~/.ssh/master-%r@%n:%p";
+        ControlPersist = "no";
+        StrictHostKeyChecking = "accept-new";
+      };
     };
 
     git = {
@@ -102,7 +115,7 @@
   };
 
   # Because DS_Store files on Mac are annoying
-  targets.darwin.defaults = lib.mkIf (pkgs.stdenv.isDarwin) {
+  targets.darwin.defaults = lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin) {
     "com.apple.desktopservices".DSDontWriteNetworkStores = true;
     "com.apple.desktopservices".DSDontWriteUSBStores = true;
   };
@@ -116,7 +129,7 @@
     age.keyFile = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
     defaultSopsFile = ./../../secrets/msaxena.yaml;
     # need this so that the launchd agent uses age-plugin-yubikey to decrypt the secrets using a yubikey
-    environment = lib.mkIf (pkgs.stdenv.isDarwin) {
+    environment = lib.mkIf (pkgs.stdenv.hostPlatform.isDarwin) {
       PATH = lib.mkForce "${pkgs.age-plugin-yubikey}/bin:/usr/bin:/bin:/usr/sbin:/sbin";
     };
     # Secrets that need to be decrypted and made available.
