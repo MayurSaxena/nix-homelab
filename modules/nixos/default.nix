@@ -33,7 +33,7 @@
       };
       settings = {
         # enable flakes
-        experimental-features = "nix-command flakes";
+        experimental-features = ["nix-command" "flakes"];
         auto-optimise-store = true;
         # allow root and sudoers
         trusted-users = ["root" "@wheel"];
