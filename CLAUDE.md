@@ -587,10 +587,24 @@ numbers written here — they're tuned per service and change.
   `custom.*`/service options) is normal, not a sign anything is misconfigured. Budget
   `memory_size_mb` for the service's own runtime needs *plus* headroom for this daily
   evaluation cost — a host sized only for its application can OOM-kill its own autoUpgrade
-  (observed on `yamtrack` and `trek`, both since bumped). `zramSwap.enable = true` is a
-  lighter-weight mitigation worth knowing about (compressed in-RAM swap so evaluation spills
-  instead of hard-OOMing) if bumping real RAM isn't wanted, but isn't currently used anywhere
-  in this repo.
+  (observed on `yamtrack` and `trek`, both since bumped; and on `homepage`, whose OOM sat
+  undetected for two weeks because a killed autoUpgrade is silent unless you watch Beszel).
+  **Raising `memory_size_mb` is the only lever you have here.** Do not reach for
+  `zramSwap.enable` or `swapDevices` — no NixOS-side setting can create swap in these
+  containers. `swapon(2)` checks `CAP_SYS_ADMIN` against the *initial* user namespace, and
+  these are unprivileged LXCs (`unprivileged: 1`), so the call returns `EPERM` before it even
+  looks at its argument; zram additionally needs a `modprobe` and a new block device, neither
+  of which an unprivileged container can do. Container pid 1 *does* show `cap_sys_admin` in
+  `/proc/1/status`, but only within its own namespace, which buys nothing.
+
+  Swap for a container is purely a host-side resource. Every CT is already configured with
+  `swap: 512` (PVE's default), which sets `memory.swap.max` on the host cgroup — but that is
+  a *ceiling, not an allocation*, and the PVE node itself currently has no swap at all
+  (its root is ZFS, and the installer creates no swap volume on ZFS-root installs). So the
+  allowance is real and the backing store is absent, which is why `free` inside every
+  container reports `SwapTotal: 0`. lxcfs is mounted and reporting that honestly. If host
+  swap is ever added, all containers' existing allowances become live at once, with no
+  change in this repo and no container restart.
 - **Disks** — which variables apply depends on impermanence. If impermanent, leave
   `rootfs_size_gb` at its default and set `nix_fs_size_gb` (to the closure size) and
   `persistent_fs_size_gb` (to the service's state). If not, size `rootfs_size_gb`.
