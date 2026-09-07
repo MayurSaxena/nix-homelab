@@ -18,6 +18,7 @@
     ./proxmox-lxc.nix
     ./remote-builds.nix
     ./root-password.nix
+    ./failure-notifications.nix
     ../beszel-agent.nix
   ];
 
