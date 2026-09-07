@@ -81,7 +81,22 @@ in {
             # notification with a blank field than none at all.
             result=$(${config.systemd.package}/bin/systemctl show "$unit.service" -p Result --value || true)
             code=$(${config.systemd.package}/bin/systemctl show "$unit.service" -p ExecMainStatus --value || true)
-            log=$(${config.systemd.package}/bin/journalctl -u "$unit.service" -n 25 --no-pager -o cat 2>/dev/null | tail -c 1200 || true)
+
+            # Scope the excerpt to the failing run. A bare `journalctl -n 25`
+            # returns the last 25 lines across *all* invocations, so a unit that
+            # fails quietly gets padded out with stale output from earlier runs
+            # and the report reads as though far more happened than did.
+            #
+            # --since on InactiveExitTimestamp (when this run started) is used
+            # rather than _SYSTEMD_INVOCATION_ID, which scopes correctly but
+            # drops systemd's own "Main process exited"/"Failed with result"
+            # lines -- the most useful part of the excerpt.
+            since=$(${config.systemd.package}/bin/systemctl show "$unit.service" -p InactiveExitTimestamp --value || true)
+            if [ -n "$since" ]; then
+              log=$(${config.systemd.package}/bin/journalctl -u "$unit.service" --since "$since" -n 25 --no-pager -o cat 2>/dev/null | tail -c 1200 || true)
+            else
+              log=$(${config.systemd.package}/bin/journalctl -u "$unit.service" -n 25 --no-pager -o cat 2>/dev/null | tail -c 1200 || true)
+            fi
 
             payload=$(${pkgs.jq}/bin/jq -n \
               --arg host "$host" \
