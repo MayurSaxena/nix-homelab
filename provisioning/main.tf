@@ -95,15 +95,18 @@ module "sabnzbd" {
 }
 
 module "homepage" {
-  source                = "./modules/nixos-lxc"
-  pve_node_name         = var.pve_node_name
-  ct_description        = "Homepage Dashboard (Terraform)"
-  hostname              = "homepage"
-  domain                = "home.internal"
-  network_interfaces    = { "eth0" = 20 }
-  ipv4_settings         = "dhcp"
-  ipv6_settings         = "auto"
-  memory_size_mb        = 1024
+  source             = "./modules/nixos-lxc"
+  pve_node_name      = var.pve_node_name
+  ct_description     = "Homepage Dashboard (Terraform)"
+  hostname           = "homepage"
+  domain             = "home.internal"
+  network_interfaces = { "eth0" = 20 }
+  ipv4_settings      = "dhcp"
+  ipv6_settings      = "auto"
+  # Homepage itself idles around 200MB, but autoUpgrade's nightly local
+  # `nix eval` of the whole flake peaks near 830MB on top of that, which
+  # OOM-killed the upgrade at 1024MB. Same bump as yamtrack and trek.
+  memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 4
   nix_fs_size_gb        = 8
