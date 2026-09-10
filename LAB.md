@@ -137,6 +137,62 @@ constraint, not the workstations.
 The node already carries a Windows 10 22H2 consumer ISO from earlier work. It would also
 serve for `flare01`, but Windows 10 passed end of support in October 2025, so prefer 11.
 
+## What OpenTofu owns, and what it deliberately does not
+
+The repo's invariant is that any host can be rebuilt from this repository alone. That is
+worth its cost for a machine whose loss would cost you something. A CTF box exists precisely
+because losing it costs nothing, so declaring it in `vms.tf` applies a durability guarantee
+to a thing defined by not needing one, and charges you an HCL edit and a git commit for a
+machine you will delete this evening.
+
+So the line is durability, not technology:
+
+| | Declared in `provisioning/vms.tf` | Created ad hoc |
+|---|---|---|
+| **What** | `lab-dc01`, member servers, `lab-ws01`, `flare01` | CTF boxes, research VMs, anything booted from a live ISO |
+| **Address** | Static, from OpenTofu | DHCP |
+| **Config** | Ansible role, reproducible | Whatever the task needs; usually nothing |
+| **If lost** | Rebuild from the playbook | Shrug |
+
+Both land in the `lab` pool and on VLAN 90, so the two kinds can see each other, which is the
+entire point of keeping the lab flat. Ad-hoc guests are cloned straight from a template or a
+downloaded cloud image without going near OpenTofu state.
+
+## Ansible: inventory and how it authenticates
+
+**Static inventory, covering the declared machines only.** They have known addresses, so
+nothing dynamic is needed. Should that change, `community.general.proxmox` provides an
+inventory plugin that can filter by pool, which is a second reason the `lab` pool earns its
+place. Do not build that until something needs it. An ad-hoc guest that wants a playbook run
+can take one with `-i <address>,` and no inventory entry at all.
+
+**Key authentication, bootstrapped once over a password.** The public key goes to declared
+guests through cloud-init (`ci_public_keys` on the `qemu-vm` module); the private key lives in
+`secrets/lab.yaml` and is read with the `community.sops` lookup, so playbooks stay
+committable.
+
+There is a Windows-specific trap in that, and it is worth knowing before it wastes an
+afternoon. Windows OpenSSH does **not** read `~/.ssh/authorized_keys` for any account in the
+Administrators group. It reads `C:\ProgramData\ssh\administrators_authorized_keys`, and it
+refuses that file unless its ACL grants only SYSTEM and Administrators. Cloudbase-init's key
+plugin writes to the user profile, so a key injected that way is silently ignored and every
+connection falls back to asking for a password.
+
+Rather than weaken `sshd_config` to paper over it, the `baseline` role authenticates its
+first run with the password cloudbase-init set, writes the key to
+`administrators_authorized_keys` with the right ACL, and every run after that uses the key.
+The password stays a bootstrap credential rather than becoming a standing one.
+
+## Backups
+
+Reproducibility is the backup for most of this. Range VMs rebuild from the playbook and
+templates rebuild from Packer, so backing either up stores a copy of something the repo
+already describes.
+
+`flare01` is the exception, because it accumulates analysis state that exists nowhere else.
+Back that one up, and leave the rest of the `lab` pool out of the job. This is the same
+judgement the LXC side already makes by setting `backup = true` on `/persistent` alone.
+
 ## Resetting, and what that means for the DC
 
 Snapshots are an optimisation here, not the lifecycle. The forest is built by `microsoft.ad`
