@@ -87,15 +87,25 @@ in {
       package = pkgs.openssh;
       enableDefaultConfig = false;
       settings."*" = {
-        # No per-shell ssh-agent (the old initContent leaked one process per terminal
-        # tab). launchd's agent is always there; these three keys are offered directly.
+        # No ssh-agent at all: the old initContent leaked one process per terminal tab,
+        # and launchd's agent turns out to be unusable here (see AddKeysToAgent below).
+        # These three keys are offered straight from disk.
         IdentityFile = [
           "~/.ssh/id_ed25519_sk"
           "~/.ssh/id_ed25519_sk2"
           "~/.ssh/id_ed25519"
         ];
         IdentitiesOnly = true;
-        AddKeysToAgent = "yes"; # Apple's agent silently ignores the sk keys; harmless
+        # Apple's launchd ssh-agent will happily *hold* an sk- key but cannot sign with
+        # one, and ssh prefers an agent-held identity over the same key on disk -- so the
+        # moment AddKeysToAgent pushed either YubiKey in, every host started failing with
+        # "agent refused operation" and then "Permission denied (publickey)". (The old
+        # comment here assumed the agent ignored sk keys outright. It no longer does.)
+        # Nothing here wants an agent anyway: id_ed25519 is passphrase-less and the sk
+        # keys are signed by the YubiKey itself, so caching buys nothing. ControlMaster
+        # below -- not the agent -- is what keeps this to one touch per host.
+        AddKeysToAgent = "no";
+        IdentityAgent = "none";
         ForwardAgent = false;
         # One YubiKey touch per host per 10 minutes: later ssh/scp/nixos-rebuild to the
         # same host reuse the master connection. %C hashes user@host:port so the socket
