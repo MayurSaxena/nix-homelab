@@ -86,44 +86,49 @@ in {
       # Consequence: UseKeychain is an Apple-only directive and must not appear here.
       package = pkgs.openssh;
       enableDefaultConfig = false;
-      settings."*" = {
-        # No ssh-agent at all: the old initContent leaked one process per terminal tab,
-        # and launchd's agent turns out to be unusable here (see AddKeysToAgent below).
-        # These three keys are offered straight from disk.
-        IdentityFile = [
-          "~/.ssh/id_ed25519_sk"
-          "~/.ssh/id_ed25519_sk2"
-          "~/.ssh/id_ed25519"
-        ];
-        IdentitiesOnly = true;
-        # Apple's launchd ssh-agent will happily *hold* an sk- key but cannot sign with
-        # one, and ssh prefers an agent-held identity over the same key on disk -- so the
-        # moment AddKeysToAgent pushed either YubiKey in, every host started failing with
-        # "agent refused operation" and then "Permission denied (publickey)". (The old
-        # comment here assumed the agent ignored sk keys outright. It no longer does.)
-        # Nothing here wants an agent anyway: id_ed25519 is passphrase-less and the sk
-        # keys are signed by the YubiKey itself, so caching buys nothing. ControlMaster
-        # below -- not the agent -- is what keeps this to one touch per host.
-        AddKeysToAgent = "no";
-        IdentityAgent = "none";
-        ForwardAgent = false;
-        # One YubiKey touch per host per 10 minutes: later ssh/scp/nixos-rebuild to the
-        # same host reuse the master connection. %C hashes user@host:port so the socket
-        # path stays under the unix-socket length limit.
-        ControlMaster = "auto";
-        ControlPath = "~/.ssh/cm-%C";
-        ControlPersist = "10m";
-        StrictHostKeyChecking = "accept-new";
-        HashKnownHosts = false;
-        UserKnownHostsFile = "~/.ssh/known_hosts";
-        Compression = false;
-        ServerAliveInterval = 0;
-        ServerAliveCountMax = 3;
-      };
       # `ssh plex` instead of `ssh root@plex`. Hostnames deliberately are not pinned here:
       # the short name already resolves through the home.internal search domain on the LAN,
       # and leaving it alone keeps whatever resolution works elsewhere (Tailscale) working.
-      matchBlocks = lib.genAttrs homelabHosts (_: {user = "root";});
+      # An attribute name becomes `Host <name>`; "*" is always emitted last regardless of
+      # where it sits here, so the per-host blocks keep winning on first-match.
+      settings =
+        lib.genAttrs homelabHosts (_: {User = "root";})
+        // {
+          "*" = {
+            # No ssh-agent at all: the old initContent leaked one process per terminal tab,
+            # and launchd's agent turns out to be unusable here (see AddKeysToAgent below).
+            # These three keys are offered straight from disk.
+            IdentityFile = [
+              "~/.ssh/id_ed25519_sk"
+              "~/.ssh/id_ed25519_sk2"
+              "~/.ssh/id_ed25519"
+            ];
+            IdentitiesOnly = true;
+            # Apple's launchd ssh-agent will happily *hold* an sk- key but cannot sign with
+            # one, and ssh prefers an agent-held identity over the same key on disk -- so the
+            # moment AddKeysToAgent pushed either YubiKey in, every host started failing with
+            # "agent refused operation" and then "Permission denied (publickey)". (The old
+            # comment here assumed the agent ignored sk keys outright. It no longer does.)
+            # Nothing here wants an agent anyway: id_ed25519 is passphrase-less and the sk
+            # keys are signed by the YubiKey itself, so caching buys nothing. ControlMaster
+            # below -- not the agent -- is what keeps this to one touch per host.
+            AddKeysToAgent = "no";
+            IdentityAgent = "none";
+            ForwardAgent = false;
+            # One YubiKey touch per host per 10 minutes: later ssh/scp/nixos-rebuild to the
+            # same host reuse the master connection. %C hashes user@host:port so the socket
+            # path stays under the unix-socket length limit.
+            ControlMaster = "auto";
+            ControlPath = "~/.ssh/cm-%C";
+            ControlPersist = "10m";
+            StrictHostKeyChecking = "accept-new";
+            HashKnownHosts = false;
+            UserKnownHostsFile = "~/.ssh/known_hosts";
+            Compression = false;
+            ServerAliveInterval = 0;
+            ServerAliveCountMax = 3;
+          };
+        };
     };
   };
 }
