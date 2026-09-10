@@ -94,12 +94,14 @@
         fi
       ''}
 
+      # Both strings are standalone phrases, because each is used twice: as the
+      # notification banner's subtitle, and after the bold host name in Discord.
       if [ "$local_has_remote" -eq 1 ]; then
-        headline="running config does not match ${cfg.branch}"
-        detail="The checkout already has ${cfg.branch}@$short, so the difference is uncommitted local work."
+        headline="running uncommitted local config"
+        detail="Commit and push it, or the nightly switch will revert it."
       else
-        headline="still behind ${cfg.branch}@$short"
-        detail="The nightly switch has not applied it. See ${cfg.autoUpgradeLog}."
+        headline="has not applied the latest ${cfg.branch}"
+        detail="See ${cfg.autoUpgradeLog}."
       fi
 
       # The tail of the failed switch's own log, which is the only place the
@@ -146,18 +148,18 @@
             subject=$(git -C "${cfg.checkoutPath}" log -1 --format=%s "$remote_sha" 2>/dev/null || true)
           fi
 
+          # Deliberately no store paths. The two closure paths differ only in
+          # their hash, which tells a reader nothing, and at ~60 characters
+          # each they crowded out every line that actually said something.
           payload=$(jq -n \
             --arg headline "$headline" \
             --arg detail "$detail" \
             --arg host "${cfg.configurationName}" \
             --arg sha "$short" \
             --arg subject "$subject" \
-            --arg running "$(basename "$current")" \
-            --arg target "$(basename "$target")" \
             --arg log "$log_excerpt" \
             '{content: ("🟡 **\($host)**: \($headline)"
-                        + (if $subject == "" then "" else "\n`\($sha)` \($subject)" end)
-                        + "\nrunning `\($running)`\n" + "target  `\($target)`"
+                        + "\n`\($sha)`" + (if $subject == "" then "" else " \($subject)" end)
                         + "\n\($detail)"
                         + (if $log == "" then "" else "\n```\n\($log)\n```" end))}')
 
