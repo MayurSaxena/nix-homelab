@@ -41,9 +41,25 @@
       # not in -- hence launchctl asuser, the same mechanism nix-darwin uses to
       # run home-manager activation. It fails when nobody is logged in; that is
       # logged and never fatal, because Discord still gets through.
+      #
+      # terminal-notifier rather than `osascript -e 'display notification'`,
+      # which does not work from here: macOS attributes a notification to the
+      # responsible process, a process descended from a root LaunchDaemon has no
+      # notification client identity, and the request is then dropped *silently*
+      # -- osascript still exits 0. That was observed, not theorised. Shipping
+      # an .app bundle with its own identifier is the whole point of
+      # terminal-notifier; the notification is attributed to it regardless of
+      # what launched it.
+      #
+      # The absolute store path is deliberate: sudo resets PATH, so runtimeInputs
+      # would not reach it. Only the *plist* has to stay free of store paths.
+      #
+      # -group means the outcome replaces the "started" banner rather than
+      # stacking a second one behind it.
       banner() {
-        /bin/launchctl asuser "$uid" /usr/bin/sudo -u "$user" /usr/bin/osascript \
-          -e "display notification \"$2\" with title \"nix-homelab\" subtitle \"$1\"" \
+        /bin/launchctl asuser "$uid" /usr/bin/sudo -u "$user" \
+          ${pkgs.terminal-notifier}/bin/terminal-notifier \
+          -title "nix-homelab" -subtitle "$1" -message "$2" -group nix-homelab \
           >/dev/null 2>&1 || echo "could not post banner (nobody logged in?)" >&2
       }
 
