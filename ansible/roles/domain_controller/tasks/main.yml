@@ -24,11 +24,24 @@
 # Promotion makes this host a DNS server, so it must now resolve against itself. A domain
 # controller pointed at an external resolver cannot find its own SRV records, and the symptoms
 # read as replication or Kerberos faults rather than as a DNS setting.
+# Written as a checked shell step rather than with win_dns_client, which reports "changed" on
+# every run here: `adapter_names: '*'` sweeps in the loopback pseudo-interfaces as well as the
+# real NIC, so its idea of the current state never matches what it just set.
+#
+# Set to the DC's own address rather than 127.0.0.1. Both work for a single DC, but a loopback
+# entry is the one Microsoft warns about once a second DC exists, and it costs nothing to be
+# right now rather than remember later.
 - name: Point the DC's resolver at itself
-  ansible.windows.win_dns_client:
-    adapter_names: '*'
-    dns_servers:
-      - 127.0.0.1
+  ansible.windows.win_shell: |
+    $want = @('{{ ansible_host }}')
+    $nic  = Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Select-Object -First 1
+    $have = @((Get-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -AddressFamily IPv4).ServerAddresses)
+    if (Compare-Object $have $want) {
+        Set-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -ServerAddresses $want
+        Write-Output 'changed'
+    }
+  register: dc_resolver
+  changed_when: "'changed' in dc_resolver.stdout"
 
 # Anything outside the forest goes to technitium, which is what gives the lab the internet and
 # the rest of the homelab without standing up a second resolver.
