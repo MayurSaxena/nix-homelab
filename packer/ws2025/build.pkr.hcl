@@ -38,32 +38,6 @@ variable "admin_password" {
   EOT
 }
 
-# The lab VLAN deliberately has no DHCP server: range VMs get static addresses from
-# OpenTofu, and leaving DHCP free means the lab domain controller can serve it later without
-# a fight. A template build therefore has to bring its own address. .99 is reserved for that
-# and sits outside every block LAB.md allocates to real machines, so two builds
-# would collide with each other but never with a range VM.
-variable "build_ip" {
-  type    = string
-  default = "10.0.90.99"
-}
-
-variable "build_prefix" {
-  type    = number
-  default = 24
-}
-
-variable "build_gateway" {
-  type    = string
-  default = "10.0.90.1"
-}
-
-variable "build_dns" {
-  type        = string
-  default     = "10.0.10.2"
-  description = "technitium, so the build can resolve cloudbase.it to fetch cloudbase-init."
-}
-
 variable "ansible_private_key_file" {
   type        = string
   description = <<-EOT
@@ -85,12 +59,11 @@ variable "clone_password" {
   type        = string
   sensitive   = true
   description = <<-EOT
-    Administrator password baked into the template, so every clone boots with a known
-    credential Ansible can bootstrap over. It cannot come from cloud-init: Proxmox writes
-    the password into user-data as Linux cloud-config, while cloudbase-init reads
-    admin_pass from meta-data, which Proxmox leaves empty. See sysprep.ps1.
-
-    Ansible replaces it with key authentication on first run.
+    Administrator password every clone carries, set at the end of the build because it
+    survives sysprep. It cannot come from cloud-init: Proxmox writes the password into
+    user-data as Linux cloud-config, which cloudbase-init explicitly does not support, and
+    reads admin_pass from meta-data, which Proxmox leaves empty. Ansible does not use it;
+    it is the break-glass console credential.
   EOT
 }
 
@@ -199,10 +172,6 @@ source "proxmox-iso" "ws2025" {
 
       "autounattend.xml" = templatefile("${path.root}/autounattend.xml", {
         admin_password = var.admin_password
-        build_ip       = var.build_ip
-        build_prefix   = var.build_prefix
-        build_gateway  = var.build_gateway
-        build_dns      = var.build_dns
       })
     }
   }
@@ -231,8 +200,13 @@ source "proxmox-iso" "ws2025" {
   # configuration are gone with it.
   communicator = "ssh"
   ssh_username = "Administrator"
-  # The address is known, so this does not depend on guest-agent discovery to find it.
-  ssh_host             = var.build_ip
+  # Deliberately no ssh_host: Packer asks the guest agent where the VM is.
+  #
+  # It used to be pinned to a fixed build address, which looked like the safer choice and was
+  # not. A pinned host is whatever answers at that address, so once a clone inherited the
+  # build address from the image, a build connected to that clone and started provisioning
+  # it -- failing 41 seconds in, on a machine that was never part of the build. Discovery
+  # cannot address the wrong machine, because it asks Proxmox which VM it just created.
   ssh_private_key_file = var.ansible_private_key_file
   # Covers the whole unattended install, not just a reboot.
   ssh_timeout = "45m"

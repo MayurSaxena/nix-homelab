@@ -137,14 +137,14 @@
           Bring the machine to a state Packer can drive, using SSH rather than WinRM.
           Order matters.
 
-          1. The QEMU guest agent, first, because it is how the Proxmox builder learns a VM's
-             address. Installing it from a provisioner is too late: Packer must connect in
+          1. The QEMU guest agent, first, because it is how the Proxmox builder learns this
+             VM's address. The build takes a DHCP lease rather than a fixed address: a fixed
+             one seemed safer and was the opposite, because pinning ssh_host meant Packer
+             connected to whatever sat at that address, and once a clone inherited it from
+             the image a build SSH'd into that clone and provisioned it by mistake. Installing it from a provisioner is too late: Packer must connect in
              order to run that provisioner. The loop covers the virtio ISO's unpredictable
              drive letter, the same way the driver paths above do.
-          2. A static build address. The lab VLAN does serve DHCP now, so this is no longer
-             strictly required, it is kept because it makes the build deterministic and
-             removes any dependence on agent discovery, which has failed before.
-          3. OpenSSH, with the Ansible key. This replaces the four commands that used to
+          2. OpenSSH, with the Ansible key. This replaces the four commands that used to
              enable WinRM with basic authentication over unencrypted HTTP: Packer connects
              by key over the same transport Ansible will use afterwards, so the build needs
              no password on the wire and the image needs no second remote-management stack.
@@ -155,18 +155,15 @@
           <CommandLine>cmd.exe /c for %i in (D E F G H) do @if exist %i:\virtio-win-guest-tools.exe %i:\virtio-win-guest-tools.exe /install /quiet /norestart</CommandLine>
           <Description>Install VirtIO guest tools (drivers + agent)</Description></SynchronousCommand>
         <SynchronousCommand wcm:action="add"><Order>2</Order>
-          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$a = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1; New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress ${build_ip} -PrefixLength ${build_prefix} -DefaultGateway ${build_gateway}; Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ${build_dns}"</CommandLine>
-          <Description>Deterministic build address</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>3</Order>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-WindowsCapability -Online -Name (Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Select-Object -First 1 -ExpandProperty Name)"</CommandLine>
           <Description>Install the OpenSSH server</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>4</Order>
+        <SynchronousCommand wcm:action="add"><Order>3</Order>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "New-Item -Path 'HKLM:\SOFTWARE\OpenSSH' -Force | Out-Null; New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value \"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe\" -PropertyType String -Force | Out-Null; Set-Service sshd -StartupType Automatic; Start-Service sshd"</CommandLine>
           <Description>PowerShell as the default shell, then start sshd</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>5</Order>
+        <SynchronousCommand wcm:action="add"><Order>4</Order>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$src = (Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root 'authorized_keys' } | Where-Object { Test-Path $_ } | Select-Object -First 1); $dst = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'; Copy-Item $src $dst -Force; icacls $dst /inheritance:r /grant 'SYSTEM:F' /grant 'BUILTIN\Administrators:F'"</CommandLine>
           <Description>Install the Ansible key where Windows sshd will read it</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>6</Order>
+        <SynchronousCommand wcm:action="add"><Order>5</Order>
           <CommandLine>cmd.exe /c netsh advfirewall firewall add rule name="OpenSSH-22" dir=in action=allow protocol=TCP localport=22</CommandLine>
           <Description>Open SSH in the firewall</Description></SynchronousCommand>
       </FirstLogonCommands>
