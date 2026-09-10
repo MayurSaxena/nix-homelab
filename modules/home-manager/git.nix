@@ -1,5 +1,23 @@
 # Version control and the SSH client it (and everything else here) rides on.
-{pkgs, ...}: {
+{
+  lib,
+  outputs,
+  pkgs,
+  ...
+}: let
+  # Every NixOS host in this flake is reached as root over SSH, so give each one an alias
+  # and stop typing `root@`. Derived from nixosConfigurations rather than listed by hand:
+  # registering a host in flake.nix is then the only step, and this list cannot drift from
+  # the hosts that actually exist. base-lxc is excluded because it is the CI image, not a
+  # machine that runs anywhere.
+  #
+  # This is the one place in the repo that reads `outputs` (= self). Only the attribute
+  # *names* are forced, never the configurations themselves, so it costs nothing to
+  # evaluate and cannot recurse back into this Darwin config.
+  homelabHosts =
+    builtins.filter (h: h != "base-lxc")
+    (builtins.attrNames outputs.nixosConfigurations);
+in {
   programs = {
     git = {
       enable = true;
@@ -92,6 +110,10 @@
         ServerAliveInterval = 0;
         ServerAliveCountMax = 3;
       };
+      # `ssh plex` instead of `ssh root@plex`. Hostnames deliberately are not pinned here:
+      # the short name already resolves through the home.internal search domain on the LAN,
+      # and leaving it alone keeps whatever resolution works elsewhere (Tailscale) working.
+      matchBlocks = lib.genAttrs homelabHosts (_: {user = "root";});
     };
   };
 }

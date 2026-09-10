@@ -27,6 +27,7 @@
       opentofu
       devenv
       claude-code
+      just # runs the recipes in ./justfile
       nano # the editor the shell history actually shows; EDITOR is set below
       dust # du, readable
       duf # df, readable

@@ -89,6 +89,7 @@ The consequence worth internalising: **pushing to main deploys.** There is no st
 
 ```
 flake.nix              Inputs, both config builders, every host registration
+justfile               `just` recipes for the commands with flags worth not retyping
 .sops.yaml             Which age keys decrypt which secret files (tofu-managed)
 hosts/<name>.nix       One file per host — service config and little else
 modules/nixos/         Base module + the custom.* capability modules
@@ -134,11 +135,16 @@ Three things follow, and all three catch people out:
   rule — there is exactly one list-form call site in the whole flake: `minecraft`, which is
   how `nixpkgs.overlays` gets applied since host files are forbidden from setting it.
 
-`specialArgs` is the whole extra-args surface: `inputs` and `outputs`. **Nothing in the repo
-actually reads `outputs`** — every host destructures it for uniformity, and
-`hosts/Mayurs-MacBook-Pro.nix` forwards it into home-manager via `extraSpecialArgs` where
-`modules/home-manager/msaxena.nix` ignores it too. Keep passing it for consistency; don't go
-looking for a consumer.
+`specialArgs` is the whole extra-args surface: `inputs` and `outputs`. **`outputs` has exactly
+one consumer**: `modules/home-manager/git.nix` reads `outputs.nixosConfigurations` to derive an
+SSH alias per host (see below). Everything else destructures it for uniformity and ignores it;
+`hosts/Mayurs-MacBook-Pro.nix` forwards it into home-manager via `extraSpecialArgs`. Keep
+passing it everywhere for consistency, but don't expect a second consumer.
+
+That one read is deliberately cheap and non-recursive: it forces only `builtins.attrNames`,
+i.e. the attrset spine, never the configurations themselves. Reading a *value* out of
+`outputs.nixosConfigurations` from inside the Darwin config would evaluate a NixOS system
+during a `darwin-rebuild`, which is slow and worth avoiding.
 
 ### What every NixOS host already has
 
@@ -728,6 +734,14 @@ first avoids the trap entirely rather than working around it.
 3. Write `hosts/<name>.nix`, register it in `flake.nix`. If it needs secrets: add the
    `.sops.yaml` rule (see *Secrets → Which file*) and `sops`-encrypt the file directly — the
    anchor already exists, so this is one step, not a bootstrap dance.
+
+   **Nothing else needs updating for SSH.** `modules/home-manager/git.nix` derives a
+   `Host <name>` / `User root` block for every key in `nixosConfigurations` except
+   `base-lxc`, so registering the host here is what creates `ssh <name>` on the Mac's next
+   switch. Never add a matchBlock by hand — a hand-written one can outlive the host it
+   names, which is the whole reason this is derived. The short name is left to resolve on
+   its own through the `home.internal` search domain rather than being pinned to an FQDN,
+   so it keeps working off-LAN too.
 4. If the service is proxied through the shared `caddy` host, add its `virtualHosts` entry in
    `hosts/caddy.nix` now too — its own switch happens separately, in step 6.
 5. `nix fmt .`, sanity-build: `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`.
@@ -830,6 +844,21 @@ same fix if their own `nix-optimise` alert ever fires.
 
 ## Common operations
 
+Most of these have a `just` recipe wrapping them, which is where the flags that are easy to
+forget live. `just` on its own lists them.
+
+```bash
+just fmt                          # nix fmt . (alejandra)
+just check <host>                 # build a host without switching
+just unit <host> <unit>           # a unit's serviceConfig, for persistence decisions
+just deploy <host> <ip>           # first switch from the working tree, nothing committed
+just plan / just apply [-target=module.<name>]   # tofu, Proxmox auth handled for you
+just secret <file>                # sops secrets/<file>
+just mac                          # darwin-rebuild switch on the Mac
+```
+
+The underlying commands, when you want them directly:
+
 ```bash
 nix fmt .                                                    # alejandra
 nix build .#nixosConfigurations.<host>.config.system.build.toplevel  # check without switching
@@ -838,6 +867,9 @@ nix flake update [<input>]
 sops secrets/<file>
 nixos-rebuild switch --flake .#<host> --target-host root@<ip>
 ```
+
+On the Mac, `, <command>` (comma) runs any program in nixpkgs without installing it, against
+a prebuilt index — useful for the one-off tool you don't want in `home.packages`.
 
 ---
 

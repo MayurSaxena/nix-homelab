@@ -22,6 +22,7 @@
     sharedModules = [
       inputs.sops-nix.homeManagerModules.sops # secret management
       inputs.catppuccin.homeModules.catppuccin # one theme across every themed program
+      inputs.nix-index-database.homeModules.nix-index # the database `comma` searches
     ];
 
     # Configure the msaxena user

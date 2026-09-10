@@ -30,6 +30,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Prebuilt nix-index database, so `comma` can run any program in nixpkgs without
+    # installing it and without spending an hour indexing locally first
+    nix-index-database = {
+      url = "github:nix-community/nix-index-database";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Homebrew manager and associated taps. homebrew/bundle is deliberately absent:
     # `brew bundle` merged into Homebrew/brew itself and the tap is an empty stub.
     nix-homebrew = {

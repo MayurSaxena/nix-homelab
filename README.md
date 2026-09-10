@@ -15,11 +15,12 @@ bug.
 
 ```
 flake.nix              # Entry point — inputs, both config builders, every host
+justfile               # `just` recipes for the commands with flags worth not retyping
 hosts/                 # Per-host NixOS and macOS configurations
 modules/
   nixos/               # Base NixOS module + the custom.* capability modules
-  macos/               # Base macOS config, packages, remote builds
-  home-manager/        # The Mac user's dotfiles and personal secrets
+  macos/               # Base macOS config, packages, remote builds, auto-upgrade
+  home-manager/        # The Mac user: packages, shell, git/ssh, window manager
   beszel-agent.nix     # Monitoring agent (shared, imported by the NixOS base)
 provisioning/          # OpenTofu configs for Proxmox LXC provisioning
 secrets/               # SOPS-encrypted secrets (age + YubiKey)
@@ -192,6 +193,23 @@ are written by activation scripts instead. See `modules/macos/remote-builds.nix`
 
 ## Common Operations
 
+Run `just` to list the recipes. They wrap the commands below, keeping the easily-forgotten
+flags in one reviewable place.
+
+```bash
+just                              # list every recipe
+just fmt                          # alejandra
+just hosts                        # every host this flake can build
+just check <host>                 # build a host without switching
+just deploy <host> <ip>           # first switch from the working tree, nothing committed
+just plan / just apply            # tofu, with Proxmox auth handled (needs a YubiKey)
+just secret <file>                # edit an encrypted file
+just mac                          # switch this Mac
+just gc                           # drop old generations
+```
+
+The same things by hand:
+
 ```bash
 nix fmt .                                                       # alejandra
 nix build .#nixosConfigurations.<host>.config.system.build.toplevel   # check without switching
@@ -203,3 +221,7 @@ source util/pve-auth.sh                                                 # auth f
 cd provisioning && tofu apply
 ./provisioning/onboard-host.sh <flake-host-key> <container-ip>          # finish a new host
 ```
+
+Every host in `nixosConfigurations` also gets an SSH alias on the Mac automatically, so it is
+`ssh plex`, not `ssh root@plex`. The list is derived, so a new host needs no SSH change.
+And `, <command>` runs any program in nixpkgs without installing it.

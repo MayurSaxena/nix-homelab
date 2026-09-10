@@ -67,6 +67,12 @@
     ripgrep.enable = true;
     btop.enable = true;
 
+    # `, <command>` runs any program in nixpkgs without installing it: `, ffmpeg -i in.mov`.
+    # The module also points programs.nix-index at the prebuilt database from the flake
+    # input, so nothing has to be indexed locally, and gives zsh a command-not-found
+    # handler that names the package providing a missing command.
+    nix-index-database.comma.enable = true;
+
     tealdeer = {
       enable = true;
       settings.updates.auto_update = true;
@@ -79,6 +85,9 @@
       flake = "${config.home.homeDirectory}/Projects/nix-homelab";
     };
 
+    # Ghostty runs quick-terminal-first: no Dock icon, no window at login, and a drop-down
+    # from the top of the screen on the same hotkey iTerm2's hotkey window used. Ghostty
+    # documents macos-hidden as being meant for exactly this mode.
     ghostty = {
       enable = true;
       # The .app comes from the Homebrew cask (nixpkgs' ghostty is Linux-only, and
@@ -89,11 +98,39 @@
       settings = {
         font-family = "JetBrainsMono Nerd Font";
         font-size = 13;
-        # The same hotkey iTerm2's hotkey window used. `global:` works while another app
-        # is focused; Ghostty asks for Accessibility permission once for that.
-        keybind = ["global:ctrl+backquote=toggle_quick_terminal"];
         # theme is written by catppuccin.ghostty
+
+        # `global:` fires while another app is focused, which needs Accessibility
+        # permission; Ghostty asks for it once on first launch.
+        keybind = ["global:ctrl+backquote=toggle_quick_terminal"];
+        quick-terminal-position = "top";
+        # "main" is whichever screen currently has keyboard focus, so the drop-down
+        # follows the laptop or a docked display without being told which.
+        quick-terminal-screen = "main";
+        quick-terminal-autohide = true; # get out of the way the moment focus moves
+
+        # No Dock icon and no entry in the Cmd-Tab switcher. The trade: that applies to
+        # *every* Ghostty window, not just the quick terminal, so a full window opened with
+        # Cmd-N is reachable by clicking it or through AeroSpace, not by Cmd-Tab. Set this
+        # to "never" to get the normal app back. It also means macOS will no longer switch
+        # keyboard layouts automatically, which costs nothing here with one layout.
+        macos-hidden = "always";
+        initial-window = false; # launching at login must not pop a window
+        window-save-state = "never"; # ... and must not restore last session's windows either
       };
+    };
+  };
+
+  # Start Ghostty at login so the hotkey always has something to summon. `open` rather than
+  # the binary inside the bundle: launching the Mach-O directly loses the app-bundle
+  # identity macOS ties window management and permission grants to. One-shot -- `open`
+  # exits as soon as Ghostty is up, and quitting Ghostty on purpose should not relaunch it.
+  launchd.agents.ghostty = {
+    enable = true;
+    config = {
+      ProgramArguments = ["/usr/bin/open" "-a" "/Applications/Ghostty.app"];
+      RunAtLoad = true;
+      KeepAlive = false;
     };
   };
 }
