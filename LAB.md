@@ -246,6 +246,6 @@ below. Verified against this flake's pinned build, not the registry's:
 Pin nothing by hand here. These move with `flake.lock` like everything else, and a
 `requirements.yml` would quietly shadow the versions Nix already provides.
 
-Later, an always-on `lab-controller` LXC can take this role over. Nothing under `windows/`
+Later, an always-on `lab-controller` LXC can take this role over. Nothing under `packer/` or `ansible/`
 would need to change; it would gain the same two packages and a checkout, and its age key
 would be added to the `secrets/lab.yaml` rule.
