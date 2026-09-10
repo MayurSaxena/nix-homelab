@@ -29,24 +29,34 @@ yesterday. So do not add one.
 To upload one by hand, from the Proxmox web UI: *Datacenter → proxmox → local → ISO Images →
 Upload*. The file names matter, because `provisioning/windows.tf` refers to them:
 
-- `windows-11-enterprise-eval.iso` from the [Evaluation Center][eval]
+- `windows-11-enterprise-eval.iso` from the [Evaluation Center][eval] (the standard
+  edition, **not** LTSC, see below)
 - `windows-11-pro.iso` from the [consumer download page][consumer]
 
 [eval]: https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise
 [consumer]: https://www.microsoft.com/software-download/windows11
+[ltsc]: https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise-ltsc
 
 ## Which edition goes where, and why
 
 The range is cattle and the analysis box is a pet, so they take different media:
 
 - **Range VMs** (`lab-dc01`, `lab-ws01`, any member server) use evaluation media. Server 2025
-  runs 180 days and Windows 11 Enterprise 90, and `sysprep /generalize` resets that clock, so
-  every clone starts fresh no matter how old the template is. Expiry is a template rebuild
-  cadence, not a problem to solve.
-- **`flare01`** uses Windows 11 Pro left unactivated. An evaluation build eventually stops
-  booting, which is fine for a VM you rebuild and wrong for one you keep. Unactivated
-  consumer Windows runs indefinitely with a watermark and some personalisation settings
-  greyed out, neither of which matters for opening minidumps.
+  runs 180 days and Windows 11 Enterprise 90, and `sysprep /generalize` rearms that clock, so
+  each clone starts its own full term from first boot however old the template is. Expiry is
+  a template rebuild cadence, not a problem to solve.
+- **Standard Enterprise, not LTSC**, for the workstation. LTSC omits the Microsoft Store, the
+  UWP app stack, Edge, Copilot, widgets and Teams — which is exactly the surface a real
+  corporate endpoint has, and the surface CTF challenges and attack writeups assume. Its
+  advantages (smaller image, five-year servicing) buy nothing here: the node is not short of
+  RAM or disk, and the only machine kept long-term is `flare01`, which avoids the expiry
+  question entirely by not using evaluation media. Adding an LTSC template later is a copy of
+  the Packer config with a different ISO and edition string, if a comparison is ever wanted.
+- **`flare01`** uses Windows 11 Pro left unactivated. An expired evaluation does not merely
+  nag: it blacks the desktop and shuts the machine down every hour, which is fine for a VM
+  you rebuild and ruinous for one you keep analysis state on. Unactivated consumer Windows
+  runs indefinitely with a watermark and some personalisation settings greyed out, neither
+  of which matters for opening minidumps.
 
 The node already carries a Windows 10 22H2 consumer ISO from earlier work. It would also
 serve for `flare01`, but Windows 10 passed end of support in October 2025, so prefer 11.
