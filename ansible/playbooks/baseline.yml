@@ -1,0 +1,6 @@
+---
+- name: Baseline only, without touching the forest
+  hosts: windows
+  gather_facts: true
+  roles:
+    - baseline

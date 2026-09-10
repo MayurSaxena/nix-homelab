@@ -24,6 +24,21 @@
   ansible.windows.win_reboot:
   when: _hostname.reboot_required
 
+# SetupComplete.cmd tries this too, and on the first clone it did not take: the profile was
+# still Public afterwards, which is why 445 and 3389 were closed on a machine whose firewall
+# rules allowed them. Doing it here as well makes it re-runnable and self-healing. A domain
+# controller ends up DomainAuthenticated after promotion regardless, but everything before
+# promotion happens on this setting.
+- name: Move the connection out of the Public firewall profile
+  ansible.windows.win_shell: |
+    $p = Get-NetConnectionProfile | Where-Object { $_.NetworkCategory -eq 'Public' }
+    if ($p) {
+        $p | Set-NetConnectionProfile -NetworkCategory Private
+        Write-Output 'changed'
+    }
+  register: baseline_netcat
+  changed_when: "'changed' in baseline_netcat.stdout"
+
 - name: Set the timezone
   ansible.windows.win_timezone:
     timezone: "{{ baseline_timezone }}"
@@ -53,17 +68,19 @@
   register: _lic
   changed_when: false
 
-# Resets the evaluation clock. Each build of a template consumes one of a small number of
-# rearms, so this runs once per clone rather than on every playbook run.
+# Off by default; see the note in defaults/main.yml. When enabled, //Nologo rather than //B:
+# //B suppresses slmgr's output entirely, so a failure arrives as rc=1 with empty stdout and
+# nothing to distinguish "already rearmed" from a real error.
 - name: Rearm the evaluation period
-  ansible.windows.win_shell: cscript //B C:\Windows\System32\slmgr.vbs /rearm
+  ansible.windows.win_shell: cscript //Nologo C:\Windows\System32\slmgr.vbs /rearm
   when:
     - baseline_rearm_evaluation
     - "'EVAL' in (_lic.stdout | upper)"
   register: _rearm
   failed_when:
     - _rearm.rc != 0
-    - "'exceeded' not in (_rearm.stdout | lower)"
+    - "'exceeded' not in ((_rearm.stdout | default('')) | lower)"
+    - "'maximum' not in ((_rearm.stdout | default('')) | lower)"
   changed_when: _rearm.rc == 0
 
 # The guest agent is how Proxmox reports a VM's address and shuts it down cleanly, and a

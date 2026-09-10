@@ -1,6 +1,9 @@
 ---
 baseline_timezone: "GMT Standard Time"
 baseline_enable_rdp: true
-# Evaluation media only. Rearming retail or unactivated consumer Windows is pointless at
-# best; the task is guarded on the edition actually being an evaluation.
-baseline_rearm_evaluation: true
+# Off by default, and it took a failure to see why: `sysprep /generalize` already rearms, so
+# every clone starts its own full evaluation term from first boot regardless of the
+# template's age. Rearming again here achieves nothing and burns one of a small, finite
+# number of rearms. Turn it on deliberately for a guest that has been running long enough to
+# approach expiry, not as part of routine configuration.
+baseline_rearm_evaluation: false
