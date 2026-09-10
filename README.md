@@ -43,9 +43,9 @@ Four systems hand off to each other:
    sops-capable. A bootstrap, not the host.
 3. **The first `nixos-rebuild switch` makes it itself.** Impermanence turns on, services
    start, secrets decrypt against the host key OpenTofu already registered.
-4. **`system.autoUpgrade` keeps it current.** Each host pulls this repo daily and switches.
-   A separate workflow updates `flake.lock` on main and re-tags `nightly`, rebuilding the
-   images.
+4. **`system.autoUpgrade` keeps it current.** Each NixOS host pulls this repo daily and
+   switches. A separate workflow updates `flake.lock` on main and re-tags `nightly`,
+   rebuilding the images. The Mac is excluded — see *Deploying on a New Mac*.
 
 Pushing to main therefore deploys. There is no staging step.
 
@@ -153,6 +153,17 @@ own file on the first switch, not from the image.
    `mkDarwinConfig` does not inject a base module.
 3. `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:MayurSaxena/nix-homelab`
 4. Plug in a YubiKey for secrets decryption.
+5. Add a `discord/mac-update-webhook` key to `secrets/msaxena.yaml`, or set
+   `custom.update-notifications.discord.enable = false`. A missing key fails the *build*,
+   not activation: sops-nix validates its manifest against the sops file's key structure,
+   which a sops YAML keeps in plaintext.
+
+The Mac switches by hand: nix-darwin has no `system.autoUpgrade`, and activation needs the
+YubiKey, so an unattended nightly switch would fail whenever the key was out.
+`custom.update-notifications` covers the gap instead — a daily launchd agent that evaluates
+`main`'s toplevel for this host, compares it to `/run/current-system`, and posts a
+notification banner plus a Discord message when a switch is due. Run
+`nix-homelab-update-check` to see the same check interactively.
 
 This configures Touch ID / Watch sudo, Homebrew casks, App Store apps, zsh + starship, SSH
 keys, Dock/Finder preferences, and remote Nix builds.

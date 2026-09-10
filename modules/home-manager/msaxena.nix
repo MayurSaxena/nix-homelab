@@ -4,6 +4,8 @@
   config,
   ...
 }: {
+  imports = [./update-notifications.nix];
+
   home = rec {
     stateVersion = "25.05";
     username = "msaxena";

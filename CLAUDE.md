@@ -59,6 +59,16 @@ separate daily workflow runs `nix flake update`, commits `flake.lock` straight t
 force-pushes the `nightly` tag — which re-triggers the image build. So a merged change
 reaches every host within a day without anyone touching a container.
 
+**The Mac is the exception to step 4.** nix-darwin has no `system.autoUpgrade`, and this
+one could not use it anyway: activation decrypts the user's secrets from a YubiKey, so a
+scheduled unattended switch would fail on every boot the key wasn't plugged into. Instead
+`custom.update-notifications` (a *home-manager* module,
+`modules/home-manager/update-notifications.nix`) runs a daily launchd agent that evaluates
+`main`'s `darwinConfigurations.<host>` toplevel and compares it to `/run/current-system`,
+then posts a notification banner and a Discord message when they differ. It deliberately
+evaluates rather than comparing commit SHAs — most commits here touch only the Linux hosts,
+and a SHA comparison would nag about every one of them. The switch itself stays manual.
+
 The consequence worth internalising: **pushing to main deploys.** There is no staging step.
 
 ---

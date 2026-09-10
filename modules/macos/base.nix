@@ -8,6 +8,7 @@
     inputs.nur.modules.darwin.default
     ./packages.nix
     ./remote-builds.nix
+    ./auto-upgrade.nix
   ];
 
   # Determinate Nix manages nix.conf directly (gc, optimise, settings).

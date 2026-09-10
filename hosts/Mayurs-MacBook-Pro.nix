@@ -13,6 +13,7 @@
   nixpkgs.hostPlatform = inputs.nixpkgs.lib.mkDefault "aarch64-darwin";
 
   custom.remote-builds-mac.enable = true;
+  custom.auto-upgrade-mac.enable = true;
 
   # Use home-manager to manage the user configs
   home-manager = {
