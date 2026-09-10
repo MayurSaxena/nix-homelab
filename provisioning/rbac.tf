@@ -33,7 +33,14 @@ resource "proxmox_virtual_environment_role" "packer_build" {
     "Datastore.Audit",            # locate the ISOs on local
     "Datastore.AllocateSpace",    # the build VM's disks on local-zfs
     "Datastore.AllocateTemplate", # upload the unattend ISO, and convert the finished VM to a template
-    "SDN.Use",                    # attach a NIC to vmbr0
+    # Removing content from a datastore, NOT (as several guides imply, and as an earlier
+    # revision of this file asserted) creating and destroying storage definitions -- that is
+    # Datastore.AllocateSpace plus node-level rights. Packer generates the autounattend ISO,
+    # uploads it, and deletes it again at the end of a build; without this the whole build
+    # fails at cleanup with "403 Permission check failed (/storage/local, Datastore.Allocate)"
+    # after everything else has already succeeded.
+    "Datastore.Allocate",
+    "SDN.Use", # attach a NIC to vmbr0
     "SDN.Audit",
     "Sys.Audit", # read-only node status
   ]
