@@ -94,9 +94,8 @@
         exit 1
       fi
 
-      short=$(printf '%.7s' "$sha")
       log "resolved ${cfg.branch} to $sha"
-      banner "upgrading to ${cfg.branch}@$short" "Started at $(date '+%H:%M')."
+      banner "upgrade started" "Applying the latest configuration."
 
       # Pinned to the resolved commit, not the branch. An immutable ref is
       # exempt from Nix's tarball TTL (so --refresh is unnecessary), and it
@@ -123,56 +122,78 @@
         target=""
       fi
 
-      # Uncommitted work in the checkout has just been reverted on this Mac,
-      # whether or not it was ever activated. A footnote, not a failure. Run as
-      # the owner because git refuses a repository owned by another user, and
-      # root is another user here. Deliberately `git status` rather than any
-      # comparison against the branch: the checkout is routinely behind simply
-      # because nobody has pulled, which says nothing about this Mac.
+      # Uncommitted work is no longer applied to this Mac -- but only worth
+      # mentioning if it would have changed *this* machine, since most edits in
+      # this repo touch the Linux hosts. Comparing the closure the working tree
+      # builds against the one its own committed HEAD builds answers that
+      # exactly, and because both sides are local it is unaffected by how far
+      # behind the branch the checkout happens to be. If either eval fails --
+      # a syntax error mid-edit, an untracked file the flake cannot see -- it
+      # degrades to a generic warning rather than staying silent.
+      #
+      # Run as the checkout's owner: git refuses a repository owned by another
+      # user, and root is another user here.
+      eval_toplevel() {
+        /usr/bin/sudo -u "$user" --set-home /nix/var/nix/profiles/default/bin/nix eval --raw \
+          "$1#darwinConfigurations.${cfg.configurationName}.config.system.build.toplevel" 2>/dev/null || true
+      }
+
       drift=""
-      subject=""
       if [ -d "${cfg.checkoutPath}/.git" ]; then
         changed=$(/usr/bin/sudo -u "$user" git -C "${cfg.checkoutPath}" status --porcelain 2>/dev/null | wc -l | tr -d ' ' || true)
         if [ -n "$changed" ] && [ "$changed" -gt 0 ]; then
-          drift="$changed uncommitted file(s) in ${cfg.checkoutPath} are not part of this system any more."
+          head_sha=$(/usr/bin/sudo -u "$user" git -C "${cfg.checkoutPath}" rev-parse HEAD 2>/dev/null || true)
+          worktree_top=$(eval_toplevel "${cfg.checkoutPath}")
+          head_top=""
+          if [ -n "$head_sha" ]; then
+            head_top=$(eval_toplevel "git+file://${cfg.checkoutPath}?rev=$head_sha")
+          fi
+
+          if [ -n "$worktree_top" ] && [ -n "$head_top" ]; then
+            if [ "$worktree_top" != "$head_top" ]; then
+              drift="Uncommitted changes in ${cfg.checkoutPath} change this Mac's configuration, and are no longer applied to it."
+            fi
+          else
+            drift="$changed uncommitted file(s) in ${cfg.checkoutPath}; could not work out whether they affect this Mac."
+          fi
         fi
-        subject=$(/usr/bin/sudo -u "$user" git -C "${cfg.checkoutPath}" log -1 --format=%s "$sha" 2>/dev/null || true)
       fi
 
       if [ "$status" -ne 0 ]; then
         headline="upgrade failed (exit $status)"
-        ok=0
       elif [ -z "$target" ]; then
         # A clean exit means activate() reached its last line, so this is
         # unlikely -- but an unverifiable result is exactly what a lax notifier
         # would wave through, so it counts as a failure.
         headline="upgraded, but the result could not be verified"
-        ok=0
       elif [ "$target" != "$current" ]; then
-        headline="exited cleanly but the system does not match ${cfg.branch}@$short"
-        ok=0
+        headline="exited cleanly but the system does not match ${cfg.branch}"
       else
-        headline="upgraded to ${cfg.branch}@$short"
-        ok=1
+        headline=""
       fi
 
-      detail=""
-      if [ -n "$subject" ]; then
-        detail="$detail"$'\n'"\`$short\` $subject"
-      fi
-      if [ -n "$drift" ]; then
-        detail="$detail"$'\n'"$drift"
-      fi
-
-      if [ "$ok" -eq 1 ]; then
-        log "success: $headline"
-        if [ -n "$drift" ]; then banner "$headline" "$drift"; else banner "$headline" "Applied cleanly."; fi
-        discord "🟢 **${cfg.configurationName}**: $headline$detail"
+      if [ -z "$headline" ]; then
+        if [ -n "$drift" ]; then
+          # Still a success, but deliberately its own colour: the upgrade did
+          # what it should and quietly took local work out of the running
+          # system, which is the one success worth looking at.
+          log "success, local changes reverted"
+          banner "upgrade succeeded, local changes reverted" "$drift"
+          discord "🟠 **${cfg.configurationName}**: upgrade succeeded, but local changes were reverted"$'\n'"$drift"
+        else
+          log "success"
+          banner "upgrade succeeded" "Your Mac is up to date."
+          discord "🟢 **${cfg.configurationName}**: upgrade succeeded -- your Mac is up to date."
+        fi
         exit 0
       fi
 
       log "failure: $headline"
       banner "$headline" "See ${cfg.errorLogFile}."
+      detail=""
+      if [ -n "$drift" ]; then
+        detail=$'\n'"$drift"
+      fi
       # The tail of this very run's stderr, the only record of why. The file is
       # still open for writing; reading it back is fine.
       excerpt=$(tail -n 25 "${cfg.errorLogFile}" 2>/dev/null | tail -c 1400 || true)
