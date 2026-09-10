@@ -127,7 +127,7 @@ lab-cred key="":
 # Packer's own convention for populating an input variable from the environment.
 
 # Build a golden VM template with Packer: `just packer-build ws2025`.
-packer-build template:
+packer-build template *args:
     #!/usr/bin/env bash
     set -euo pipefail
     export PKR_VAR_proxmox_username=$(sops -d --extract '["proxmox"]["packer-token-id"]' secrets/msaxena.yaml)
@@ -140,6 +140,22 @@ packer-build template:
     chmod 600 "$key"
     sops -d --extract '["ansible-ssh-private-key"]' secrets/lab.yaml > "$key"
     export PKR_VAR_ansible_private_key_file="$key"
+    # Refuse to start if something is already answering on the build address.
+    #
+    # Packer connects to a fixed address rather than discovering one, because the Proxmox
+    # plugin's discovery does not resolve here even when the agent reports correctly. The
+    # hazard of a fixed address is that a clone can inherit it from the image, and Packer
+    # would then SSH into that clone and provision it instead. That happened: a build failed
+    # 41 seconds in on a machine that was never part of it, and a build that had found what
+    # it expected would have carried on silently.
+    build_ip="${PKR_VAR_build_ip:-10.0.90.99}"
+    if nc -z -G 3 "$build_ip" 22 2>/dev/null; then
+        echo "ERROR: something is already listening on ${build_ip}:22." >&2
+        echo "A build would connect to it instead of the VM it creates. Find and remove the" >&2
+        echo "guest sitting on that address, then retry." >&2
+        exit 1
+    fi
+
     # Build first, retire second.
     #
     # The old recipe deleted the existing template before building its replacement, because
@@ -161,7 +177,7 @@ packer-build template:
     before=$(templates_with_tag | sort -n | tr '\n' ' ')
     echo "existing ${tmpl_tag} templates before this build: ${before:-none}"
 
-    (cd packer/{{template}} && packer init . && packer build .)
+    (cd packer/{{template}} && packer init . && packer build {{args}} .)
 
     after=$(templates_with_tag | sort -n | tr '\n' ' ')
     echo "after: ${after:-none}"

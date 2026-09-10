@@ -55,6 +55,34 @@ variable "ansible_public_key" {
   EOT
 }
 
+# The build's own address, fixed rather than leased.
+#
+# Discovery through the guest agent was tried and does not work here: the agent reports the
+# DHCP lease correctly and SSH is open on it, but the Proxmox plugin never resolves an
+# address and waits out its whole timeout. A fixed address is the reliable option, and its
+# one real hazard -- a clone inheriting it, so Packer connects to the clone instead of the
+# VM it just made -- is checked for by `just packer-build` before a build starts.
+variable "build_ip" {
+  type    = string
+  default = "10.0.90.99"
+}
+
+variable "build_prefix" {
+  type    = number
+  default = 24
+}
+
+variable "build_gateway" {
+  type    = string
+  default = "10.0.90.1"
+}
+
+variable "build_dns" {
+  type        = string
+  default     = "10.0.10.2"
+  description = "technitium, so the build can resolve cloudbase.it to fetch cloudbase-init."
+}
+
 variable "node" {
   type    = string
   default = "proxmox"
@@ -160,6 +188,10 @@ source "proxmox-iso" "ws2025" {
 
       "autounattend.xml" = templatefile("${path.root}/autounattend.xml", {
         admin_password = var.admin_password
+        build_ip       = var.build_ip
+        build_prefix   = var.build_prefix
+        build_gateway  = var.build_gateway
+        build_dns      = var.build_dns
       })
     }
   }
@@ -186,15 +218,9 @@ source "proxmox-iso" "ws2025" {
   # start: no password crosses the wire, and the image carries one remote-management stack
   # instead of two. WinRM's four unattend commands and its basic-auth-over-unencrypted-HTTP
   # configuration are gone with it.
-  communicator = "ssh"
-  ssh_username = "Administrator"
-  # Deliberately no ssh_host: Packer asks the guest agent where the VM is.
-  #
-  # It used to be pinned to a fixed build address, which looked like the safer choice and was
-  # not. A pinned host is whatever answers at that address, so once a clone inherited the
-  # build address from the image, a build connected to that clone and started provisioning
-  # it -- failing 41 seconds in, on a machine that was never part of the build. Discovery
-  # cannot address the wrong machine, because it asks Proxmox which VM it just created.
+  communicator         = "ssh"
+  ssh_username         = "Administrator"
+  ssh_host             = var.build_ip
   ssh_private_key_file = var.ansible_private_key_file
   # Covers the whole unattended install, not just a reboot.
   ssh_timeout = "45m"
