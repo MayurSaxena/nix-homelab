@@ -25,19 +25,24 @@ resource "proxmox_virtual_environment_download_file" "nixos-standard-nightly" {
 # ---------------------------------------------------------------------------
 # Windows lab media (see windows/README.md).
 #
-# Only two of the four ISOs the Windows pipeline needs can be declared here, and the
+# Only two of the three ISOs the Windows pipeline needs can be declared here, and the
 # split is an upstream constraint rather than a gap worth closing:
 #
 #   Server 2025 evaluation  fwlink redirects to a stable software-static.download URL
 #   virtio-win              Fedora publishes permanent, versioned archive URLs
-#   Windows 11 Enterprise   Microsoft's Evaluation Center signs a per-session CDN URL
-#   Windows 11 Pro          that expires ~24h after the download page generates it
+#   Windows 11 Pro          Microsoft's consumer download page signs a per-session CDN
+#                           URL that expires ~24h after the page generates it
 #
-# The last two therefore cannot be a `url` here at all: any value committed would fail
-# the very next day. They are a documented one-time manual upload to local:iso, and
-# provisioning/windows.tf refers to them by file name only. Do not "fix" this by
-# pasting a fresh signed link -- it will break, and it will break a day later, at
-# apply time, on a machine that was working yesterday.
+# The last therefore cannot be a `url` here at all: any value committed would fail the
+# very next day. It is a documented one-time manual upload to local:iso, and
+# provisioning/windows.tf refers to it by file name only. Do not "fix" this by pasting
+# a fresh signed link -- it will break, and it will break a day later, at apply time,
+# on a machine that was working yesterday.
+#
+# One Windows 11 ISO covers every client: the domain-joined workstations and the
+# FLARE-VM box all come from a single Pro template, left unactivated. See the edition
+# rationale in windows/README.md, including the one thing that would justify adding an
+# Enterprise template later.
 # ---------------------------------------------------------------------------
 
 resource "proxmox_virtual_environment_download_file" "windows_server_2025_eval" {

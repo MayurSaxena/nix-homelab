@@ -10,15 +10,14 @@ the LXC pipeline; this file covers only what the repo cannot do for itself.
 
 ## Media
 
-Four ISOs are needed. Two are declared in `provisioning/images.tf` and arrive with
-`tofu apply`. **Two must be uploaded by hand, once**, and that split is forced by Microsoft
+Three ISOs are needed. Two are declared in `provisioning/images.tf` and arrive with
+`tofu apply`. **One must be uploaded by hand, once**, and that split is forced by Microsoft
 rather than by this repo:
 
 | ISO | How it arrives |
 |---|---|
 | Windows Server 2025 evaluation | `tofu apply` (stable `go.microsoft.com/fwlink` redirect) |
 | virtio-win drivers | `tofu apply` (pinned Fedora archive URL) |
-| Windows 11 Enterprise evaluation | manual, see below |
 | Windows 11 Pro | manual, see below |
 
 Microsoft's Evaluation Center and the consumer download page both mint a **signed CDN URL
@@ -26,37 +25,48 @@ that expires roughly 24 hours after the page generates it**, and regenerate it p
 URL committed here would fail the next day, at apply time, on a machine that worked
 yesterday. So do not add one.
 
-To upload one by hand, from the Proxmox web UI: *Datacenter → proxmox → local → ISO Images →
-Upload*. The file names matter, because `provisioning/windows.tf` refers to them:
+To upload it by hand, from the Proxmox web UI: *Datacenter → proxmox → local → ISO Images →
+Upload*. The file name matters, because `provisioning/windows.tf` refers to it:
 
-- `windows-11-enterprise-eval.iso` from the [Evaluation Center][eval] (the standard
-  edition, **not** LTSC, see below)
 - `windows-11-pro.iso` from the [consumer download page][consumer]
 
-[eval]: https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise
 [consumer]: https://www.microsoft.com/software-download/windows11
-[ltsc]: https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise-ltsc
+[eval]: https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise
 
 ## Which edition goes where, and why
 
-The range is cattle and the analysis box is a pet, so they take different media:
+**Every Windows client here is Windows 11 Pro, left unactivated.** Both the domain-joined
+range workstations and the FLARE-VM analysis box come from one template. Only the servers
+run evaluation media, because there is no non-evaluation Server 2025 to be had without a
+licence.
 
-- **Range VMs** (`lab-dc01`, `lab-ws01`, any member server) use evaluation media. Server 2025
-  runs 180 days and Windows 11 Enterprise 90, and `sysprep /generalize` rearms that clock, so
-  each clone starts its own full term from first boot however old the template is. Expiry is
-  a template rebuild cadence, not a problem to solve.
-- **Standard Enterprise, not LTSC**, for the workstation. LTSC omits the Microsoft Store, the
-  UWP app stack, Edge, Copilot, widgets and Teams — which is exactly the surface a real
-  corporate endpoint has, and the surface CTF challenges and attack writeups assume. Its
-  advantages (smaller image, five-year servicing) buy nothing here: the node is not short of
-  RAM or disk, and the only machine kept long-term is `flare01`, which avoids the expiry
-  question entirely by not using evaluation media. Adding an LTSC template later is a copy of
-  the Packer config with a different ISO and edition string, if a comparison is ever wanted.
-- **`flare01`** uses Windows 11 Pro left unactivated. An expired evaluation does not merely
-  nag: it blacks the desktop and shuts the machine down every hour, which is fine for a VM
-  you rebuild and ruinous for one you keep analysis state on. Unactivated consumer Windows
-  runs indefinitely with a watermark and some personalisation settings greyed out, neither
-  of which matters for opening minidumps.
+That is one Windows 11 template rather than two, one manual ISO rather than two, and no
+expiry to manage on any client. Pro joins a domain (Home cannot), and domain join is not
+gated on activation, so nothing about the range needs Enterprise. Unactivated Windows only
+watermarks the desktop and greys out personalisation settings; an *expired evaluation*, by
+contrast, blacks the desktop and shuts the machine down every hour, which would be ruinous
+on a box holding analysis state and merely annoying on the rest.
+
+**What Pro gives up, and when to revisit.** The one security-relevant gap is **Credential
+Guard**, which is Enterprise and Education only. It is what stops LSASS credential dumping
+on a modern corporate endpoint, so an exercise about *why Mimikatz fails* and how that is
+evaded cannot be staged on Pro. Everything a beginner-to-intermediate AD exercise needs —
+domain join, GPO, Kerberos, delegation, LSASS dumping without VBS in the way — works on Pro,
+and works more simply, since Credential Guard is not silently blocking the lesson.
+
+If Credential Guard ever becomes the point, add a `tpl-win11-ent` template from the standard
+Enterprise 90-day [evaluation][eval] (**not** LTSC, which omits the Store, the UWP stack,
+Edge, Copilot and Teams, and so removes the very surface a real endpoint has). It is a copy
+of the Pro Packer config with a different ISO and edition string. `provisioning/rbac.tf`
+already grants `packer@pve` on `/vms/9101`, deliberately left unused, so no permission
+change is needed when that day comes.
+
+**The servers are the only expiry to track.** Server 2025 evaluation runs 180 days, and
+`sysprep /generalize` rearms that clock, so each clone starts its own full term from first
+boot however old the template is, up to three rearms. Treat it as a template rebuild
+cadence rather than a problem to solve — but note that if you ever want the *forest itself*
+to live longer than a couple of rebuild cycles, the DC's evaluation is the binding
+constraint, not the workstations.
 
 The node already carries a Windows 10 22H2 consumer ISO from earlier work. It would also
 serve for `flare01`, but Windows 10 passed end of support in October 2025, so prefer 11.
