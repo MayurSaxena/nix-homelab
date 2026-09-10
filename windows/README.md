@@ -26,7 +26,7 @@ URL committed here would fail the next day, at apply time, on a machine that wor
 yesterday. So do not add one.
 
 To upload it by hand, from the Proxmox web UI: *Datacenter → proxmox → local → ISO Images →
-Upload*. The file name matters, because `provisioning/windows.tf` refers to it:
+Upload*. The file name matters, because `provisioning/vms.tf` refers to it:
 
 - `windows-11-pro.iso` from the [consumer download page][consumer]
 
@@ -119,7 +119,7 @@ a few minutes of drift, and it resyncs on boot.
 ### One thing still unverified
 
 The Proxmox OpenTofu provider does not expose `vmgenid`, so VMs created by
-`provisioning/windows.tf` inherit whatever PVE does by default. Every VM already on this node
+`provisioning/vms.tf` inherit whatever PVE does by default. Every VM already on this node
 carries one, so that default appears to be "generate" — but **whether PVE issues a _new_ one
 on rollback has not been confirmed here**, and a rollback that leaves the ID unchanged is a
 rollback Windows cannot detect. Establish it at the Phase 2 gate rather than assuming it:

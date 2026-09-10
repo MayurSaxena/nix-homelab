@@ -35,7 +35,7 @@ resource "proxmox_virtual_environment_download_file" "nixos-standard-nightly" {
 #
 # The last therefore cannot be a `url` here at all: any value committed would fail the
 # very next day. It is a documented one-time manual upload to local:iso, and
-# provisioning/windows.tf refers to it by file name only. Do not "fix" this by pasting
+# provisioning/vms.tf refers to it by file name only. Do not "fix" this by pasting
 # a fresh signed link -- it will break, and it will break a day later, at apply time,
 # on a machine that was working yesterday.
 #
