@@ -55,11 +55,12 @@
       # would not reach it. Only the *plist* has to stay free of store paths.
       #
       # -group means the outcome replaces the "started" banner rather than
-      # stacking a second one behind it.
+      # stacking a second one behind it. The title carries the status dot so the
+      # whole thing reads at a glance without opening anything.
       banner() {
         /bin/launchctl asuser "$uid" /usr/bin/sudo -u "$user" \
           ${pkgs.terminal-notifier}/bin/terminal-notifier \
-          -title "nix-homelab" -subtitle "$1" -message "$2" -group nix-homelab \
+          -title "$1" -message "$2" -group nix-homelab \
           >/dev/null 2>&1 || echo "could not post banner (nobody logged in?)" >&2
       }
 
@@ -72,8 +73,8 @@
           echo "webhook at $webhook unreadable (YubiKey absent at login?); skipping Discord" >&2
           return 0
         fi
-        # jq -Rs turns arbitrary text -- log excerpts with quotes, newlines and
-        # backslashes -- into one correctly escaped JSON string.
+        # jq -Rs turns arbitrary text -- two-line messages, quotes, backslashes
+        # -- into one correctly escaped JSON string.
         payload=$(printf '%s' "$1" | jq -Rs '{content: .}')
         # --fail because curl exits 0 on an HTTP 4xx, so a revoked webhook would
         # report success forever. stderr is dropped because curl's messages
@@ -105,13 +106,13 @@
 
       if [ -z "$sha" ]; then
         log "cannot reach ${flakeUrl}, giving up"
-        banner "upgrade could not start" "GitHub is unreachable."
-        discord "🔴 **${cfg.configurationName}**: nightly upgrade could not start -- GitHub unreachable after ${toString cfg.networkAttempts} attempts."
+        banner "🔴 Upgrade could not start" "GitHub was unreachable."
+        discord "🔴 **${cfg.configurationName}** -- upgrade could not start"$'\n'"GitHub was unreachable after ${toString cfg.networkAttempts} attempts."
         exit 1
       fi
 
       log "resolved ${cfg.branch} to $sha"
-      banner "upgrade started" "Applying the latest configuration."
+      banner "🔵 Upgrade started" "Applying the latest configuration."
 
       # Pinned to the resolved commit, not the branch. An immutable ref is
       # exempt from Nix's tarball TTL (so --refresh is unnecessary), and it
@@ -167,57 +168,56 @@
 
           if [ -n "$worktree_top" ] && [ -n "$head_top" ]; then
             if [ "$worktree_top" != "$head_top" ]; then
-              drift="Uncommitted changes in ${cfg.checkoutPath} change this Mac's configuration, and are no longer applied to it."
+              drift="Uncommitted changes in your checkout are no longer applied. Commit them to keep them."
             fi
           else
-            drift="$changed uncommitted file(s) in ${cfg.checkoutPath}; could not work out whether they affect this Mac."
+            drift="$changed uncommitted file(s) in your checkout may no longer be applied."
           fi
         fi
       fi
 
+      # One dot, one short status, and an action line only when there is
+      # something to do. Deliberately no log excerpt: these are read at a glance
+      # on a phone, and the stderr tail belongs in the log file it names.
       if [ "$status" -ne 0 ]; then
-        headline="upgrade failed (exit $status)"
+        dot="🔴"
+        summary="Upgrade failed (exit $status)"
+        action="See ${cfg.errorLogFile}"
+        rc="$status"
       elif [ -z "$target" ]; then
         # A clean exit means activate() reached its last line, so this is
         # unlikely -- but an unverifiable result is exactly what a lax notifier
         # would wave through, so it counts as a failure.
-        headline="upgraded, but the result could not be verified"
+        summary="Upgrade could not be verified"
+        dot="🔴"
+        action="See ${cfg.errorLogFile}"
+        rc=1
       elif [ "$target" != "$current" ]; then
-        headline="exited cleanly but the system does not match ${cfg.branch}"
+        dot="🔴"
+        summary="Upgrade did not take effect"
+        action="See ${cfg.errorLogFile}"
+        rc=1
+      elif [ -n "$drift" ]; then
+        dot="🟠"
+        summary="Upgraded, local changes reverted"
+        action="$drift"
+        rc=0
       else
-        headline=""
+        dot="🟢"
+        summary="Upgraded, your Mac is up to date"
+        action=""
+        rc=0
       fi
 
-      if [ -z "$headline" ]; then
-        if [ -n "$drift" ]; then
-          # Still a success, but deliberately its own colour: the upgrade did
-          # what it should and quietly took local work out of the running
-          # system, which is the one success worth looking at.
-          log "success, local changes reverted"
-          banner "upgrade succeeded, local changes reverted" "$drift"
-          discord "🟠 **${cfg.configurationName}**: upgrade succeeded, but local changes were reverted"$'\n'"$drift"
-        else
-          log "success"
-          banner "upgrade succeeded" "Your Mac is up to date."
-          discord "🟢 **${cfg.configurationName}**: upgrade succeeded -- your Mac is up to date."
-        fi
-        exit 0
+      log "$summary"
+      if [ -n "$action" ]; then
+        banner "$dot $summary" "$action"
+        discord "$dot **${cfg.configurationName}** -- $summary"$'\n'"$action"
+      else
+        banner "$dot $summary" "No action needed."
+        discord "$dot **${cfg.configurationName}** -- $summary"
       fi
-
-      log "failure: $headline"
-      banner "$headline" "See ${cfg.errorLogFile}."
-      detail=""
-      if [ -n "$drift" ]; then
-        detail=$'\n'"$drift"
-      fi
-      # The tail of this very run's stderr, the only record of why. The file is
-      # still open for writing; reading it back is fine.
-      excerpt=$(tail -n 25 "${cfg.errorLogFile}" 2>/dev/null | tail -c 1400 || true)
-      if [ -n "$excerpt" ]; then
-        detail="$detail"$'\n'"\`\`\`"$'\n'"$excerpt"$'\n'"\`\`\`"
-      fi
-      discord "🔴 **${cfg.configurationName}**: $headline$detail"
-      exit "$status"
+      exit "$rc"
     '';
   };
 in {
