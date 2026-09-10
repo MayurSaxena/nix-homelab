@@ -56,9 +56,11 @@ serve for `flare01`, but Windows 10 passed end of support in October 2025, so pr
 `packer` and `ansible` come from the Mac's home-manager profile
 (`modules/home-manager/msaxena.nix`), so `just mac` is all that is needed to get them.
 
-**There is no `ansible-galaxy install` step.** nixpkgs' `ansible` attribute is the
-batteries-included community distribution rather than `ansible-core`, and it already ships
-every collection the roles here use. Verified present:
+**There is no `ansible-galaxy install` step.** nixpkgs' `ansible` attribute already ships
+every collection the roles here use, 92 of them in total. Do not be misled by its `pname`,
+which is `ansible-core`: that is the interpreter it is built from, and the community
+collection bundle is layered on top. A real `ansible-core` install would carry none of the
+below. Verified against this flake's pinned build, not the registry's:
 
 | Collection | Version | Used for |
 |---|---|---|
