@@ -775,6 +775,21 @@ update `hash = "sha256-...";` to the reported `got:` value and retry.
 
 `tofu destroy` removes the host's age key and re-encrypts on the way out.
 
+**Known possible gotcha:** a host that ran OOM-starved for a long stretch before its
+`memory_size_mb` was bumped (`homepage`, `yamtrack`, `trek` — see the comments in
+`provisioning/main.tf`) can be left with a `nix-optimise`/`nix-gc` failure that has nothing
+to do with the memory fix itself: an OOM kill mid-GC or mid-build can leave the local Nix
+`ValidPaths` SQLite database referencing store paths that no longer exist on disk.
+`nix-store --optimise` walks every DB-registered path and dies on the first one that's
+missing, surfacing as `error: getting status of "/nix/store/...": No such file or
+directory` (confirmed on `homepage`, 2026-09-10, via the Discord failure-notifier). The
+memory bump prevents new corruption; it doesn't repair damage already sitting in the DB
+from before the bump. Fix by SSHing in and running `nix-store --verify --check-contents`
+(it prints `disappeared, removing from database` for each stale entry), then manually
+`systemctl start nix-optimise.service` to confirm it now exits 0. `yamtrack` and `trek`
+share the same OOM history and haven't been checked — treat either as a candidate for this
+same fix if their own `nix-optimise` alert ever fires.
+
 ---
 
 ## Common operations
