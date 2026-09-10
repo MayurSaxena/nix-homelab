@@ -5,7 +5,7 @@
 - name: Read the Ansible public key
   ansible.builtin.set_fact:
     baseline_pubkey: >-
-      {{ lookup('community.sops.sops', lab_secrets_file, extract='ansible-ssh-public-key') | trim }}
+      {{ lookup('community.sops.sops', lab_secrets_file, extract='["ansible-ssh-public-key"]') | trim }}
   no_log: true
 
 # Windows sshd ignores ~/.ssh/authorized_keys for every account in the Administrators group.

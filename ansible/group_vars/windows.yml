@@ -2,4 +2,9 @@
 # Bootstrap credential only. Cloud-init cannot set this (see LAB.md), so the template bakes
 # it in at sysprep time and every clone boots with it. The baseline role's first act is to
 # install an SSH key and stop depending on it.
-ansible_password: "{{ lookup('community.sops.sops', lab_secrets_file, extract='clone-admin-password') }}"
+#
+# `extract` takes sops' own tree-path syntax -- '["key"]', the same form `sops --extract`
+# uses on the command line -- not a bare key name. A bare name fails at run time with
+# "component <key> doesn't end with ]", which reads like a parser bug rather than a syntax
+# error in this file.
+ansible_password: "{{ lookup('community.sops.sops', lab_secrets_file, extract='["clone-admin-password"]') }}"

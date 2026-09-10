@@ -89,6 +89,22 @@ gc:
 # reveals a token's secret only at creation, so rotating is delete-then-create; both the old
 # and new token carry the same privileges, which come from the ACLs, not from the token.
 
+# The private key is materialised into a mode-0600 file for the length of the run and removed
+# afterwards, because ssh will not take a key on stdin or from an environment variable. The
+# very first run against a fresh clone has no key installed yet and falls back to the
+# bootstrap password from group_vars; the baseline role installs the key, and every run after
+# that uses it.
+
+# Run an Ansible playbook against the lab: `just lab-play` or `just lab-play dc.yml`.
+lab-play playbook="site.yml" *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    key=$(mktemp); trap 'rm -f "$key"' EXIT
+    chmod 600 "$key"
+    sops -d --extract '["ansible-ssh-private-key"]' secrets/lab.yaml > "$key"
+    cd ansible
+    ANSIBLE_PRIVATE_KEY_FILE="$key" ansible-playbook playbooks/{{playbook}} {{args}}
+
 # Credentials are decrypted straight into the process environment rather than written to a
 # .pkrvars file, so nothing lands on disk and nothing lands in shell history. PKR_VAR_ is
 # Packer's own convention for populating an input variable from the environment.
