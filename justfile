@@ -67,6 +67,9 @@ plan *args:
     # and derives a live TOTP code from secrets/msaxena.yaml, so a YubiKey must be present.
     set -euo pipefail
     source util/pve-auth.sh
+    # Lab guests take their initial Administrator password from here. Decrypted per run
+    # rather than kept in a .tfvars file, so it exists only in this process's environment.
+    export TF_VAR_lab_admin_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
     cd provisioning && tofu plan {{args}}
 
 # Apply OpenTofu changes; scope to one host with `just apply -target=module.<name>`.
@@ -74,6 +77,7 @@ apply *args:
     #!/usr/bin/env bash
     set -euo pipefail
     source util/pve-auth.sh
+    export TF_VAR_lab_admin_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
     cd provisioning && tofu apply {{args}}
 
 # Delete old system generations, keeping the last five.
