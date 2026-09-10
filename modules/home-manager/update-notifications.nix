@@ -73,30 +73,44 @@
         exit 0
       fi
 
-      # Distinguish "upstream moved" from "this Mac is running uncommitted
-      # local work", which look identical in the comparison above but mean
-      # opposite things. `cat-file -e` first because merge-base needs the
-      # object present locally; a commit the checkout has never fetched is by
-      # definition not an ancestor of HEAD.
-      local_has_remote=0
-      if [ -d "${cfg.checkoutPath}/.git" ] \
-        && git -C "${cfg.checkoutPath}" cat-file -e "$remote_sha^{commit}" 2>/dev/null \
-        && git -C "${cfg.checkoutPath}" merge-base --is-ancestor "$remote_sha" HEAD 2>/dev/null; then
-        local_has_remote=1
+      # Distinguish "this Mac is running the working tree" from "the switch did
+      # not happen", which look identical in the comparison above but mean
+      # opposite things.
+      #
+      # The test is whether the running closure is the one the local checkout
+      # evaluates to *right now*. Asking git whether the checkout contains the
+      # branch tip cannot tell them apart -- an up-to-date checkout looks the
+      # same whether the difference is uncommitted work or a failed nightly
+      # switch -- and suppressing on that would silence this watchdog in
+      # precisely the case it exists for. An extra local eval is cheap next to
+      # the remote one already done above, and only ever runs on a day that is
+      # already out of date.
+      #
+      # An eval that fails (a syntax error mid-edit, an untracked file the
+      # flake cannot see) deliberately counts as "not the working tree", so an
+      # unreadable checkout produces a notification rather than silence.
+      running_local_worktree=0
+      if [ -d "${cfg.checkoutPath}/.git" ]; then
+        if worktree_target=$(${nix} eval --raw \
+          "${cfg.checkoutPath}#darwinConfigurations.${cfg.configurationName}.config.system.build.toplevel" 2>/dev/null); then
+          if [ "$worktree_target" = "$current" ]; then
+            running_local_worktree=1
+          fi
+        fi
       fi
 
       short=$(printf '%.7s' "$remote_sha")
 
       ${lib.optionalString (!cfg.notifyOnLocalDrift) ''
-        if [ "$local_has_remote" -eq 1 ]; then
-          echo "running system differs from ${cfg.branch}@$short, but the checkout already has that commit -- treating as local drift and staying quiet" >&2
+        if [ "$running_local_worktree" -eq 1 ]; then
+          echo "running system differs from ${cfg.branch}@$short but matches the local checkout -- treating as working-tree drift and staying quiet" >&2
           exit 0
         fi
       ''}
 
       # Both strings are standalone phrases, because each is used twice: as the
       # notification banner's subtitle, and after the bold host name in Discord.
-      if [ "$local_has_remote" -eq 1 ]; then
+      if [ "$running_local_worktree" -eq 1 ]; then
         headline="running uncommitted local config"
         detail="Commit and push it, or the nightly switch will revert it."
       else
@@ -245,10 +259,10 @@ in {
       type = lib.types.str;
       default = "${config.home.homeDirectory}/Projects/nix-homelab";
       description = ''
-        Local clone, used only to tell "upstream has moved" apart from "this
-        Mac is running uncommitted local changes", and to quote the offending
-        commit's subject. A missing path is not an error: the check falls back
-        to reporting an unapplied upstream commit.
+        Local clone. Evaluated to tell "this Mac is running the working tree"
+        apart from "the nightly switch did not happen", and used to quote the
+        offending commit's subject. A missing path is not an error: the check
+        falls back to reporting an unapplied upstream commit.
       '';
     };
 
@@ -256,9 +270,9 @@ in {
       type = lib.types.bool;
       default = false;
       description = ''
-        Whether to notify when the running system differs from the branch even
-        though the checkout already contains the branch tip -- i.e. the Mac is
-        running uncommitted local work.
+        Whether to notify when the running system differs from the branch but
+        is exactly what the local checkout evaluates to -- i.e. the Mac is
+        running the working tree.
 
         Off by default because that state is self-inflicted and often
         deliberate mid-change, and a notification that fires every single day
