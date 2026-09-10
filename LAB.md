@@ -287,6 +287,19 @@ worked. Every clone trusting one lab key is the same trust model as every clone 
 baked password, without the password. `clone-admin-password` survives in `secrets/lab.yaml`
 purely as an emergency console credential.
 
+### A clone's first reported address is the wrong one
+
+A guest boots briefly on the address baked into the template by the build, and cloudbase-init
+replaces it with the real one a moment later. OpenTofu polls the guest agent as soon as it
+answers, which can land inside that window, so `ipv4_addresses` in state sometimes records
+`10.0.90.99` rather than the guest's actual address.
+
+Harmless -- nothing reads that attribute, and the module's output is informational -- but
+worth knowing before it sends someone chasing a network fault that does not exist. The
+authority is `qm agent <vmid> network-get-interfaces`, or simply connecting. A give-away that
+you are looking at the settled state rather than the transient one: cloudbase-init renames the
+interface to `eth0`, so an adapter still called `Ethernet` has not been configured yet.
+
 ### The guest agent needs a driver, not just a service
 
 The QEMU guest agent does not reach the host over the network. It uses a VirtIO serial port,
