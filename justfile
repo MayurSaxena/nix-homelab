@@ -135,35 +135,37 @@ packer-build template:
     export PKR_VAR_admin_password=$(sops -d --extract '["build-admin-password"]' secrets/lab.yaml)
     export PKR_VAR_clone_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
     export PKR_VAR_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
-    # Packer will not replace an existing VMID, so a second build of the same template dies
-    # at "Creating VM" with "already exists". Retire the old one first. Safe because the
-    # qemu-vm module takes full clones rather than linked ones: guests already built from
-    # this template hold no reference to it, so removing it cannot affect them.
+    # Build first, retire second.
     #
-    # Uses the Packer token rather than the root ticket, both because this recipe has no
-    # reason to hold root and because it exercises exactly the permissions the build itself
-    # will need. API-token auth does not use a CSRF token.
+    # The old recipe deleted the existing template before building its replacement, because
+    # Packer refuses to create a VM at an id that already exists. That left the node with no
+    # template at all whenever a build then failed -- which happened twice, once when the
+    # build tooling went missing from the PATH. Packer now allocates its own id, so the new
+    # template can exist alongside the old one and the old one is removed only once the new
+    # one is real.
+    #
+    # Steady state is still exactly one template per role. The difference is that there is
+    # never a moment with zero.
     export PKR_VAR_proxmox_url="${PKR_VAR_proxmox_url:-https://10.0.10.3:8006/api2/json}"
-    vmid=$(grep -oE '^[[:space:]]*vm_id[[:space:]]*=[[:space:]]*[0-9]+' packer/{{template}}/build.pkr.hcl | grep -oE '[0-9]+' | head -1)
     auth=(-H "Authorization: PVEAPIToken=${PKR_VAR_proxmox_username}=${PKR_VAR_proxmox_token}")
-    cfg=$(curl -sk "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu/${vmid}/config" 2>/dev/null || true)
-    if [ "$(jq -r '.data.template // 0' <<<"${cfg:-{}}" 2>/dev/null)" = "1" ] \
-       && [[ "$(jq -r '.data.name // ""' <<<"${cfg:-{}}" 2>/dev/null)" == tpl-* ]]; then
-        echo "retiring existing template ${vmid} ($(jq -r .data.name <<<"$cfg"))"
-        curl -sk -X DELETE "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu/${vmid}" >/dev/null
-        # PVE deletes asynchronously; creating into the id before it is gone fails identically.
-        for _ in $(seq 1 30); do
-            curl -sk "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu/${vmid}/config" \
-              | jq -e '.data.name' >/dev/null 2>&1 || break
-            sleep 2
-        done
-    elif [ -n "$(jq -r '.data.name // ""' <<<"${cfg:-{}}" 2>/dev/null)" ]; then
-        echo "ERROR: VMID ${vmid} exists but is not a tpl-* template. Refusing to touch it." >&2
-        exit 1
-    fi
-    cd packer/{{template}}
-    packer init .
-    packer build .
+    tmpl_tag="{{template}}"
+    templates_with_tag() {
+        curl -sk "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu" \
+          | jq -r --arg t "$tmpl_tag" '.data[] | select(.template==1) | select((.tags // "") | split(";") | index($t)) | .vmid'
+    }
+    before=$(templates_with_tag | sort -n | tr '\n' ' ')
+    echo "existing ${tmpl_tag} templates before this build: ${before:-none}"
+
+    (cd packer/{{template}} && packer init . && packer build .)
+
+    after=$(templates_with_tag | sort -n | tr '\n' ' ')
+    echo "after: ${after:-none}"
+    for old in $before; do
+        case " $after " in *" $old "*) ;; *) continue ;; esac
+        [ "$(echo "$after" | wc -w)" -le 1 ] && { echo "only one template present; nothing to retire"; break; }
+        echo "retiring superseded template $old"
+        curl -sk -X DELETE "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu/${old}" >/dev/null
+    done
 
 # Mint or rotate the Packer API token into secrets/msaxena.yaml.
 packer-token:

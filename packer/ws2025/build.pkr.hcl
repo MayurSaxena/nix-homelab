@@ -107,19 +107,22 @@ source "proxmox-iso" "ws2025" {
   insecure_skip_tls_verify = true
   node                     = var.node
 
-  # Fixed, because provisioning/rbac.tf grants packer@pve on a reserved block of template
-  # VMIDs rather than on /vms. A VMID outside 9100-9109 will fail with a permission error.
-  vm_id   = 9100
-  vm_name = "tpl-ws2025"
-
-  # Not cosmetic. PVE deletes a guest's ACL entries when the guest is destroyed, so the
-  # grant on /vms/9100 disappears every time a build fails and cleans up after itself, and
-  # the next run 403s at "Creating VM". Building into a pool that packer@pve is granted on
-  # gives the permission somewhere to live that outlives the VM. See provisioning/rbac.tf.
-  pool = "lab"
-
+  # No vm_id: PVE allocates the next free one. Nothing needs a fixed id any more.
+  #
+  # The grant is on the lab pool rather than on a block of reserved ids (see
+  # provisioning/rbac.tf), and OpenTofu finds this template by tag rather than by number
+  # (see provisioning/vms.tf). Fixing an id bought nothing and cost the old build recipe a
+  # delete-before-build step, which is what left the node with no template at all whenever a
+  # build failed after it.
+  vm_name              = "tpl-ws2025"
   template_name        = "tpl-ws2025"
   template_description = "Windows Server 2025 Standard Eval, Desktop Experience. Built by Packer; do not edit in place."
+
+  # How OpenTofu finds it, and how the build recipe knows which older template to retire once
+  # this one exists. PVE joins tags with semicolons.
+  tags = "template;ws2025"
+
+  pool = "lab"
 
   # Windows 11 and Server 2025 both expect UEFI plus a TPM. q35 rather than i440fx because
   # OVMF wants a PCIe machine type.

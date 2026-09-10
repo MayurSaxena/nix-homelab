@@ -5,13 +5,45 @@
 # would apply a rebuild-from-repo guarantee to machines defined by not needing one. See the
 # ownership table in LAB.md.
 
+# Templates are found by tag, not by a hardcoded id.
+#
+# Packer lets PVE allocate whatever id is free and tags the result, so a new template can be
+# built alongside the one it replaces and the old one retired only once the new one exists.
+# Nothing here needs to know a number, and nothing needs a block of ids reserved in advance.
+#
+# `one()` is the assertion, not a convenience: it returns null when no template carries the
+# tag and errors outright when more than one does. Both are worth failing on. Two matches
+# means a build is in flight or a retirement did not complete, and cloning in that window
+# would silently pick an arbitrary one.
+data "proxmox_virtual_environment_vms" "ws2025_template" {
+  tags = ["template", "ws2025"]
+
+  filter {
+    name   = "template"
+    values = ["true"]
+  }
+
+  # Without this, "no template" surfaces as "Attempt to get attribute from null value",
+  # which names neither the tag nor the fix.
+  lifecycle {
+    postcondition {
+      condition     = length(self.vms) == 1
+      error_message = "Expected exactly one template tagged ws2025, found ${length(self.vms)}. None means it has not been built yet: run `just packer-build ws2025`. More than one means a build is in flight, or a retirement did not finish."
+    }
+  }
+}
+
+locals {
+  ws2025_template_id = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
+}
+
 module "lab-dc01" {
   source        = "./modules/qemu-vm"
   pve_node_name = var.pve_node_name
 
   vm_name        = "lab-dc01"
   vm_description = "lab.internal domain controller (Terraform)"
-  template_vm_id = 9100 # tpl-ws2025
+  template_vm_id = local.ws2025_template_id
 
   os_type = "win11" # covers Server 2022/2025 as well as Windows 11
   bios    = "ovmf"
