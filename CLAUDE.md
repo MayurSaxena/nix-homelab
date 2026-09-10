@@ -880,6 +880,51 @@ same fix if their own `nix-optimise` alert ever fires.
 
 ---
 
+## QEMU guests
+
+Containers are the norm here; VMs exist for guests the flake cannot configure, which today
+means the lab on VLAN 90 (see `LAB.md`, which owns everything lab-specific). They are
+declared in `provisioning/vms.tf` through `provisioning/modules/qemu-vm`, built from Packer
+templates under `packer/`, and configured by Ansible under `ansible/`.
+
+Four things about VMs on this provider are counter-intuitive enough to have each cost a
+debugging session, and none of them are Windows-specific:
+
+- **PVE deletes a guest's ACL entries when the guest is destroyed.** An ACL granted on
+  `/vms/<id>` therefore disappears with the guest, so a build that creates and then removes a
+  VM silently revokes its own permission to run again. Grant on a *pool* instead: a pool is
+  not a guest and outlives the guests in it. `provisioning/rbac.tf` does both, and the pool
+  grant is the one that matters.
+
+- **`proxmox_virtual_environment_user` manages ACLs too**, via an `acl` block of its own.
+  Declaring none on it does not mean "leave them alone", it means "there should be none", so
+  the user resource and any separate `proxmox_virtual_environment_acl` resources delete and
+  recreate each other on every apply. The damage depends on which order they run in and shows
+  up in a plan only as an innocuous "1 to change". `ignore_changes = [acl]` on the user makes
+  the ACL resources the single writer.
+
+- **`stop_on_destroy` is read from stored state, not from configuration.** Adding it to the
+  module does nothing for guests that already exist, so a guest whose agent is broken still
+  hangs `tofu destroy` on a graceful shutdown that never completes, with no PVE task in
+  flight to explain the wait. Stop it out of band; guests created afterwards carry the
+  attribute.
+
+- **Verify ACL changes against PVE, not against the apply's exit code.** `GET
+  /access/permissions?userid=<user>!<token>` returns PVE's own computation of a token's
+  effective privileges, and it is the only thing that has reliably told the truth about
+  whether a grant landed.
+
+**Diagnosing a guest you cannot reach.** The single most useful tool has been a console
+screenshot, which needs neither the network nor the guest agent:
+
+```bash
+ssh root@<pve-host> 'echo "screendump /tmp/x.ppm" | qm monitor <vmid>' && scp root@<pve-host>:/tmp/x.ppm .
+```
+
+It settles in one look what hours of inference cannot: whether the guest is at a login
+screen, stuck in an installer, or sitting at firmware. Pair it with a port sweep, since the
+set of *open* ports says a great deal about a Windows guest's firewall profile.
+
 ## Common operations
 
 Most of these have a `just` recipe wrapping them, which is where the flags that are easy to
