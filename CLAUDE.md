@@ -102,9 +102,9 @@ modules/home-manager/  The Mac user. msaxena.nix (packages, secrets, theme) impo
 modules/beszel-agent.nix   Monitoring agent (NixOS-only despite the location; imported by the NixOS base)
 provisioning/          OpenTofu: container definitions and base-image downloads
 secrets/               SOPS-encrypted files
-assets/                Files committed in the clear — hookscript, pubkeys, and the
-                       deliberately-committed builder *private* key. Anything genuinely
-                       secret belongs in secrets/, not here.
+assets/                Files committed in the clear — hookscript and public keys. Anything
+                       genuinely secret belongs in secrets/, not here; the builder's private
+                       key used to live here and was rotated out (see Known drift).
 util/                  pve-auth.sh — sourced, not executed, for 2FA against the PVE API
 ```
 
@@ -808,9 +808,11 @@ first avoids the trap entirely rather than working around it.
    `fileserver` → `files`). Root SSH is YubiKey-hardware-key-only on every host, so both steps
    6 and 8 need someone at the keyboard — for *both* legs: `root@nix-builder` reuses the same
    YubiKey-gated identity already required for `root@<container-ip>`, rather than the
-   `nix@nix-builder` account, whose key (`/etc/nix/remote-builder-key`) is deliberately
-   root-only-readable locally and reserved for the unattended `custom.remote-builds`/
-   `autoUpgrade` daemon path. Using that account here would force the whole command under
+   `nix-ssh@nix-builder` account, whose key (`/etc/nix/remote-builder-key` on the Mac,
+   `/run/secrets/remote-builder/private-key` on a host) is root-only-readable and reserved
+   for the unattended `custom.remote-builds`/`autoUpgrade` daemon path — and which sshd
+   restricts to `nix-store --serve`, so it couldn't run a switch anyway. Using that account
+   here would force the whole command under
    `sudo`, which then hits a second problem: root's own local `known_hosts` is essentially
    empty, so even `--target-host` fails host-key verification non-interactively.
 
@@ -887,7 +889,7 @@ a prebuilt index — useful for the one-off tool you don't want in `home.package
 2. Local options always under `custom.*`.
 3. Destructure only what you use in a host file's argument head.
 4. **Comment the rationale wherever a choice is surprising.** This is the strongest
-   convention in the repo — the committed builder key, D-Bus broker mode, the 0700 on
+   convention in the repo — the forced-command builder account, D-Bus broker mode, the 0700 on
    `/var/lib/private`, every disabled toggle. Match that density.
 5. Derive rather than hardcode: `[config.services.paperless.port]`, not `[8000]`.
 6. Commit messages in imperative present tense.
@@ -923,12 +925,13 @@ copy them as precedent:
   its own out-of-band passdb, not because it's the better pattern.
 - `minecraft`'s two disabled toggles and `nix-builder`'s remote-builds and root-password
   carry no explanatory comment, unlike `nix-builder`'s impermanence. Comment yours anyway.
-- **`assets/remote-builder` is a private key in a public repo, and the `nix` account it
-  unlocks on `nix-builder` has an unrestricted shell and is a Nix trusted user.** The
-  comment in `modules/nixos/remote-builds.nix` spells out why that is a fleet-wide problem
-  rather than the "build capacity only" trade-off it was meant to be. Do not copy the
-  pattern for any new key. The fix (rotate the key into sops, use the `nix-ssh` account
-  that `nix.sshServe` restricts to `nix-store --serve`) is planned, not done.
+- **The builder key rotation is half-landed.** The key every host uses now comes from
+  `secrets/common.yaml` (`remote-builder/private-key`) and logs in as the forced-command
+  `nix-ssh` account. Until every host and the Mac have switched past that commit,
+  `hosts/remote-builder.nix` still carries the *old* public key and the old `nix` user
+  (shell, trusted) under `TRANSITIONAL` comments. Remove both once a full autoUpgrade
+  cycle has passed; the old private key is still in git history, which is why it was
+  rotated rather than moved. Never commit a private key under `assets/` again.
 - **Both YubiKey age identities are PIN=never/touch=never, and `secrets/msaxena.yaml`
   holds the Proxmox root password together with its TOTP seed.** Deliberate, so login-time
   decryption and `just apply` run unattended — but it means a plugged-in YubiKey is a single

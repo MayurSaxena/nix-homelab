@@ -24,7 +24,7 @@ modules/
   beszel-agent.nix     # Monitoring agent (NixOS-only, imported by the NixOS base)
 provisioning/          # OpenTofu configs for Proxmox LXC provisioning
 secrets/               # SOPS-encrypted secrets (age + YubiKey)
-assets/                # Committed in the clear — hookscript, pubkeys, builder key
+assets/                # Committed in the clear — hookscript and public keys only
 util/                  # pve-auth.sh — sourced, not executed, for 2FA against the PVE API
 .github/workflows/     # CI: LXC image generation, flake.lock auto-update
 ```

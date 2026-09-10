@@ -36,9 +36,10 @@
 # Requires a YubiKey inserted for both the root@nix-builder and root@<ip> SSH
 # prompts — root SSH is hardware-key-only on every host, so this step can't
 # be unattended. Building goes through root@nix-builder rather than the `nix`
-# user: the `nix` account's key (/etc/nix/remote-builder-key) is deliberately
+# user: the `nix-ssh` account's key (/etc/nix/remote-builder-key) is deliberately
 # root-only-readable locally and reserved for the unattended
-# custom.remote-builds/autoUpgrade daemon path. Using root@ here reuses the
+# custom.remote-builds/autoUpgrade daemon path, and sshd restricts that account
+# to `nix-store --serve` anyway. Using root@ here reuses the
 # same YubiKey-gated identity already required for --target-host, instead of
 # forcing this whole script under sudo (which then hits a second problem:
 # root's own local known_hosts is essentially empty).

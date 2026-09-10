@@ -141,6 +141,13 @@
       # user's home. The Mac has no system-level sops, because decryption needs
       # the YubiKey and only this user's login agent has it.
       "discord/mac-update-webhook" = {};
+      # Same arrangement: decrypted here, copied into /etc/nix by
+      # custom.remote-builds-mac's activation script. Read from common.yaml
+      # (encrypted to *all-keys, which includes msaxena-keys) so the fleet and
+      # the Mac share one key with one place to rotate it.
+      "remote-builder/private-key" = {
+        sopsFile = ./../../secrets/common.yaml;
+      };
     };
   };
 }

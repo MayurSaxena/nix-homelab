@@ -13,6 +13,17 @@ in {
       example = "host.example.com";
       description = "Hostname of remote build machine.";
     };
+    keyFile = lib.mkOption {
+      type = lib.types.str;
+      default = "${config.users.users.${config.system.primaryUser}.home}/.config/sops-nix/secrets/remote-builder/private-key";
+      description = ''
+        Decrypted builder key to copy into /etc/nix. It lives under the
+        primary user's home rather than /run/secrets because this Mac has no
+        system-level sops: decryption needs the YubiKey, which only the
+        user's login agent has (the same arrangement as
+        custom.auto-upgrade-mac.webhookFile). Root can read it.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -20,10 +31,19 @@ in {
     # machines file. We use extraActivation because nix-darwin only interpolates
     # a fixed set of named activation script slots; arbitrary names are silently
     # ignored.
+    #
+    # The key is legitimately absent after a boot without the YubiKey (the
+    # sops-nix agent leaves a dangling symlink), so a missing source is a
+    # warning that keeps whatever /etc/nix already holds, not an activation
+    # failure -- otherwise every keyless switch would abort here.
     system.activationScripts.extraActivation.text = lib.mkAfter ''
       echo "Setting up Nix remote builder..." >&2
-      install -m 0400 -o root ${./../../assets/remote-builder} /etc/nix/remote-builder-key
-      echo "ssh://nix@${cfg.remote-host} x86_64-linux /etc/nix/remote-builder-key 3 1 kvm,nixos-test,big-parallel" > /etc/nix/machines
+      if [ -r "${cfg.keyFile}" ]; then
+        install -m 0400 -o root "${cfg.keyFile}" /etc/nix/remote-builder-key
+      else
+        echo "warning: ${cfg.keyFile} unreadable (YubiKey absent at login?); leaving /etc/nix/remote-builder-key as is" >&2
+      fi
+      echo "ssh://nix-ssh@${cfg.remote-host} x86_64-linux /etc/nix/remote-builder-key 3 1 kvm,nixos-test,big-parallel" > /etc/nix/machines
     '';
 
     # Determinate Nix manages nix.conf and regenerates nix.custom.conf on each
@@ -41,7 +61,7 @@ in {
       Host ${cfg.remote-host}
         StrictHostKeyChecking accept-new
         IdentityFile /etc/nix/remote-builder-key
-        User nix
+        User nix-ssh
     '';
   };
 }
