@@ -43,6 +43,13 @@ resource "proxmox_virtual_environment_user" "packer" {
   user_id = "packer@pve"
   comment = "Packer image builds (Terraform). Token auth only; no password is set."
   enabled = true
+
+  # This resource can carry `acl` blocks, and declaring none here does not mean "leave them
+  # alone" -- it means "there should be none", so every apply deletes the rows the acl
+  # resources below just created. See the note above them.
+  lifecycle {
+    ignore_changes = [acl]
+  }
 }
 
 # Scoped deliberately, NOT granted at "/".
@@ -77,20 +84,24 @@ locals {
   )
 }
 
-# Apply ACL changes with `-parallelism=1`.
+# NOTE: proxmox_virtual_environment_user manages ACLs too, via an `acl` block of its own.
 #
-# Every ACL write is a read-modify-write of the same /etc/pve/user.cfg on the node. Applying
-# a batch at OpenTofu's default parallelism of ten raced: an apply that planned "10 to add,
-# 3 to destroy" also silently removed four rows it never touched, leaving state claiming
-# fourteen entries while PVE had ten. Nothing in the plan output hints at it, and the only
-# symptom is a permission failure much later, partway through a build.
+# With no acl blocks declared on the user above, OpenTofu reads whatever ACLs exist at
+# refresh into that resource's state and then plans to remove all of them, because the
+# config says there should be none. The separate acl resources below immediately add them
+# back. The two fight on every single apply, and the damage depends on which order they
+# happen to run in: an apply that planned "10 to add, 3 to destroy" also removed four rows
+# nothing had asked it to touch, leaving state claiming fourteen entries while PVE had ten.
 #
-#   just apply -parallelism=1 -target=proxmox_virtual_environment_acl.packer
+# It is invisible in a plan unless you read the user resource's diff rather than the summary
+# line -- it shows only as an innocuous-looking "1 to change" -- and the symptom is a
+# permission failure much later, partway through a build.
 #
-# A refresh does detect the drift afterwards and re-adds the rows, so it is recoverable
-# rather than dangerous. Verify against PVE's own GET /access/permissions after any ACL
-# change rather than trusting the apply's exit code.
-#
+# ignore_changes on that block is what stops it. The acl resources here are the single
+# writer; the user resource is told to keep its hands off. Verify against PVE's own
+# GET /access/permissions after any ACL change rather than trusting the apply's exit code,
+# which reports success either way.
+
 # One entry per path. The role is a superset at every path: granting VM.Config.CPU on
 # /storage/local is inert, and splitting the role into per-path subsets would trade real
 # clarity for no additional restriction.
