@@ -59,15 +59,27 @@ separate daily workflow runs `nix flake update`, commits `flake.lock` straight t
 force-pushes the `nightly` tag — which re-triggers the image build. So a merged change
 reaches every host within a day without anyone touching a container.
 
-**The Mac is the exception to step 4.** nix-darwin has no `system.autoUpgrade`, and this
-one could not use it anyway: activation decrypts the user's secrets from a YubiKey, so a
-scheduled unattended switch would fail on every boot the key wasn't plugged into. Instead
-`custom.update-notifications` (a *home-manager* module,
-`modules/home-manager/update-notifications.nix`) runs a daily launchd agent that evaluates
-`main`'s `darwinConfigurations.<host>` toplevel and compares it to `/run/current-system`,
-then posts a notification banner and a Discord message when they differ. It deliberately
-evaluates rather than comparing commit SHAs — most commits here touch only the Linux hosts,
-and a SHA comparison would nag about every one of them. The switch itself stays manual.
+**The Mac is the exception to step 4.** nix-darwin has no `system.autoUpgrade`, so
+`custom.auto-upgrade-mac` (`modules/macos/auto-upgrade.nix`) supplies one: a root
+LaunchDaemon that resolves `main` to a commit, switches to that pinned SHA, verifies the
+result, and reports it. It also owns a `pmset repeat wakeorpoweron` so the Mac wakes for
+its own window rather than upgrading whenever the lid next opens.
+
+Two constraints shape that module and are easy to undo by accident. Its plist must contain
+no store paths -- nix-darwin's launchd activation runs `launchctl unload` on any daemon
+whose plist changed, killing the running job, and it unloads *before* copying the new
+plist, so a store path in there means the daemon kills its own switch on every nixpkgs bump
+and never installs the replacement. The script therefore lives on the system path and the
+plist calls `/run/current-system/sw/bin/darwin-auto-upgrade`. And notifications must be
+posted through `launchctl asuser <uid> sudo -u <user>`, because a root daemon is not in the
+user's Aqua session.
+
+nix-darwin has no `OnFailure` equivalent either, so the daemon reports its own outcome
+rather than relying on anything watching it: a banner when it starts, and a banner plus a
+Discord message when it finishes, classified by exit status *and* by comparing
+`/run/current-system` against the closure the pinned commit evaluates to. Do not classify
+by exit status alone, and do not compare against the local checkout -- it is routinely
+behind the branch simply because nobody has pulled, which says nothing about this Mac.
 
 The consequence worth internalising: **pushing to main deploys.** There is no staging step.
 

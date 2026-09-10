@@ -1,64 +1,209 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.custom.auto-upgrade-mac;
 
-  flakeRef = "${cfg.flake}#${cfg.configurationName}";
+  home = config.users.users.${cfg.user}.home;
 
-  # Every path here is deliberately a *stable* one -- /bin, /usr/bin, the
-  # Determinate Nix profile, and /run/current-system -- and this runs as an
-  # inline `/bin/sh -c` string rather than through launchd.daemons.<n>.script.
-  #
-  # That is not stylistic. nix-darwin's launchd activation is:
-  #
-  #   if ! diff <new plist> <installed plist>; then
-  #     launchctl unload <installed>; cp; launchctl load -w
-  #
-  # and `launchctl unload` terminates a job that is currently running. A plist
-  # embedding a store path changes whenever nixpkgs moves, which is daily -- so
-  # this daemon would unload, and kill, its own switch partway through
-  # activation, leaving a half-applied system. Keeping the plist byte-identical
-  # across nixpkgs bumps is what prevents that.
-  #
-  # The corollary: changing an option below *does* change the plist, so apply
-  # such a change with a manual switch rather than letting the daemon apply it
-  # to itself.
-  switchScript = ''
-    set -u
-    echo "=== $(/bin/date -u '+%Y-%m-%dT%H:%M:%SZ') switching to ${flakeRef}"
+  flakeUrl = "https://github.com/${cfg.githubRepository}.git";
+  flakeRef = "github:${cfg.githubRepository}";
 
-    # No tty, deliberately. Homebrew's activation runs `brew bundle` with
-    # cleanup = "zap" on every switch, and it has prompted interactively on this
-    # machine before (see the taps comment in modules/macos/packages.nix). A
-    # prompt with an open stdin would wedge this job until someone noticed;
-    # </dev/null makes it fail and get reported instead.
-    exec </dev/null
+  # Wake shortly before the window so the switch runs at the hour rather than
+  # whenever the lid next opens.
+  wakeAt = let
+    total = cfg.hour * 60 + cfg.minute - cfg.wakeLeadMinutes;
+    wrapped =
+      if total < 0
+      then total + 1440
+      else total;
+    h = wrapped / 60;
+    m = wrapped - h * 60;
+    pad = n:
+      if n < 10
+      then "0${toString n}"
+      else toString n;
+  in "${pad h}:${pad m}:00";
 
-    # --refresh is not optional for a `github:` ref: it is subject to Nix's
-    # tarball TTL, so a run shortly after a push can silently rebuild the
-    # *previous* commit with no error at all.
-    /run/current-system/sw/bin/darwin-rebuild switch --flake '${flakeRef}' --refresh
-    status=$?
+  upgrade = pkgs.writeShellApplication {
+    name = "darwin-auto-upgrade";
+    runtimeInputs = [pkgs.coreutils pkgs.git pkgs.curl pkgs.jq];
+    text = ''
+      user="${cfg.user}"
+      uid=$(/usr/bin/id -u "$user")
+      webhook="${cfg.webhookFile}"
 
-    echo "=== finished with status $status, now on $(/usr/bin/readlink /run/current-system)"
-    exit $status
-  '';
+      log() { echo "=== $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
+
+      # Banners must come from the user's Aqua session, which a root daemon is
+      # not in -- hence launchctl asuser, the same mechanism nix-darwin uses to
+      # run home-manager activation. It fails when nobody is logged in; that is
+      # logged and never fatal, because Discord still gets through.
+      banner() {
+        /bin/launchctl asuser "$uid" /usr/bin/sudo -u "$user" /usr/bin/osascript \
+          -e "display notification \"$2\" with title \"nix-homelab\" subtitle \"$1\"" \
+          >/dev/null 2>&1 || echo "could not post banner (nobody logged in?)" >&2
+      }
+
+      discord() {
+      ${lib.optionalString (!cfg.discord.enable) "  return 0"}
+        # Legitimately absent rather than an error: this webhook is decrypted
+        # from a YubiKey by the user's login agent, so after a boot without the
+        # key the symlink dangles.
+        if [ ! -r "$webhook" ]; then
+          echo "webhook at $webhook unreadable (YubiKey absent at login?); skipping Discord" >&2
+          return 0
+        fi
+        # jq -Rs turns arbitrary text -- log excerpts with quotes, newlines and
+        # backslashes -- into one correctly escaped JSON string.
+        payload=$(printf '%s' "$1" | jq -Rs '{content: .}')
+        # --fail because curl exits 0 on an HTTP 4xx, so a revoked webhook would
+        # report success forever. stderr is dropped because curl's messages
+        # embed the effective URL, which would write the webhook into this log.
+        if ! curl -sS --fail --max-time 20 \
+          -H 'Content-Type: application/json' \
+          -X POST -d "$payload" "$(cat "$webhook")" >/dev/null 2>&1; then
+          echo "Discord POST failed" >&2
+        fi
+      }
+
+      log "starting"
+
+      # The job usually runs because the Mac just woke for it, and Wi-Fi is
+      # often not up yet. Retrying beats a spurious failure every morning.
+      sha=""
+      attempt=0
+      while [ "$attempt" -lt ${toString cfg.networkAttempts} ]; do
+        sha=$(git ls-remote "${flakeUrl}" "refs/heads/${cfg.branch}" 2>/dev/null | head -n1 | cut -f1 || true)
+        # `[ -n "$sha" ] && break` would be a bug here: an AND-list whose test
+        # fails returns non-zero, and under errexit that exits the script -- so
+        # the first unreachable attempt would end the run instead of retrying.
+        if [ -n "$sha" ]; then
+          break
+        fi
+        attempt=$((attempt + 1))
+        sleep ${toString cfg.networkRetrySeconds}
+      done
+
+      if [ -z "$sha" ]; then
+        log "cannot reach ${flakeUrl}, giving up"
+        banner "upgrade could not start" "GitHub is unreachable."
+        discord "🔴 **${cfg.configurationName}**: nightly upgrade could not start -- GitHub unreachable after ${toString cfg.networkAttempts} attempts."
+        exit 1
+      fi
+
+      short=$(printf '%.7s' "$sha")
+      log "resolved ${cfg.branch} to $sha"
+      banner "upgrading to ${cfg.branch}@$short" "Started at $(date '+%H:%M')."
+
+      # Pinned to the resolved commit, not the branch. An immutable ref is
+      # exempt from Nix's tarball TTL (so --refresh is unnecessary), and it
+      # means the verification below compares against the commit that was
+      # actually applied rather than whatever landed on the branch meanwhile.
+      #
+      # caffeinate -i holds off idle sleep: the Mac may have woken solely for
+      # this and would otherwise drop back to sleep mid-activation.
+      #
+      # </dev/null so Homebrew's `brew bundle` cleanup fails rather than
+      # blocking forever if it ever prompts (see the taps comment in
+      # modules/macos/packages.nix).
+      if /usr/bin/caffeinate -i /run/current-system/sw/bin/darwin-rebuild switch \
+        --flake "${flakeRef}/$sha#${cfg.configurationName}" </dev/null; then
+        status=0
+      else
+        status=$?
+      fi
+      log "darwin-rebuild exited $status"
+
+      current=$(readlink /run/current-system)
+      if ! target=$(/nix/var/nix/profiles/default/bin/nix eval --raw \
+        "${flakeRef}/$sha#darwinConfigurations.${cfg.configurationName}.config.system.build.toplevel" 2>/dev/null); then
+        target=""
+      fi
+
+      # Uncommitted work in the checkout has just been reverted on this Mac,
+      # whether or not it was ever activated. A footnote, not a failure. Run as
+      # the owner because git refuses a repository owned by another user, and
+      # root is another user here. Deliberately `git status` rather than any
+      # comparison against the branch: the checkout is routinely behind simply
+      # because nobody has pulled, which says nothing about this Mac.
+      drift=""
+      subject=""
+      if [ -d "${cfg.checkoutPath}/.git" ]; then
+        changed=$(/usr/bin/sudo -u "$user" git -C "${cfg.checkoutPath}" status --porcelain 2>/dev/null | wc -l | tr -d ' ' || true)
+        if [ -n "$changed" ] && [ "$changed" -gt 0 ]; then
+          drift="$changed uncommitted file(s) in ${cfg.checkoutPath} are not part of this system any more."
+        fi
+        subject=$(/usr/bin/sudo -u "$user" git -C "${cfg.checkoutPath}" log -1 --format=%s "$sha" 2>/dev/null || true)
+      fi
+
+      if [ "$status" -ne 0 ]; then
+        headline="upgrade failed (exit $status)"
+        ok=0
+      elif [ -z "$target" ]; then
+        # A clean exit means activate() reached its last line, so this is
+        # unlikely -- but an unverifiable result is exactly what a lax notifier
+        # would wave through, so it counts as a failure.
+        headline="upgraded, but the result could not be verified"
+        ok=0
+      elif [ "$target" != "$current" ]; then
+        headline="exited cleanly but the system does not match ${cfg.branch}@$short"
+        ok=0
+      else
+        headline="upgraded to ${cfg.branch}@$short"
+        ok=1
+      fi
+
+      detail=""
+      if [ -n "$subject" ]; then
+        detail="$detail"$'\n'"\`$short\` $subject"
+      fi
+      if [ -n "$drift" ]; then
+        detail="$detail"$'\n'"$drift"
+      fi
+
+      if [ "$ok" -eq 1 ]; then
+        log "success: $headline"
+        if [ -n "$drift" ]; then banner "$headline" "$drift"; else banner "$headline" "Applied cleanly."; fi
+        discord "🟢 **${cfg.configurationName}**: $headline$detail"
+        exit 0
+      fi
+
+      log "failure: $headline"
+      banner "$headline" "See ${cfg.errorLogFile}."
+      # The tail of this very run's stderr, the only record of why. The file is
+      # still open for writing; reading it back is fine.
+      excerpt=$(tail -n 25 "${cfg.errorLogFile}" 2>/dev/null | tail -c 1400 || true)
+      if [ -n "$excerpt" ]; then
+        detail="$detail"$'\n'"\`\`\`"$'\n'"$excerpt"$'\n'"\`\`\`"
+      fi
+      discord "🔴 **${cfg.configurationName}**: $headline$detail"
+      exit "$status"
+    '';
+  };
 in {
   options.custom.auto-upgrade-mac = {
     enable = lib.mkEnableOption "a daily unattended darwin-rebuild switch";
 
-    flake = lib.mkOption {
+    githubRepository = lib.mkOption {
       type = lib.types.str;
-      default = "github:MayurSaxena/nix-homelab";
+      default = "MayurSaxena/nix-homelab";
+      example = "owner/repo";
       description = ''
-        Flake to switch to. GitHub rather than a local checkout on purpose, so
-        this Mac follows the same "pushing to main deploys" rule as the NixOS
-        hosts.
+        `owner/repo` on GitHub. Both the `git ls-remote` URL and the `github:`
+        flake ref are derived from this. HTTPS deliberately: this runs with no
+        ssh-agent, and the SSH key is itself a YubiKey-gated secret.
+      '';
+    };
 
-        The consequence is the same one as on those hosts: uncommitted local
-        config that is currently activated gets reverted by the next run.
+    branch = lib.mkOption {
+      type = lib.types.str;
+      default = "main";
+      description = ''
+        Branch to follow. This repository deploys from `main` with no staging
+        step, the same as the NixOS hosts.
       '';
     };
 
@@ -67,8 +212,16 @@ in {
       default = "Mayurs-MacBook-Pro";
       description = ''
         The `darwinConfigurations` attribute key to switch to -- whatever
-        `flake.nix` registered, which is not necessarily the machine's live
-        hostname.
+        `flake.nix` registered, which need not be the machine's live hostname.
+      '';
+    };
+
+    user = lib.mkOption {
+      type = lib.types.str;
+      default = config.system.primaryUser;
+      description = ''
+        User whose session receives the notification banners, and whose
+        checkout is inspected for uncommitted work.
       '';
     };
 
@@ -76,13 +229,8 @@ in {
       type = lib.types.ints.between 0 23;
       default = 4;
       description = ''
-        Local hour to switch at. 4AM to match the NixOS hosts' upgrade window
-        (18:00 UTC + jitter is roughly 4AM AEST), so the whole fleet moves to
-        the same commit at about the same time.
-
-        launchd runs a missed `StartCalendarInterval` job once on wake, so a
-        laptop that was asleep still upgrades -- shortly after it opens rather
-        than at this hour.
+        Local hour to switch at, matching the NixOS hosts' window (18:00 UTC +
+        jitter is roughly 4AM AEST) so the fleet moves together.
       '';
     };
 
@@ -96,6 +244,66 @@ in {
       '';
     };
 
+    wake = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Schedule a `pmset repeat wakeorpoweron` shortly before the window, so
+        the switch happens at the hour rather than whenever the lid next opens.
+        launchd running the missed job on wake is the fallback, not the intent.
+
+        macOS supports exactly one repeating power schedule, so enabling this
+        takes ownership of it -- any `pmset repeat` set by hand is replaced on
+        the next activation.
+      '';
+    };
+
+    wakeLeadMinutes = lib.mkOption {
+      type = lib.types.ints.between 1 60;
+      default = 5;
+      description = ''
+        How long before the window to wake, giving the machine time to bring up
+        Wi-Fi before the first `git ls-remote`.
+      '';
+    };
+
+    networkAttempts = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 5;
+      description = ''
+        How many times to try resolving the branch before reporting the run as
+        unable to start. A freshly woken Mac frequently has no network for the
+        first few seconds.
+      '';
+    };
+
+    networkRetrySeconds = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 30;
+      description = "Delay between those attempts.";
+    };
+
+    checkoutPath = lib.mkOption {
+      type = lib.types.str;
+      default = "${home}/Projects/nix-homelab";
+      description = ''
+        Local clone. Inspected only with `git status --porcelain`, to warn that
+        uncommitted work has just been reverted, and to quote the applied
+        commit's subject when the checkout happens to have it.
+      '';
+    };
+
+    webhookFile = lib.mkOption {
+      type = lib.types.str;
+      default = "${home}/.config/sops-nix/secrets/discord/mac-update-webhook";
+      description = ''
+        Decrypted Discord webhook. It lives under the user's home rather than
+        /run/secrets because this Mac has no system-level sops: decryption needs
+        the YubiKey, which only the user's login agent has. Root can read it,
+        and its absence is handled rather than fatal.
+      '';
+    };
+
     logFile = lib.mkOption {
       type = lib.types.str;
       default = "/var/log/darwin-auto-upgrade.log";
@@ -106,18 +314,42 @@ in {
       type = lib.types.str;
       default = "/var/log/darwin-auto-upgrade.err";
       description = ''
-        Where the daemon's stderr goes. `custom.update-notifications` quotes the
-        tail of this file when it reports that the Mac has fallen behind, which
-        is the only way the reason for a failed unattended switch reaches
-        anyone -- nothing else watches it.
+        Where the daemon's stderr goes. Its tail is quoted in the failure
+        notification, since nothing else records why a switch failed.
+      '';
+    };
+
+    discord.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Post the outcome to a Discord webhook as well as the banner, so a run
+        that finishes while nobody is logged in is still reported.
+
+        Deliberately a different webhook from `custom.failure-notifications`':
+        that channel is for hosts breaking, this one carries a routine daily
+        success, and mixing them would make the failures easier to miss.
       '';
     };
   };
 
   config = lib.mkIf cfg.enable {
+    # On the system path so the plist can invoke it at a path that does not
+    # move. nix-darwin's launchd activation runs `launchctl unload` on any
+    # daemon whose plist content changed, which terminates a running job -- and
+    # it unloads *before* copying the new plist, so a plist embedding a store
+    # path would change on every nixpkgs bump, kill its own switch partway
+    # through activation, and never install the replacement. Referencing
+    # /run/current-system/sw/bin keeps the plist byte-identical forever.
+    #
+    # The corollary: changing an option above does change the plist, so apply
+    # such a change with a manual switch rather than letting the daemon apply
+    # it to itself.
+    environment.systemPackages = [upgrade];
+
     launchd.daemons.darwin-auto-upgrade = {
       serviceConfig = {
-        ProgramArguments = ["/bin/sh" "-c" switchScript];
+        ProgramArguments = ["/run/current-system/sw/bin/darwin-auto-upgrade"];
         StartCalendarInterval = [
           {
             Hour = cfg.hour;
@@ -126,15 +358,19 @@ in {
         ];
         StandardOutPath = cfg.logFile;
         StandardErrorPath = cfg.errorLogFile;
-        # A root daemon, so no sudo and therefore no Touch ID prompt to hang on.
-        # It does still need the user logged in: nix-darwin runs home-manager's
-        # activation through `launchctl asuser <uid> sudo -u <user>`, which needs
-        # a live user session and fails at the login window. A Mac left asleep
-        # while logged in -- the normal case -- is fine.
+        # A root daemon, so no sudo and no Touch ID prompt. It does still need
+        # the user logged in for the banner and for home-manager's own
+        # activation, which nix-darwin runs via `launchctl asuser <uid> sudo -u`.
         EnvironmentVariables = {
           PATH = "/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin:/usr/sbin:/sbin";
         };
       };
     };
+
+    system.activationScripts.postActivation.text = lib.mkIf cfg.wake (lib.mkAfter ''
+      # Wake (or power on) shortly before the upgrade window. macOS allows one
+      # repeating schedule, so this owns it.
+      /usr/bin/pmset repeat wakeorpoweron MTWRFSU ${wakeAt}
+    '');
   };
 }

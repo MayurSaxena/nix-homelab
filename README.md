@@ -154,16 +154,20 @@ own file on the first switch, not from the image.
 3. `sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake github:MayurSaxena/nix-homelab`
 4. Plug in a YubiKey for secrets decryption.
 5. Add a `discord/mac-update-webhook` key to `secrets/msaxena.yaml`, or set
-   `custom.update-notifications.discord.enable = false`. A missing key fails the *build*,
-   not activation: sops-nix validates its manifest against the sops file's key structure,
+   `custom.auto-upgrade-mac.discord.enable = false`. A missing key fails the *build*, not
+   activation: sops-nix validates its manifest against the sops file's key structure,
    which a sops YAML keeps in plaintext.
 
-The Mac switches by hand: nix-darwin has no `system.autoUpgrade`, and activation needs the
-YubiKey, so an unattended nightly switch would fail whenever the key was out.
-`custom.update-notifications` covers the gap instead — a daily launchd agent that evaluates
-`main`'s toplevel for this host, compares it to `/run/current-system`, and posts a
-notification banner plus a Discord message when a switch is due. Run
-`nix-homelab-update-check` to see the same check interactively.
+The Mac upgrades itself: `custom.auto-upgrade-mac` is a root LaunchDaemon that wakes the
+machine shortly before 4AM, resolves `main` to a commit, switches to that pinned SHA, and
+then verifies the result by comparing `/run/current-system` against what the commit
+evaluates to. It posts a banner when it starts, and a banner plus a Discord message when it
+finishes — green on success, red on a bad exit status or a system that does not match. A
+dirty checkout is reported as a footnote, since the switch has just reverted it.
+
+Run `darwin-auto-upgrade` as root to do the same thing on demand, or
+`sudo launchctl kickstart -k system/org.nixos.darwin-auto-upgrade` to exercise the daemon
+itself.
 
 This configures Touch ID / Watch sudo, Homebrew casks, App Store apps, zsh + starship, SSH
 keys, Dock/Finder preferences, and remote Nix builds.

@@ -4,8 +4,6 @@
   config,
   ...
 }: {
-  imports = [./update-notifications.nix];
-
   home = rec {
     stateVersion = "25.05";
     username = "msaxena";
@@ -145,6 +143,11 @@
         mode = "0600";
         path = "${config.home.homeDirectory}/.ssh/id_ed25519";
       };
+      # Declared here but consumed by the root auto-upgrade daemon
+      # (custom.auto-upgrade-mac), which reads the decrypted file from this
+      # user's home. The Mac has no system-level sops, because decryption needs
+      # the YubiKey and only this user's login agent has it.
+      "discord/mac-update-webhook" = {};
     };
   };
 }
