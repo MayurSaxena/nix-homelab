@@ -76,8 +76,11 @@ jobs:
       - run: nix eval --raw '.#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath'
 
   eval-darwin:
+    # On a macOS runner, not Linux: the catppuccin home-manager module imports a
+    # derivation during evaluation (IFD), which has to be *built* for the Mac's own
+    # platform. Free for a public repository.
     needs: hosts
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
