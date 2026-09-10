@@ -24,21 +24,6 @@
   ansible.windows.win_reboot:
   when: _hostname.reboot_required
 
-# SetupComplete.cmd tries this too, and on the first clone it did not take: the profile was
-# still Public afterwards, which is why 445 and 3389 were closed on a machine whose firewall
-# rules allowed them. Doing it here as well makes it re-runnable and self-healing. A domain
-# controller ends up DomainAuthenticated after promotion regardless, but everything before
-# promotion happens on this setting.
-- name: Move the connection out of the Public firewall profile
-  ansible.windows.win_shell: |
-    $p = Get-NetConnectionProfile | Where-Object { $_.NetworkCategory -eq 'Public' }
-    if ($p) {
-        $p | Set-NetConnectionProfile -NetworkCategory Private
-        Write-Output 'changed'
-    }
-  register: baseline_netcat
-  changed_when: "'changed' in baseline_netcat.stdout"
-
 - name: Set the timezone
   ansible.windows.win_timezone:
     timezone: "{{ baseline_timezone }}"

@@ -37,7 +37,6 @@ net user Administrator "$env:CLONE_PASSWORD" /active:yes
 sc config sshd start= auto
 net start sshd
 netsh advfirewall firewall add rule name="OpenSSH-22" dir=in action=allow protocol=TCP localport=22
-powershell -NoProfile -Command "Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private"
 type nul > "%~f0"
 "@
 Write-Host "first-boot commands appended to $setupComplete"

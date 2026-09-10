@@ -105,6 +105,23 @@ lab-play playbook="site.yml" *args:
     cd ansible
     ANSIBLE_PRIVATE_KEY_FILE="$key" ansible-playbook playbooks/{{playbook}} {{args}}
 
+# Copies rather than prints, because these are long random strings whose only real use is
+# being pasted into an RDP or console login. `just lab-cred` on its own lists what is there.
+
+# Copy a lab credential to the clipboard: `just lab-cred clone-admin-password`.
+lab-cred key="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "{{key}}" ]; then
+        echo "keys in secrets/lab.yaml:"
+        sops -d secrets/lab.yaml | grep -E '^[a-z][a-z0-9-]*:' | cut -d: -f1 | sed 's/^/  /'
+        echo
+        echo "usage: just lab-cred <key>"
+        exit 0
+    fi
+    sops -d --extract '["{{key}}"]' secrets/lab.yaml | tr -d '\n' | pbcopy
+    echo "copied {{key}} to the clipboard"
+
 # Credentials are decrypted straight into the process environment rather than written to a
 # .pkrvars file, so nothing lands on disk and nothing lands in shell history. PKR_VAR_ is
 # Packer's own convention for populating an input variable from the environment.

@@ -49,9 +49,20 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   memory {
     dedicated = var.memory_size_mb
-    # Ballooning off: it needs a driver and a service inside the guest, and a Windows guest
-    # that loses either one gets squeezed by the host with no way to push back.
-    floating = 0
+
+    # floating == dedicated attaches the balloon device without ever reclaiming through it.
+    #
+    # The earlier value here was 0, which removes the device entirely. That looked harmless
+    # and was not: with no balloon device, Proxmox has no memory statistics from the guest
+    # and falls back to reporting the QEMU process's resident size, which includes guest page
+    # cache and emulator overhead. A domain controller genuinely using 38% of its RAM showed
+    # as 4502MB of 4096MB in the Proxmox summary -- over 100%, and an invitation to solve a
+    # capacity problem that does not exist.
+    #
+    # Ballooning reclaims only down to this floor, so setting it equal to the allocation
+    # gives accurate reporting with no possibility of the host squeezing the guest. The
+    # driver and service arrive with the VirtIO guest tools the templates install.
+    floating = var.memory_size_mb
   }
 
   disk {
