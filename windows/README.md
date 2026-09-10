@@ -8,6 +8,26 @@ golden templates, OpenTofu for cloning them into VMs, and Ansible for turning a 
 domain controller, a member, or the FLARE-VM box. Read `CLAUDE.md` for how that fits beside
 the LXC pipeline; this file covers only what the repo cannot do for itself.
 
+## Addressing
+
+VLAN 90 is `10.0.90.0/24`, gateway `10.0.90.1`, and **runs no DHCP**. Range VMs take static
+addresses from OpenTofu, and leaving DHCP unclaimed means the lab domain controller can serve
+it later without contending with the router.
+
+| Block | Use |
+|---|---|
+| `.10`&ndash;`.19` | Servers. `lab-dc01` is `.10`. |
+| `.20`&ndash;`.39` | Domain-joined workstations. `lab-ws01` is `.21`. |
+| `.50`&ndash;`.59` | Pets. `flare01` is `.50`. |
+| `.99` | Packer builds, and nothing else. |
+| `.100`+ | Left free for a DHCP scope the lab DC might serve one day. |
+
+`.99` exists because a Packer build has no OpenTofu behind it to assign an address, so the
+unattend sets one itself. Deliberately outside every block above: two concurrent builds would
+collide with each other, which is obvious and harmless, rather than with a range VM, which
+would not be. The address is build-only — sysprep discards it, and cloudbase-init assigns the
+clone its real one from the cloud-init drive.
+
 ## Media
 
 Three ISOs are needed. Two are declared in `provisioning/images.tf` and arrive with
