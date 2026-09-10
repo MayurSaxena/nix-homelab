@@ -79,3 +79,27 @@ apply *args:
 # Delete old system generations, keeping the last five.
 gc:
     nh clean all --keep 5
+
+# Deliberately not OpenTofu's job: tofu owns packer@pve's role, user and ACLs, but a token
+# secret it managed would sit in the committed state file. See provisioning/rbac.tf. PVE
+# reveals a token's secret only at creation, so rotating is delete-then-create; both the old
+# and new token carry the same privileges, which come from the ACLs, not from the token.
+
+# Mint or rotate the Packer API token into secrets/msaxena.yaml.
+packer-token:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source util/pve-auth.sh
+    user="packer@pve"; tok="packerbuild"
+    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
+          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
+    url="${PROXMOX_VE_ENDPOINT}api2/json/access/users/${user}/token/${tok}"
+    # A first run has nothing to delete; a rotation does. Neither case should abort.
+    curl -sk -X DELETE "${auth[@]}" "$url" >/dev/null || true
+    value=$(curl -sk -X POST "${auth[@]}" \
+        --data-urlencode 'privsep=0' \
+        --data-urlencode 'comment=Packer image builds. Secret lives in secrets/msaxena.yaml.' \
+        "$url" | jq -er '.data.value')
+    sops set secrets/msaxena.yaml '["proxmox"]["packer-token-id"]' "\"${user}!${tok}\""
+    sops set secrets/msaxena.yaml '["proxmox"]["packer-token-secret"]' "\"${value}\""
+    echo "wrote proxmox/packer-token-id and proxmox/packer-token-secret to secrets/msaxena.yaml"
