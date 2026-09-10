@@ -13,10 +13,10 @@ choice depends on the service, this document tells you **how to work out the ans
 
 ## What this is
 
-A declarative homelab. Thirteen NixOS hosts run as unprivileged LXC containers on a single
-Proxmox node, plus one nix-darwin Mac. Containers are provisioned by OpenTofu, built from
-CI-published base images, and configured entirely from this flake. Most have an ephemeral
-root filesystem that is wiped on every boot.
+A declarative homelab. The NixOS hosts (`flake.nix` is the authoritative list) run as
+unprivileged LXC containers on a single Proxmox node, plus one nix-darwin Mac. Containers
+are provisioned by OpenTofu, built from CI-published base images, and configured entirely
+from this flake. Most have an ephemeral root filesystem that is wiped on every boot.
 
 **The invariant everything serves:** any host can be destroyed and rebuilt from this
 repository alone. If a change only works because of state you created by hand on a running
@@ -99,7 +99,7 @@ modules/macos/         nix-darwin equivalents (deliberately not shared with NixO
 modules/home-manager/  The Mac user. msaxena.nix (packages, secrets, theme) imports
                        shell.nix, git.nix and aerospace.nix; vscode/settings.json is
                        symlinked out-of-store so VS Code can still write it
-modules/beszel-agent.nix   Monitoring agent (shared, imported by the NixOS base)
+modules/beszel-agent.nix   Monitoring agent (NixOS-only despite the location; imported by the NixOS base)
 provisioning/          OpenTofu: container definitions and base-image downloads
 secrets/               SOPS-encrypted files
 assets/                Files committed in the clear — hookscript, pubkeys, and the
@@ -132,8 +132,8 @@ Three things follow, and all three catch people out:
 - **No `system` argument is passed**, which is why every host file must set
   `nixpkgs.hostPlatform` itself.
 - **`lib.toList` means the argument may be a path or a list of modules.** Bare path is the
-  rule — there is exactly one list-form call site in the whole flake: `minecraft`, which is
-  how `nixpkgs.overlays` gets applied since host files are forbidden from setting it.
+  rule; the list form exists for one purpose, applying `nixpkgs.overlays` (`minecraft` is the
+  example), since host files are forbidden from setting it.
 
 `specialArgs` is the whole extra-args surface: `inputs` and `outputs`. **`outputs` has exactly
 one consumer**: `modules/home-manager/git.nix` reads `outputs.nixosConfigurations` to derive an
@@ -161,7 +161,7 @@ before adding anything system-wide:
 
 Also in scope automatically, via the base module's imports: sops-nix, NUR (`pkgs.nur`), the
 upstream impermanence module (pulled in transitively by `modules/nixos/impermanence.nix`), and
-all five `custom.*` modules.
+every `custom.*` module.
 
 **Never set `networking.hostName`** — `proxmox-lxc.nix` sets `manageHostName = false` and
 Proxmox supplies it.
@@ -170,7 +170,8 @@ Proxmox supplies it.
 
 ## The `custom.*` namespace
 
-All repo-local options live under `custom.*`. Five toggles are the standard host preamble:
+All repo-local options live under `custom.*`. A fixed block of toggles is the standard host
+preamble:
 
 | Option | What enabling it does | When to turn it off |
 |---|---|---|
@@ -183,6 +184,11 @@ All repo-local options live under `custom.*`. Five toggles are the standard host
 Plus `custom.domain` (default `home.mayursaxena.com`) and, on macOS only,
 `custom.remote-builds-mac.*` and `custom.auto-upgrade-mac.*`.
 
+`custom.failure-notifications` is the one toggle deliberately *outside* the preamble. It
+defaults to `true` (a Discord post when a nix maintenance unit fails; `units` lists which)
+and the only opt-out is the `base-lxc` CI image, whose host key isn't in `.sops.yaml` and so
+can't decrypt the webhook. Leave it unset in host files.
+
 **Where a Mac app goes.** GUI apps are Homebrew casks in `modules/macos/packages.nix`: a
 cask puts a real `.app` in `/Applications` with a stable path, so Spotlight, the Dock and the
 app's own updater all work. A menu-bar daemon with a home-manager module (AeroSpace) comes
@@ -193,13 +199,13 @@ README's *Deploying on a New Mac* lists that one-time manual setup. `~/.claude/s
 is likewise left to Claude Code, which writes it — the status line and notification scripts
 it points at are the managed part.
 
-**Write all five explicitly, including `false`, with a comment when you deviate.** Eleven of
-thirteen hosts set all five true. `nix-builder` disables impermanence (a wiped Nix store
+**Write every preamble toggle explicitly, including `false`, with a comment when you deviate.**
+All but two hosts set them all true. `nix-builder` disables impermanence (a wiped Nix store
 defeats a build cache), remote-builds (it would point at itself) and root-password;
 `minecraft` disables impermanence and remote-builds.
 
-Note the *comment* half of that rule is aspirational: of those five disabled toggles only
-`nix-builder`'s impermanence actually carries an explanation. The other four are bare. That's
+Note the *comment* half of that rule is aspirational: of those disabled toggles only
+`nix-builder`'s impermanence actually carries an explanation. The rest are bare. That's
 drift — comment yours anyway.
 
 ---
@@ -222,10 +228,9 @@ The fixed part is small. Everything after it is judgement.
 }
 ```
 
-Keep the five toggles in that order as a contiguous block. Add to the argument head only
+Keep the preamble toggles in that order as a contiguous block. Add to the argument head only
 what you use: `pkgs` when you name a package, a `let domain = config.custom.domain;` binding
-only under the test below. **Never add `lib`** — no host file uses it (`sabnzbd.nix`
-destructures it unused; that's a leftover, not a pattern).
+only under the test below. **Never add `lib`** — no host file uses it.
 
 ### Writing the `services.*` block
 
@@ -261,10 +266,13 @@ proxied and none of them reference `domain`. Don't add an unused binding.
 
 ### Do you need `imports`?
 
-Almost never. Exactly one host has one (`minecraft`, for `inputs.nix-minecraft.nixosModules.minecraft-servers`).
-Anything in nixpkgs needs no import, and the base module already brings in sops-nix, NUR,
-impermanence and the `custom.*` modules. Adding a third-party module is a
-three-place change: flake input, host `imports`, and — if it needs an overlay — an inline
+Only for a module that isn't in nixpkgs, and two shapes exist. A module from a dedicated
+flake input: `minecraft`, for `inputs.nix-minecraft.nixosModules.minecraft-servers`. A module
+from `nurpkgs`: `yamtrack` and `trek` each import
+`inputs.nur.repos.msaxena.modules.nixos.<name>`, which needs no new input because NUR is
+already one (see *When a package isn't in nixpkgs*). Anything in nixpkgs needs no import, and
+the base module already brings in sops-nix, NUR, impermanence and the `custom.*` modules.
+Adding a module from a *new* flake input is a three-place change: flake input, host `imports`, and — if it needs an overlay — an inline
 module list in `flake.nix`, never `nixpkgs.overlays` in the host file.
 
 ---
@@ -391,7 +399,7 @@ start. Omitting is correct when the service doesn't care.
 
 ### When you also need `systemd.tmpfiles.rules`
 
-Usually never — exactly one host does it. Add one when the `/persistent`-side directory must
+Usually never. Add one when the `/persistent`-side directory must
 pre-exist with the right owner before the unit's own pre-start runs. `paperless.nix` is the
 sole example; copy its idiom of interpolating `config.services.paperless.dataDir` rather than
 hardcoding a path, but don't copy the rule itself unless you've established the same need.
@@ -421,8 +429,8 @@ key; the `msaxena-keys` group (Mac SSH key + two YubiKeys) can decrypt everythin
 
 Ask whether more than one host needs the value **at runtime**.
 
-- **`secrets/common.yaml`** — encrypted to `*all-keys`. Today holds exactly one key,
-  `passwords/root`.
+- **`secrets/common.yaml`** — encrypted to `*all-keys`. Holds only what every host needs
+  at runtime: the root password and the Discord failure webhook.
 - **A dedicated per-host file** — the default for anything service-specific. Encrypted to
   `*msaxena-keys` plus that one host, so compromising one container doesn't expose another's
   credentials. One file per *host* is right even when several services share it
@@ -489,7 +497,7 @@ declared as `"homepage-secrets"` on a host whose flake key is `homepage`.
 
 ### How the path gets consumed
 
-Entirely upstream's API, with no repo convention. Six shapes already exist:
+Entirely upstream's API, with no repo convention. Several shapes already exist:
 `environmentFile` (singular string), `environmentFiles` (list), `secretFiles` (list, paired
 with `configFile = null`), `hashedPasswordFile`, an explicit `path =` relocation in
 home-manager, and a raw read of the decrypted path from an activation script (`files.nix`,
@@ -545,7 +553,7 @@ Judgement inside that shape:
 - **Document side effects at the point of compromise.** Enabling the beszel agent sets
   `services.dbus.implementation = "broker"` host-wide to dodge an early-boot deadlock, and
   says so in a comment. Match that.
-- **Check it's safe for the CI base images.** Both images build on a stock runner with no
+- **Check it's safe for the CI base image.** It builds on a stock runner with no
   remote builder, no age key and no homelab network. `sops.secrets` *declarations* are fine
   (decryption happens at activation, and `validateSopsFiles = false` stops eval reading the
   encrypted files), but anything referenced via `environment.etc` must exist in-repo.
@@ -590,8 +598,8 @@ So two shapes are available anywhere without further wiring:
 - **A package** — `pkgs.nur.repos.msaxena.<name>`. Nothing in the repo uses one yet, so
   you'd be setting the precedent.
 - **A NixOS module** — `inputs.nur.repos.msaxena.modules.nixos.<name>`, imported like any
-  other module. Nothing in the repo uses one currently (the `services.scrobblex` module that
-  used to be the live example was removed along with the service).
+  other module. `yamtrack.nix` and `trek.nix` are the live examples (`services.yamtrack`,
+  `services.trek`, both packaged in `nurpkgs`).
 
 Import a NUR module from the base module only when every host should see the option;
 otherwise put it in the one host's `imports`.
@@ -687,7 +695,7 @@ containers.
 
 `provisioning/provider.tf` authenticates as `root@pam` with a password/ticket, not an API
 token. **Don't try to move this to a token** — PVE hard-codes several operations, including
-setting a container's hookscript (`hook_script_file_id`, which 11 of the 13 hosts set), to
+setting a container's hookscript (`hook_script_file_id`, which every impermanent host sets), to
 literally require the `root@pam` identity. No role or privilege grant on a token bypasses
 this; it's a PVE limitation, not a provider one ([provider issue #570][pve-570],
 [PVE bugzilla #2582][pve-bz-2582], unlikely to be fixed). Since almost every host needs a
@@ -915,3 +923,14 @@ copy them as precedent:
   its own out-of-band passdb, not because it's the better pattern.
 - `minecraft`'s two disabled toggles and `nix-builder`'s remote-builds and root-password
   carry no explanatory comment, unlike `nix-builder`'s impermanence. Comment yours anyway.
+- **`assets/remote-builder` is a private key in a public repo, and the `nix` account it
+  unlocks on `nix-builder` has an unrestricted shell and is a Nix trusted user.** The
+  comment in `modules/nixos/remote-builds.nix` spells out why that is a fleet-wide problem
+  rather than the "build capacity only" trade-off it was meant to be. Do not copy the
+  pattern for any new key. The fix (rotate the key into sops, use the `nix-ssh` account
+  that `nix.sshServe` restricts to `nix-store --serve`) is planned, not done.
+- **Both YubiKey age identities are PIN=never/touch=never, and `secrets/msaxena.yaml`
+  holds the Proxmox root password together with its TOTP seed.** Deliberate, so login-time
+  decryption and `just apply` run unattended — but it means a plugged-in YubiKey is a single
+  factor for everything the Mac can decrypt, and the repo's "2FA" against PVE is really one
+  file. Know that before adding anything more sensitive to `msaxena.yaml`.

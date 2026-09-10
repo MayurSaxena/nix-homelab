@@ -2,7 +2,6 @@
   inputs,
   outputs,
   config,
-  lib,
   ...
 }: let
   domain = config.custom.domain;

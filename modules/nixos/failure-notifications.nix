@@ -16,9 +16,9 @@ in {
         Deliberately not `mkEnableOption`: every real host wants this, and the
         only config that must opt out is the `base-lxc` CI image, whose host
         key isn't in .sops.yaml and so can't decrypt the webhook at
-        activation. Defaulting to true keeps this off the standard five-toggle
-        host preamble, which would otherwise gain a sixth entry that is `true`
-        in all thirteen files.
+        activation. Defaulting to true keeps this off the standard host
+        preamble, which would otherwise gain an entry that is `true` in every
+        host file.
       '';
     };
 

@@ -19,11 +19,16 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # The remote-builder private key is committed to the repo. This is an
-    # intentional trade-off: impermanent LXC containers have no persistent
-    # state on first boot, so they can't decrypt SOPS secrets to retrieve a
-    # key. The nix user on the builder has no shell and only serves the Nix
-    # store — the blast radius of key exposure is limited to build capacity.
+    # The remote-builder private key is committed to the repo in the clear.
+    # KNOWN ISSUE, planned for rotation (see CLAUDE.md, Known drift). The repo
+    # is public; the key unlocks the `nix` account on the builder, which is a
+    # plain isNormalUser with the default shell -- not the ForceCommand-
+    # restricted `nix-ssh` account that nix.sshServe creates -- and that
+    # account is a Nix trusted user. Every host substitutes unsigned paths from
+    # that store, so the blast radius is the whole fleet, not build capacity.
+    # The original justification (impermanent hosts can't decrypt sops before
+    # their first switch) no longer holds: the CI image doesn't enable
+    # remote-builds, and onboard-host.sh builds through root@nix-builder.
     environment.etc.remote-builder-key = {
       source = ./../../assets/remote-builder;
       mode = "0400";

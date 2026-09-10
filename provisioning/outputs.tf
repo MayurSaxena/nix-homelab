@@ -49,3 +49,11 @@ output "beszel-hub" {
 output "servarr" {
   value = "${module.servarr.ct_id}: ${module.servarr.ct_address.v4[0]} ${module.servarr.ct_address.v6[0]}"
 }
+
+output "yamtrack" {
+  value = "${module.yamtrack.ct_id}: ${module.yamtrack.ct_address.v4[0]} ${module.yamtrack.ct_address.v6[0]}"
+}
+
+output "trek" {
+  value = "${module.trek.ct_id}: ${module.trek.ct_address.v4[0]} ${module.trek.ct_address.v6[0]}"
+}
