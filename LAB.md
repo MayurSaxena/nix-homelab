@@ -251,7 +251,7 @@ on the first clone (`qm cloudinit dump <vmid> user|network|meta`):
 | Setting | Where Proxmox writes it | Where cloudbase-init looks | Works? |
 |---|---|---|---|
 | Network | `network-config`, version 1 | the same | **Yes** |
-| Password | `user-data`, as cloud-config `password:` | `admin_pass` in `meta-data` | No |
+| Password | `user-data`, as cloud-config `password:` | `admin_pass` in `meta-data` | No, and worse |
 | Hostname | `user-data`, as cloud-config `hostname:` | `local-hostname` in `meta-data` | No |
 
 Proxmox's generated meta-data contains an instance-id and nothing else, so the two plugins
@@ -299,6 +299,19 @@ worth knowing before it sends someone chasing a network fault that does not exis
 authority is `qm agent <vmid> network-get-interfaces`, or simply connecting. A give-away that
 you are looking at the settled state rather than the transient one: cloudbase-init renames the
 interface to `eth0`, so an adapter still called `Ethernet` has not been configured yet.
+
+### Proxmox's cloud-init password field does nothing here
+
+It is visible in the VM's Cloud-Init tab and it is inert for Windows guests, which is worse
+than it sounds. Cloudbase-init rejects the cloud-config `password:` key Proxmox writes there
+(`Plugin 'password' is currently not supported`) and reads no `admin_pass` from a NoCloud
+meta-data drive either. Faced with no password it does not leave the account alone: it
+generates a random one and sets it.
+
+So the field is not merely ignored. Leaving the user plugins enabled means every clone ends
+up with an Administrator password nobody has recorded, silently overwriting whatever the
+answer file set. The fix is to remove `CreateUserPlugin` and `SetUserPasswordPlugin` from
+the plugin list, which is what `install-cloudbase-init.ps1` now does.
 
 ### The guest agent needs a driver, not just a service
 
