@@ -92,8 +92,12 @@ flake.nix              Inputs, both config builders, every host registration
 .sops.yaml             Which age keys decrypt which secret files (tofu-managed)
 hosts/<name>.nix       One file per host — service config and little else
 modules/nixos/         Base module + the custom.* capability modules
-modules/macos/         nix-darwin equivalents (deliberately not shared with NixOS)
-modules/home-manager/  The Mac user's dotfiles and personal secrets
+modules/macos/         nix-darwin equivalents (deliberately not shared with NixOS): base
+                       (system defaults), packages (casks, fonts, VS Code extensions),
+                       remote-builds, auto-upgrade
+modules/home-manager/  The Mac user. msaxena.nix (packages, secrets, theme) imports
+                       shell.nix, git.nix and aerospace.nix; vscode/settings.json is
+                       symlinked out-of-store so VS Code can still write it
 modules/beszel-agent.nix   Monitoring agent (shared, imported by the NixOS base)
 provisioning/          OpenTofu: container definitions and base-image downloads
 secrets/               SOPS-encrypted files
@@ -171,7 +175,17 @@ All repo-local options live under `custom.*`. Five toggles are the standard host
 | `custom.beszel-monitoring-agent.enable` | Monitoring agent; also takes `extraFilesystems` | Never — every host sets it |
 
 Plus `custom.domain` (default `home.mayursaxena.com`) and, on macOS only,
-`custom.remote-builds-mac.*`.
+`custom.remote-builds-mac.*` and `custom.auto-upgrade-mac.*`.
+
+**Where a Mac app goes.** GUI apps are Homebrew casks in `modules/macos/packages.nix`: a
+cask puts a real `.app` in `/Applications` with a stable path, so Spotlight, the Dock and the
+app's own updater all work. A menu-bar daemon with a home-manager module (AeroSpace) comes
+from nixpkgs through that module. CLI tools are `home.packages` or a `programs.*` module in
+`modules/home-manager/`. Fonts are `fonts.packages`, the only place macOS indexes them.
+Settings that macOS keeps in binary plists (Ice, Stats, Shottr) cannot be declared;
+README's *Deploying on a New Mac* lists that one-time manual setup. `~/.claude/settings.json`
+is likewise left to Claude Code, which writes it — the status line and notification scripts
+it points at are the managed part.
 
 **Write all five explicitly, including `false`, with a comment when you deviate.** Eleven of
 thirteen hosts set all five true. `nix-builder` disables impermanence (a wiped Nix store

@@ -23,13 +23,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Homebrew manager and associated taps
+    # Catppuccin theme modules for home-manager: one flavor setting themes ghostty, bat,
+    # fzf, starship, btop, delta, lazygit and friends on the Mac
+    catppuccin = {
+      url = "github:catppuccin/nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Homebrew manager and associated taps. homebrew/bundle is deliberately absent:
+    # `brew bundle` merged into Homebrew/brew itself and the tap is an empty stub.
     nix-homebrew = {
       url = "github:zhaofengli-wip/nix-homebrew";
-    };
-    homebrew-bundle = {
-      url = "github:homebrew/homebrew-bundle";
-      flake = false;
     };
     homebrew-core = {
       url = "github:homebrew/homebrew-core";

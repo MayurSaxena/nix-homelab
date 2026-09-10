@@ -169,17 +169,32 @@ Run `darwin-auto-upgrade` as root to do the same thing on demand, or
 `sudo launchctl kickstart -k system/org.nixos.darwin-auto-upgrade` to exercise the daemon
 itself.
 
-This configures Touch ID / Watch sudo, Homebrew casks, App Store apps, zsh + starship, SSH
-keys, Dock/Finder preferences, and remote Nix builds.
+This configures Touch ID / Watch sudo, Homebrew casks and VS Code extensions, App Store
+apps, fonts, zsh + starship + the CLI stack, Ghostty, AeroSpace + JankyBorders, git and SSH,
+macOS defaults (Dock, Finder, keyboard, screenshots), the Claude Code status line, and remote
+Nix builds — everything under `modules/macos/` and `modules/home-manager/`.
+
+A few things macOS will not let Nix do. After the first switch, by hand:
+
+- Grant Accessibility to Ghostty (for the ⌃` quick terminal) and AeroSpace when each asks.
+- Turn on Spotlight's clipboard history (System Settings → Spotlight) if wanted; it is
+  reachable with ⌘Space then ⌘4.
+- Arrange Ice's menu bar once. Point Shottr's save folder at `~/Pictures/Screenshots`.
+- Add `~/.ssh/id_ed25519.pub` to GitHub as a *signing* key: commits are SSH-signed with it.
+- Add to `~/.claude/settings.json` (Claude Code writes that file itself, so it is not
+  managed here): `"statusLine": {"type": "command", "command": "~/.claude/statusline.sh"}`
+  and a `Notification` hook whose command is `~/.claude/notify.sh`.
+- `killall Finder` once, so the declared Finder view settings apply.
 
 Note that under Determinate Nix the nix-darwin `nix.*` options are inert — daemon settings
-are written by activation scripts instead. See `modules/macos/remote-builds.nix`.
+are written by activation scripts instead. See `modules/macos/remote-builds.nix` and
+`modules/macos/auto-upgrade.nix`.
 
 ## Common Operations
 
 ```bash
 nix fmt .                                                       # alejandra
-nix build .#nixosConfigurations.<host>.config.system.toplevel   # check without switching
+nix build .#nixosConfigurations.<host>.config.system.build.toplevel   # check without switching
 nix eval .#nixosConfigurations.<host>.config.systemd.services.<unit>.serviceConfig
 nix flake update [<input>]
 sops secrets/<file>

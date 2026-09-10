@@ -1,7 +1,6 @@
 {
   inputs,
   outputs,
-  pkgs,
   ...
 }: {
   imports = [
@@ -20,7 +19,10 @@
     extraSpecialArgs = {inherit inputs outputs;};
     useGlobalPkgs = true;
     useUserPackages = true;
-    sharedModules = [inputs.sops-nix.homeManagerModules.sops]; # for secret management
+    sharedModules = [
+      inputs.sops-nix.homeManagerModules.sops # secret management
+      inputs.catppuccin.homeModules.catppuccin # one theme across every themed program
+    ];
 
     # Configure the msaxena user
     users.msaxena = {

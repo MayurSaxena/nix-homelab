@@ -17,6 +17,26 @@
         "type": "github"
       }
     },
+    "catppuccin": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788792980,
+        "narHash": "sha256-TX/Z3PQZQVHgy4g9OZpflVpuazwturkGolsRDkFVHiU=",
+        "owner": "catppuccin",
+        "repo": "nix",
+        "rev": "3142fdbeea0b181ad6600587dfe484ccb644dcc6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "catppuccin",
+        "repo": "nix",
+        "type": "github"
+      }
+    },
     "determinate": {
       "inputs": {
         "determinate-nixd-aarch64-darwin": "determinate-nixd-aarch64-darwin",
@@ -244,22 +264,6 @@
       "original": {
         "owner": "nix-community",
         "repo": "home-manager",
-        "type": "github"
-      }
-    },
-    "homebrew-bundle": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1745335228,
-        "narHash": "sha256-TIKR2UgtyUmHLNZp255/vLs+1I10hXe+sciMEbAGFwE=",
-        "owner": "homebrew",
-        "repo": "homebrew-bundle",
-        "rev": "a3265c84b232e13048ecbf6fc18a2eedfadbeb08",
-        "type": "github"
-      },
-      "original": {
-        "owner": "homebrew",
-        "repo": "homebrew-bundle",
         "type": "github"
       }
     },
@@ -525,12 +529,12 @@
     },
     "root": {
       "inputs": {
+        "catppuccin": "catppuccin",
         "determinate": "determinate",
         "geysermc-3p-cosmetics": "geysermc-3p-cosmetics",
         "geysermc-floodgate-spigot": "geysermc-floodgate-spigot",
         "geysermc-geyser-spigot": "geysermc-geyser-spigot",
         "home-manager": "home-manager",
-        "homebrew-bundle": "homebrew-bundle",
         "homebrew-cask": "homebrew-cask",
         "homebrew-core": "homebrew-core",
         "impermanence": "impermanence",
