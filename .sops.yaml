@@ -30,10 +30,11 @@ creation_rules:
       - age:
         - *msaxena-keys
 
-  # Windows lab credentials. No host anchor: the Windows VMs have no age key and decrypt
-  # nothing themselves. Packer, OpenTofu and Ansible all read this from the Mac and hand
-  # the values to the guests, so *msaxena-keys alone is correct here.
-  - path_regex: secrets/windows.yaml$
+  # Lab credentials, for every guest on VLAN 90 rather than the Windows ones specifically.
+  # No host anchor: these guests hold no age key and decrypt nothing themselves. Packer,
+  # OpenTofu and Ansible all read this from the Mac and hand the values to the guests, so
+  # *msaxena-keys alone is correct here.
+  - path_regex: secrets/lab.yaml$
     key_groups:
       - age:
         - *msaxena-keys

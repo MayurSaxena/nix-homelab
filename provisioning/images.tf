@@ -23,7 +23,7 @@ resource "proxmox_virtual_environment_download_file" "nixos-standard-nightly" {
 }
 
 # ---------------------------------------------------------------------------
-# Windows lab media (see windows/README.md).
+# Windows lab media (see LAB.md).
 #
 # Only two of the three ISOs the Windows pipeline needs can be declared here, and the
 # split is an upstream constraint rather than a gap worth closing:
@@ -41,7 +41,7 @@ resource "proxmox_virtual_environment_download_file" "nixos-standard-nightly" {
 #
 # One Windows 11 ISO covers every client: the domain-joined workstations and the
 # FLARE-VM box all come from a single Pro template, left unactivated. See the edition
-# rationale in windows/README.md, including the one thing that would justify adding an
+# rationale in LAB.md, including the one thing that would justify adding an
 # Enterprise template later.
 # ---------------------------------------------------------------------------
 

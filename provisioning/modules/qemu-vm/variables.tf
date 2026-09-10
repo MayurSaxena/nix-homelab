@@ -20,7 +20,7 @@ variable "template_vm_id" {
   type        = number
   nullable    = false
   description = <<-EOT
-    VMID of the Packer-built template to clone. See windows/packer for how these are made
+    VMID of the Packer-built template to clone. See packer/ for how these are made
     and provisioning/rbac.tf for the block of ids reserved for them.
   EOT
 }
@@ -126,7 +126,7 @@ variable "enable_agent" {
   description = <<-EOT
     Requires the QEMU guest agent inside the guest. With this on and the agent missing,
     Proxmox reports no IP and waits the full timeout on every stop. The templates in
-    windows/packer install it.
+    packer/ install it.
   EOT
 }
 

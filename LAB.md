@@ -1,32 +1,57 @@
-# windows
+# The lab (VLAN 90)
 
-The Windows half of the homelab: a small Active Directory range plus a persistent analysis
-workstation, on VLAN 90 (`10.0.90.0/24`, forest `lab.internal`).
+Everything on `10.0.90.0/24`: a proper Active Directory range (domain controller, member
+servers, domain-joined workstations), plus research boxes, CTF machines and tool machines of
+whatever operating system a task needs. Forest `lab.internal`.
 
 Unlike the NixOS hosts, none of this is configured by the flake. The pipeline is Packer for
-golden templates, OpenTofu for cloning them into VMs, and Ansible for turning a clone into a
-domain controller, a member, or the FLARE-VM box. Read `CLAUDE.md` for how that fits beside
-the LXC pipeline; this file covers only what the repo cannot do for itself.
+golden images that have to be built, OpenTofu for cloning them into guests, and Ansible for
+turning a clone into a role. Read `CLAUDE.md` for how that sits beside the LXC pipeline; this
+file covers the lab's own decisions.
 
-## Addressing
+Two standards apply, and they pull in different directions on purpose:
 
-VLAN 90 is `10.0.90.0/24`, gateway `10.0.90.1`, and **runs no DHCP**. Range VMs take static
-addresses from OpenTofu, and leaving DHCP unclaimed means the lab domain controller can serve
-it later without contending with the router.
+- **The AD range is built properly.** Real forest, real DNS, real GPO, static addressing,
+  reproducible from the playbook.
+- **Everything else works out of the box, or close to it.** A CTF box or a research VM should
+  boot, get an address and be usable. If a machine needs a bespoke build to be useful, that is
+  a reason to question the machine, not to write more automation.
 
-| Block | Use |
-|---|---|
-| `.10`&ndash;`.19` | Servers. `lab-dc01` is `.10`. |
-| `.20`&ndash;`.39` | Domain-joined workstations. `lab-ws01` is `.21`. |
-| `.50`&ndash;`.59` | Pets. `flare01` is `.50`. |
-| `.99` | Packer builds, and nothing else. |
-| `.100`+ | Left free for a DHCP scope the lab DC might serve one day. |
+## Addressing and DNS
 
-`.99` exists because a Packer build has no OpenTofu behind it to assign an address, so the
-unattend sets one itself. Deliberately outside every block above: two concurrent builds would
-collide with each other, which is obvious and harmless, rather than with a range VM, which
-would not be. The address is build-only — sysprep discards it, and cloudbase-init assigns the
-clone its real one from the cloud-init drive.
+VLAN 90 is `10.0.90.0/24`, gateway `10.0.90.1`, with **UniFi serving DHCP from `.100` to
+`.199`** and handing out technitium (`10.0.10.2`) as the resolver.
+
+| Block | Use | Assigned by |
+|---|---|---|
+| `.10`&ndash;`.19` | Servers. `lab-dc01` is `.10`. | OpenTofu, static |
+| `.20`&ndash;`.39` | Domain-joined workstations. `lab-ws01` is `.21`. | OpenTofu, static |
+| `.50`&ndash;`.59` | Pets. `flare01` is `.50`. | OpenTofu, static |
+| `.99` | Packer builds, and nothing else. | The unattend, static |
+| `.100`&ndash;`.199` | Everything disposable: CTF boxes, research VMs, live ISOs. | UniFi DHCP |
+
+**Static only where it earns it.** A machine takes a static address if something must find it
+at a known place: the domain controller, anything domain-joined (which also needs the DC as
+its resolver), and the Packer build. Everything else DHCPs. The `qemu-vm` module accepts
+`ipv4_settings = "dhcp"` for exactly this, so it is a choice per guest rather than a policy.
+
+**DHCP hands out technitium, not the domain controller**, and that is deliberate in both
+directions. Pointing it at the DC would make every CTF box depend on the DC being up to
+resolve anything at all. Pointing it at the DC *with technitium as a secondary* is worse
+still: a Windows domain member that queries a non-AD resolver gets NXDOMAIN for the SRV
+records it needs and then fails intermittently, in ways that look like AD is broken.
+Microsoft's guidance is that domain members resolve only against AD DNS, and the way to
+honour that here is to give them their resolver statically rather than through DHCP.
+
+Technitium conditionally forwards `lab.internal` to the DC, so a disposable box on DHCP can
+still resolve `lab-dc01.lab.internal` in order to attack it. That is the point of keeping the
+whole lab on one flat VLAN rather than separating the AD range: a firewall between your Kali
+box and your domain controller sits in the path of exactly the traffic you care about.
+
+`.99` exists because a Packer build has no OpenTofu behind it. It is deliberately outside
+every other block, so two concurrent builds collide with each other, which is obvious, rather
+than with a range VM, which would not be. The address is build-only: sysprep discards it, and
+cloud-init assigns the clone its real one.
 
 ## Media
 
@@ -52,6 +77,27 @@ Upload*. The file name matters, because `provisioning/vms.tf` refers to it:
 
 [consumer]: https://www.microsoft.com/software-download/windows11
 [eval]: https://www.microsoft.com/en-us/evalcenter/evaluate-windows-11-enterprise
+
+## When to build an image, and when not to
+
+**Packer is the expensive option. Reach for it only when there is no image to download.**
+
+Windows is that case, and essentially the only one: Microsoft ships no cloud image, so a
+usable Windows guest has to be built. That build is why `packer/` exists.
+
+Most Linux distributions publish a cloud image that already carries cloud-init and the QEMU
+guest agent, which is the entire content of a Packer build. Kali and Parrot both do. For
+those, download the image with a `proxmox_virtual_environment_download_file` resource next to
+the ISOs in `provisioning/images.tf`, clone it with `qemu-vm`, and configure it with Ansible
+if it needs anything at all. That is less work to write and nothing to maintain, and it is
+what "works out of the box" actually looks like.
+
+Build a Linux template only when something must exist *before first boot* that cloud-init
+cannot do at boot time. That is rare. A slow package install is not a reason on its own;
+a snapshot after first configuration gets you the same speed without a second pipeline.
+
+The `qemu-vm` module does not care which kind of thing it is cloning, so this is a decision
+per image rather than an architectural fork.
 
 ## Which edition goes where, and why
 
@@ -148,11 +194,10 @@ only matters once a second DC exists, but it is cheap to settle while the range 
 
 ## What here is Windows-specific, and what is not
 
-Most of this pipeline is not really about Windows. It is about *guests the flake cannot
-configure*, which today means Windows but tomorrow could mean a Kali or Parrot VM in the
-range, or a production appliance that ships as an image rather than a package. The two VMs
-already on the node (`parrot`, `onion`) are exactly that shape and are currently built by
-hand, outside OpenTofu.
+
+Almost none of this pipeline is about Windows. It is about *guests the flake cannot
+configure*, which covers the whole lab and, beyond it, the two VMs already on the node
+(`parrot`, `onion`) that are built by hand outside OpenTofu today.
 
 The line drawn here is **whether a thing holds OpenTofu state**, because that decides
 whether generalising it later is free or painful:
@@ -162,7 +207,7 @@ whether generalising it later is free or painful:
 | `provisioning/modules/qemu-vm` | **Yes, from the start** | Holds state. Renaming it later means `moved` blocks or `tofu state mv` against every VM built from it. Costs nothing to name generically today. |
 | `provisioning/vms.tf` | **Yes, from the start** | One file for every QEMU guest, lab and production alike, keeping `main.tf` LXC-only. |
 | `packer@pve` ACL block | **Yes, from the start** | Grants a reserved template VMID range rather than the ids in use, so a new template needs no permission change. |
-| `packer/` and `ansible/` layout | **Deferred, deliberately** | No state. Hoisting them out of `windows/` later is a `git mv` and one path in a recipe. Restructuring now would be guessing at a second image pipeline that does not exist. |
+| `packer/` and `ansible/` layout | **Yes, now** | Held no state, so this was deferred while a second image pipeline was speculative. It stopped being speculative, so they were hoisted to the repo root and `windows/` was retired. The move cost a `git mv` and one path in a recipe, exactly as predicted. |
 | Windows roles and unattend files | **No, and that is fine** | `sysprep`, cloudbase-init, VirtIO driver injection and `microsoft.ad` are Windows by nature. |
 
 So `modules/qemu-vm` takes `os_type`, `bios`, `machine` and whether to attach TPM state as
@@ -203,4 +248,4 @@ Pin nothing by hand here. These move with `flake.lock` like everything else, and
 
 Later, an always-on `lab-controller` LXC can take this role over. Nothing under `windows/`
 would need to change; it would gain the same two packages and a checkout, and its age key
-would be added to the `secrets/windows.yaml` rule.
+would be added to the `secrets/lab.yaml` rule.

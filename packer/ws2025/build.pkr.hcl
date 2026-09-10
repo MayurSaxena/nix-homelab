@@ -41,7 +41,7 @@ variable "admin_password" {
 # The lab VLAN deliberately has no DHCP server: range VMs get static addresses from
 # OpenTofu, and leaving DHCP free means the lab domain controller can serve it later without
 # a fight. A template build therefore has to bring its own address. .99 is reserved for that
-# and sits outside every block windows/README.md allocates to real machines, so two builds
+# and sits outside every block LAB.md allocates to real machines, so two builds
 # would collide with each other but never with a range VM.
 variable "build_ip" {
   type    = string
@@ -164,10 +164,20 @@ source "proxmox-iso" "ws2025" {
 
   qemu_agent = true
 
-  # Answering the "press any key to boot from CD or DVD" prompt. Miss this window and the
-  # VM falls through to the empty disk and sits at a UEFI shell until the build times out.
-  boot_wait    = "3s"
-  boot_command = ["<enter>"]
+  # Answering the "Press any key to boot from CD or DVD" prompt.
+  #
+  # A single keystroke after a fixed wait does not work: the prompt appears somewhere
+  # between two and eight seconds after power-on depending on how long OVMF takes, and it
+  # only stays up for about five. Miss it and the VM falls through to the empty disk,
+  # prints "no bootable media found", and then sits there until the WinRM timeout expires
+  # -- ninety minutes of nothing, reported as a communicator failure rather than as a boot
+  # failure. Observed exactly that on the first run.
+  #
+  # So hold the key down instead of tapping it: press Enter once a second for twenty
+  # seconds, which covers the whole window wherever it lands. Extra presses after setup has
+  # started are harmless, because the autounattend answers every screen they could hit.
+  boot_wait    = "2s"
+  boot_command = ["<enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter>"]
 
   communicator   = "winrm"
   winrm_username = "Administrator"
@@ -176,7 +186,10 @@ source "proxmox-iso" "ws2025" {
   # still installed early by the unattend, because the builder waits on it regardless.
   winrm_host = var.build_ip
   # Generous: this covers the whole unattended install, not just a reboot.
-  winrm_timeout = "90m"
+  # Setup plus FirstLogonCommands runs in about twenty-five minutes. Forty-five leaves room
+  # for a slow Windows Update pass without turning every failed run into a ninety-minute
+  # wait before the log says anything useful.
+  winrm_timeout = "45m"
 }
 
 build {

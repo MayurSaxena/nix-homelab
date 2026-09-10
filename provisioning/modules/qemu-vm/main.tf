@@ -4,7 +4,7 @@
 # arrive as variables (os_type, bios, machine, enable_tpm via the template), and a Linux
 # guest uses the same module with different ones. This resource holds OpenTofu state, so
 # naming it generically now avoids `moved` blocks or state surgery later -- see the
-# generalisation note in windows/README.md.
+# generalisation note in LAB.md.
 
 terraform {
   required_providers {
