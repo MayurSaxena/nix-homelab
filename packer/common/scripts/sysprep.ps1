@@ -6,29 +6,15 @@ $ErrorActionPreference = 'Stop'
 $cbDir    = Join-Path $env:ProgramFiles 'Cloudbase Solutions\Cloudbase-Init'
 $unattend = Join-Path $cbDir 'conf\Unattend.xml'
 if (-not (Test-Path $unattend)) { throw "cloudbase-init's Unattend.xml is missing at $unattend; did install-cloudbase-init.ps1 run?" }
-if (-not $env:CLONE_PASSWORD)   { throw "CLONE_PASSWORD is not set; the build must pass it in." }
 
-# Set the credential every clone will carry, here, at build time.
+# No password is set here any more, and that is the point of the detour above.
 #
-# This used to be written into the sysprep answer file and then re-applied by a
-# SetupComplete.cmd script on the clone's first boot. Neither worked: a clone came up with
-# the answer file's password rejected and SetupComplete.cmd still at full length, when it
-# truncates itself on execution. Worse, a script that never runs never scrubs itself, so
-# every clone carried this password in cleartext at a known path.
-#
-# Testing a live clone showed the whole mechanism was unnecessary. What survives sysprep is
-# almost everything it was re-establishing:
-#
-#   Administrator password   survives   (verified: the build's password still authenticates)
-#   sshd running             survives   (start type Automatic is preserved)
-#   firewall rules           survive
-#   cloudbase-init running   does NOT   (its installer leaves the service on Manual)
-#
-# So setting it now is enough, and Packer is connected by key rather than by password, so
-# changing it underneath the session is harmless.
-& net user Administrator "$env:CLONE_PASSWORD" /active:yes | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "net user failed with $LASTEXITCODE" }
-Write-Host "Administrator password set for clones"
+# Proxmox delivers a per-VM password through cloud-init metadata for a Windows guest, and
+# cloudbase-init applies it. Baking one at build time was a workaround for that not
+# happening, and the reason it was not happening was this repo telling Proxmox to use NoCloud
+# instead of the configdrive2 format it picks for Windows on its own. With that corrected,
+# every clone gets its own password from `ci_password` in the module rather than sharing one
+# compiled into the image.
 
 # The one thing that genuinely does not survive. Its installer leaves the service on Manual,
 # and a clone therefore never applies its cloud-init configuration: no address, no hostname,

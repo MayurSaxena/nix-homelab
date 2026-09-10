@@ -90,9 +90,22 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   initialization {
     datastore_id = var.vm_disk_datastore
-    # NoCloud rather than the OpenStack default: it is the format cloudbase-init's
-    # NoCloudConfigDriveService reads, and the templates are configured for it.
-    type = "nocloud"
+    # configdrive2, which is what Proxmox itself picks for a Windows ostype when nothing
+    # overrides it, and the comment in its Cloudinit.pm says why: "windows' cloudbased-init
+    # only supports configdrivev2".
+    #
+    # This was set to "nocloud" and that was the mistake behind a long detour. Proxmox has
+    # first-class cloudbase-init support: generate_configdrive2 branches on the ostype and
+    # calls cloudbase_configdrive2_metadata, which writes admin_pass and public_keys into
+    # metadata. NoCloud gets none of that -- NoCloudConfigDriveService does not even
+    # implement get_admin_password -- so cloudbase-init found no password, generated a
+    # random one, and the credential nobody could explain was Proxmox doing the right thing
+    # and this module telling it not to.
+    #
+    # Note that `qm cloudinit dump <vmid> meta` does NOT show this: it calls a different
+    # function and prints the generic metadata, so it will not show admin_pass even when the
+    # drive the guest sees contains it.
+    type = "configdrive2"
 
     dns {
       domain  = var.domain

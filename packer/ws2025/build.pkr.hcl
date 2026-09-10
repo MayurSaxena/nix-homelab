@@ -55,18 +55,6 @@ variable "ansible_public_key" {
   EOT
 }
 
-variable "clone_password" {
-  type        = string
-  sensitive   = true
-  description = <<-EOT
-    Administrator password every clone carries, set at the end of the build because it
-    survives sysprep. It cannot come from cloud-init: Proxmox writes the password into
-    user-data as Linux cloud-config, which cloudbase-init explicitly does not support, and
-    reads admin_pass from meta-data, which Proxmox leaves empty. Ansible does not use it;
-    it is the break-glass console credential.
-  EOT
-}
-
 variable "node" {
   type    = string
   default = "proxmox"
@@ -233,8 +221,7 @@ build {
   }
 
   provisioner "powershell" {
-    environment_vars = ["CLONE_PASSWORD=${var.clone_password}"]
-    scripts          = ["${path.root}/../common/scripts/sysprep.ps1"]
+    scripts = ["${path.root}/../common/scripts/sysprep.ps1"]
     # sysprep shuts the VM down, which looks like a dropped connection to Packer.
     valid_exit_codes = [0, 2, 259]
   }

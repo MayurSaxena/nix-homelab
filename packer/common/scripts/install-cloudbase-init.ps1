@@ -25,15 +25,36 @@ if ($p.ExitCode -ne 0) { throw "msiexec exited $($p.ExitCode)" }
 
 $confDir = Join-Path $env:ProgramFiles 'Cloudbase Solutions\Cloudbase-Init\conf'
 
-# Point it at the config drive and enable the plugins the clone actually needs. Written in
-# full rather than patched, so what the template ships is exactly what is in this repo.
-@"
+# Configured for ConfigDrive, which is what Proxmox emits for a Windows guest.
+#
+# Proxmox's generate_configdrive2 branches on ostype: for Windows it calls
+# cloudbase_configdrive2_metadata, which puts admin_pass and public_keys into metadata
+# exactly where cloudbase-init's ConfigDriveService looks for them. Pointing this at NoCloud
+# instead -- which an earlier revision did -- throws all of that away, because
+# NoCloudConfigDriveService implements no get_admin_password at all and SetUserPasswordPlugin
+# then falls through to generating a random one.
+$confBody = @"
 [DEFAULT]
-# No username/groups/inject_user_password: those configure the user plugins removed below.
+username=Administrator
+groups=Administrators
+inject_user_password=true
+
+# The password arrives in metadata rather than being invented here, so the user plugins are
+# wanted. They were removed once, when the password appeared to be randomised; the cause was
+# the metadata service above, not the plugins.
+metadata_services=cloudbaseinit.metadata.services.configdrive.ConfigDriveService
+
+plugins=cloudbaseinit.plugins.common.mtu.MTUPlugin,cloudbaseinit.plugins.common.sethostname.SetHostNamePlugin,cloudbaseinit.plugins.windows.createuser.CreateUserPlugin,cloudbaseinit.plugins.common.setuserpassword.SetUserPasswordPlugin,cloudbaseinit.plugins.common.networkconfig.NetworkConfigPlugin,cloudbaseinit.plugins.windows.extendvolumes.ExtendVolumesPlugin,cloudbaseinit.plugins.common.userdata.UserDataPlugin
+
+# Leaves the account logged-off rather than forcing a password change at first logon, which
+# would make the credential in sops correct and unusable at the same time.
+first_logon_behaviour=no
+
 config_drive_raw_hhd=true
 config_drive_cdrom=true
 config_drive_vfat=true
 bsdtar_path=C:\Program Files\Cloudbase Solutions\Cloudbase-Init\bin\bsdtar.exe
+mtools_path=C:\Program Files\Cloudbase Solutions\Cloudbase-Init\bin
 mtu_use_dhcp_config=true
 ntp_use_dhcp_config=false
 local_scripts_path=C:\Program Files\Cloudbase Solutions\Cloudbase-Init\LocalScripts\
@@ -41,24 +62,9 @@ logdir=C:\Program Files\Cloudbase Solutions\Cloudbase-Init\log\
 logfile=cloudbase-init.log
 default_log_levels=comtypes=INFO,suds=INFO,iso8601=WARN,requests=WARN
 verbose=true
-
-# NoCloud first: that is the format Proxmox writes. The others are harmless fallbacks and
-# cost only a few seconds of probing if the drive is not where the first service expects.
-metadata_services=cloudbaseinit.metadata.services.nocloudservice.NoCloudConfigDriveService,cloudbaseinit.metadata.services.configdrive.ConfigDriveService
-
-# CreateUserPlugin and SetUserPasswordPlugin are deliberately absent.
-#
-# They do not read a password from Proxmox and then fail quietly -- they generate a random
-# one and apply it. Cloudbase-init cannot get a password from a NoCloud drive at all: it
-# rejects the cloud-config `password:` key that Proxmox's cloud-init tab writes ("Plugin
-# 'password' is currently not supported") and reads no admin_pass from meta-data. So with
-# these enabled, SetupComplete.cmd sets the break-glass password, cloudbase-init starts
-# afterwards and overwrites it with something nobody has recorded, and the credential in
-# secrets/lab.yaml silently becomes fiction. Verified: it was rejected on a live guest.
-#
-# Dropping them leaves the account exactly as the answer file left it. Nothing else here
-# wants them: the SSH key is baked into the image, not injected.
-plugins=cloudbaseinit.plugins.common.mtu.MTUPlugin,cloudbaseinit.plugins.common.sethostname.SetHostNamePlugin,cloudbaseinit.plugins.windows.extendvolumes.ExtendVolumesPlugin,cloudbaseinit.plugins.common.networkconfig.NetworkConfigPlugin,cloudbaseinit.plugins.common.userdata.UserDataPlugin
-"@ | Set-Content -Path (Join-Path $confDir 'cloudbase-init.conf') -Encoding ASCII
+"@
+$confBody | Set-Content -Path (Join-Path $confDir 'cloudbase-init.conf') -Encoding ASCII
+# The unattend pass reads its own file; give it the same configuration.
+$confBody | Set-Content -Path (Join-Path $confDir 'cloudbase-init-unattend.conf') -Encoding ASCII
 
 Write-Host "cloudbase-init installed and configured"

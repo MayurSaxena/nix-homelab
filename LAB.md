@@ -270,64 +270,37 @@ the image: the first scratch clone came up on `10.0.90.99` with its adapter stil
 cloudbase-init service starts, so a bare clone gets a lease while a cloud-init clone still
 gets whatever cloud-init assigns.
 
-## What cloud-init does and does not do here
+## Cloud-init does the whole job, once Proxmox is left alone
 
-Proxmox and cloudbase-init only half agree, and the half that fails does so silently. Verified
-on the first clone (`qm cloudinit dump <vmid> user|network|meta`):
+Proxmox has first-class cloudbase-init support and this repo spent a long time fighting it.
 
-| Setting | Where Proxmox writes it | Where cloudbase-init looks | Works? |
-|---|---|---|---|
-| Network | `network-config`, version 1 | the same | **Yes** |
-| Password | `user-data`, as cloud-config `password:` | `admin_pass` in `meta-data` | No, and worse |
-| Hostname | `user-data`, as cloud-config `hostname:` | `local-hostname` in `meta-data` | No |
+`generate_configdrive2` in Proxmox's `Cloudinit.pm` branches on the guest's ostype. For a
+Windows one it calls `cloudbase_configdrive2_metadata`, which writes **`admin_pass`** and
+**`public_keys`** into metadata, exactly where cloudbase-init's `ConfigDriveService` looks for
+them. Proxmox even defaults to that format for Windows without being asked, with the comment:
 
-Proxmox's generated meta-data contains an instance-id and nothing else, so the two plugins
-that read it find nothing and do nothing. There is no error anywhere: the clone boots on the
-correct static address, with a hostname nobody chose and a password nobody knows, and the
-first symptom is a 401 from WinRM twenty minutes later.
+> No format specified, default based on ostype because windows' cloudbased-init only supports
+> configdrivev2
 
-There is a second layer, and finding it took two wrong turns worth recording.
+The `qemu-vm` module set `type = "nocloud"` instead, and everything that followed came from
+that one line. `NoCloudConfigDriveService` implements no `get_admin_password` at all, so
+`SetUserPasswordPlugin` fell through to `Generating a random user password`. Chasing that
+produced a sysprep answer file that did not apply, a `SetupComplete.cmd` that stopped running
+and left the password in cleartext in every image, and a documented break-glass credential
+that had never once worked.
 
-Writing `AdministratorPassword` into the sysprep answer file does not work: a clone built that
-way rejects the credential. Neither does re-establishing state from `SetupComplete.cmd`, which
-was the next attempt: a clone came up with that file still at its full length, when it
-truncates itself on execution, and with cloudbase-init still `Manual` and `Stopped`. That
-second failure was the worse of the two, because a script that never runs never scrubs itself,
-so every clone carried the break-glass password in cleartext at a known path.
+So the split is simply:
 
-Testing a live clone showed the whole mechanism was unnecessary. **Most of what a clone needs
-survives sysprep already:**
+- **Cloud-init owns hostname, address and the administrator password**, per VM, from
+  `vms.tf`. Nothing is compiled into the image.
+- **The template owns the SSH key**, baked into `administrators_authorized_keys` with
+  inheritance stripped, because Windows sshd ignores the usual file for administrators.
+- **Ansible owns everything after that**, and authenticates by key.
 
-| | Survives generalise? |
-|---|---|
-| Administrator password | yes, verified against a live clone |
-| sshd running | yes, the Automatic start type is preserved |
-| Firewall rules | yes |
-| cloudbase-init running | **no**, its installer leaves the service on `Manual` |
-
-So the work splits by what survives rather than by what a first-boot script can re-do:
-
-- **Cloud-init owns the network and the hostname.** The one part Proxmox and cloudbase-init
-  agree on, plus the cloud-config `hostname:` key its user-data handler acts on.
-- **The build owns everything else.** `sysprep.ps1` sets the clone password and flips
-  cloudbase-init to `Automatic`, both build-time settings that outlive generalisation. That
-  one start type is the entire remainder of what a first-boot script used to do.
-- **The template owns the SSH key.** Baked into `administrators_authorized_keys` with the ACL
-  stripped to SYSTEM and Administrators.
-- **Ansible owns everything after that**, and needs no bootstrap credential.
-
-### Proxmox's cloud-init password field does nothing here
-
-It is visible in the VM's Cloud-Init tab and it is inert for Windows guests, which is worse
-than it sounds. Cloudbase-init rejects the cloud-config `password:` key Proxmox writes there
-(`Plugin 'password' is currently not supported`) and reads no `admin_pass` from a NoCloud
-meta-data drive either. Faced with no password it does not leave the account alone: it
-generates a random one and sets it.
-
-So the field is not merely ignored. Leaving the user plugins enabled means every clone ends
-up with an Administrator password nobody has recorded, silently overwriting whatever the
-answer file set. The fix is to remove `CreateUserPlugin` and `SetUserPasswordPlugin` from
-the plugin list, which is what `install-cloudbase-init.ps1` now does.
+**A trap worth knowing:** `qm cloudinit dump <vmid> meta` does not show this. It calls a
+different function and prints the generic metadata, so `admin_pass` is absent from its output
+even when the drive the guest actually reads contains it. Believing that output is what sent
+this repo down the detour above.
 
 ### The guest agent needs a driver, not just a service
 

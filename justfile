@@ -133,7 +133,6 @@ packer-build template:
     export PKR_VAR_proxmox_username=$(sops -d --extract '["proxmox"]["packer-token-id"]' secrets/msaxena.yaml)
     export PKR_VAR_proxmox_token=$(sops -d --extract '["proxmox"]["packer-token-secret"]' secrets/msaxena.yaml)
     export PKR_VAR_admin_password=$(sops -d --extract '["build-admin-password"]' secrets/lab.yaml)
-    export PKR_VAR_clone_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
     export PKR_VAR_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
     # Packer connects to the build VM by key, so it needs the private half as a file: ssh
     # takes a key from neither stdin nor the environment. Removed when the recipe exits.
