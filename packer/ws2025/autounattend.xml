@@ -40,6 +40,11 @@
         <PathAndCredentials wcm:action="add" wcm:keyValue="7"><Path>D:\Balloon\2k25\amd64</Path></PathAndCredentials>
         <PathAndCredentials wcm:action="add" wcm:keyValue="8"><Path>E:\Balloon\2k25\amd64</Path></PathAndCredentials>
         <PathAndCredentials wcm:action="add" wcm:keyValue="9"><Path>F:\Balloon\2k25\amd64</Path></PathAndCredentials>
+        <!-- vioserial is the channel the QEMU guest agent uses to reach the host. Without it
+             the agent runs, looks healthy, and is invisible to Proxmox. -->
+        <PathAndCredentials wcm:action="add" wcm:keyValue="10"><Path>D:\vioserial\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="11"><Path>E:\vioserial\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="12"><Path>F:\vioserial\2k25\amd64</Path></PathAndCredentials>
       </DriverPaths>
     </component>
 
@@ -141,8 +146,8 @@
              address from the cloud-init drive.
         -->
         <SynchronousCommand wcm:action="add"><Order>1</Order>
-          <CommandLine>cmd.exe /c for %i in (D E F G H) do @if exist %i:\guest-agent\qemu-ga-x86_64.msi msiexec /i %i:\guest-agent\qemu-ga-x86_64.msi /qn /norestart</CommandLine>
-          <Description>Install QEMU guest agent so Packer can discover the IP</Description></SynchronousCommand>
+          <CommandLine>cmd.exe /c for %i in (D E F G H) do @if exist %i:\virtio-win-gt-x64.msi msiexec /i %i:\virtio-win-gt-x64.msi /qn /norestart</CommandLine>
+          <Description>Install VirtIO guest tools (drivers + agent) so Packer can discover the IP</Description></SynchronousCommand>
         <SynchronousCommand wcm:action="add"><Order>2</Order>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$a = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1; New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress ${build_ip} -PrefixLength ${build_prefix} -DefaultGateway ${build_gateway}; Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ${build_dns}"</CommandLine>
           <Description>Static build address, because the lab VLAN has no DHCP</Description></SynchronousCommand>

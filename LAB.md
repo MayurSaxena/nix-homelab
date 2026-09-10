@@ -243,6 +243,48 @@ already describes.
 Back that one up, and leave the rest of the `lab` pool out of the job. This is the same
 judgement the LXC side already makes by setting `backup = true` on `/persistent` alone.
 
+## What cloud-init does and does not do here
+
+Proxmox and cloudbase-init only half agree, and the half that fails does so silently. Verified
+on the first clone (`qm cloudinit dump <vmid> user|network|meta`):
+
+| Setting | Where Proxmox writes it | Where cloudbase-init looks | Works? |
+|---|---|---|---|
+| Network | `network-config`, version 1 | the same | **Yes** |
+| Password | `user-data`, as cloud-config `password:` | `admin_pass` in `meta-data` | No |
+| Hostname | `user-data`, as cloud-config `hostname:` | `local-hostname` in `meta-data` | No |
+
+Proxmox's generated meta-data contains an instance-id and nothing else, so the two plugins
+that read it find nothing and do nothing. There is no error anywhere: the clone boots on the
+correct static address, with a hostname nobody chose and a password nobody knows, and the
+first symptom is a 401 from WinRM twenty minutes later.
+
+So the work is split by what actually functions:
+
+- **Cloud-init owns the network.** It is the one part Proxmox and cloudbase-init agree on.
+- **The template owns the password.** `sysprep.ps1` writes `AdministratorPassword` into the
+  answer file at build time, which also enables the built-in account that OOBE otherwise
+  leaves disabled on a generalised image. Every clone therefore boots with the same known
+  credential, which Ansible replaces with key authentication on its first run.
+- **Ansible owns the hostname**, set before domain join, where the computer name starts to
+  matter.
+
+Supplying our own meta-data through `cicustom` snippets would let cloudbase-init do all
+three, at the cost of generating a per-VM snippet file from the module. Worth revisiting only
+if something else needs custom meta-data anyway.
+
+### The guest agent needs a driver, not just a service
+
+The QEMU guest agent does not reach the host over the network. It uses a VirtIO serial port,
+and the standalone `qemu-ga` MSI does not ship that port's driver. Install only the agent and
+the service starts, reports itself healthy, and is invisible to Proxmox forever: `qm agent
+ping` times out, the VM reports no address, and OpenTofu waits out its entire timeout on
+every create before declaring success anyway.
+
+The templates therefore install the full `virtio-win-gt-x64.msi` and inject `vioserial`
+alongside the storage and network drivers, then assert the VirtIO Serial device exists rather
+than trusting that it does.
+
 ## Resetting, and what that means for the DC
 
 Snapshots are an optimisation here, not the lifecycle. The forest is built by `microsoft.ad`

@@ -100,6 +100,7 @@ packer-build template:
     export PKR_VAR_proxmox_username=$(sops -d --extract '["proxmox"]["packer-token-id"]' secrets/msaxena.yaml)
     export PKR_VAR_proxmox_token=$(sops -d --extract '["proxmox"]["packer-token-secret"]' secrets/msaxena.yaml)
     export PKR_VAR_admin_password=$(sops -d --extract '["build-admin-password"]' secrets/lab.yaml)
+    export PKR_VAR_clone_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
     cd packer/{{template}}
     packer init .
     packer build .

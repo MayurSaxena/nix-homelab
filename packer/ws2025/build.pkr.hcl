@@ -64,6 +64,19 @@ variable "build_dns" {
   description = "technitium, so the build can resolve cloudbase.it to fetch cloudbase-init."
 }
 
+variable "clone_password" {
+  type        = string
+  sensitive   = true
+  description = <<-EOT
+    Administrator password baked into the template, so every clone boots with a known
+    credential Ansible can bootstrap over. It cannot come from cloud-init: Proxmox writes
+    the password into user-data as Linux cloud-config, while cloudbase-init reads
+    admin_pass from meta-data, which Proxmox leaves empty. See sysprep.ps1.
+
+    Ansible replaces it with key authentication on first run.
+  EOT
+}
+
 variable "node" {
   type    = string
   default = "proxmox"
@@ -205,7 +218,7 @@ build {
 
   provisioner "powershell" {
     scripts = [
-      "${path.root}/../common/scripts/install-qemu-guest-agent.ps1",
+      "${path.root}/../common/scripts/install-guest-tools.ps1",
       "${path.root}/../common/scripts/install-openssh.ps1",
       "${path.root}/../common/scripts/install-cloudbase-init.ps1",
     ]
@@ -220,7 +233,8 @@ build {
   }
 
   provisioner "powershell" {
-    scripts = ["${path.root}/../common/scripts/sysprep.ps1"]
+    environment_vars = ["CLONE_PASSWORD=${var.clone_password}"]
+    scripts          = ["${path.root}/../common/scripts/sysprep.ps1"]
     # sysprep shuts the VM down, which looks like a dropped connection to Packer.
     valid_exit_codes = [0, 2, 259]
   }
