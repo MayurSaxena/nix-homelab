@@ -85,6 +85,21 @@ gc:
 # reveals a token's secret only at creation, so rotating is delete-then-create; both the old
 # and new token carry the same privileges, which come from the ACLs, not from the token.
 
+# Credentials are decrypted straight into the process environment rather than written to a
+# .pkrvars file, so nothing lands on disk and nothing lands in shell history. PKR_VAR_ is
+# Packer's own convention for populating an input variable from the environment.
+
+# Build a golden VM template with Packer: `just packer-build ws2025`.
+packer-build template:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PKR_VAR_proxmox_username=$(sops -d --extract '["proxmox"]["packer-token-id"]' secrets/msaxena.yaml)
+    export PKR_VAR_proxmox_token=$(sops -d --extract '["proxmox"]["packer-token-secret"]' secrets/msaxena.yaml)
+    export PKR_VAR_admin_password=$(sops -d --extract '["build-admin-password"]' secrets/windows.yaml)
+    cd windows/packer/{{template}}
+    packer init .
+    packer build .
+
 # Mint or rotate the Packer API token into secrets/msaxena.yaml.
 packer-token:
     #!/usr/bin/env bash

@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Unattended install answer file for the Server 2025 template build.
+
+  Two things in here are the usual reason a first Packer run fails, and both are called
+  out below: the VirtIO driver paths in the windowsPE pass, and the /IMAGE/NAME value
+  that selects an edition out of install.wim.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <SetupUILanguage><UILanguage>en-US</UILanguage></SetupUILanguage>
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <!--
+        Setup cannot see a VirtIO SCSI disk or NIC until these load, so without them the
+        installer shows "no drives were found" and the build hangs at that screen forever.
+
+        The drive letter of the virtio-win ISO is not predictable in WinPE, so every likely
+        letter is listed and the ones that do not exist are ignored. 2k25 is the correct
+        directory for Server 2025; a wrong OS directory fails exactly like a missing one.
+      -->
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1"><Path>D:\vioscsi\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="2"><Path>E:\vioscsi\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="3"><Path>F:\vioscsi\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="4"><Path>D:\NetKVM\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="5"><Path>E:\NetKVM\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="6"><Path>F:\NetKVM\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="7"><Path>D:\Balloon\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="8"><Path>E:\Balloon\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="9"><Path>F:\Balloon\2k25\amd64</Path></PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <DiskConfiguration>
+        <WillShowUI>OnError</WillShowUI>
+        <!-- GPT layout, because the VM boots OVMF rather than SeaBIOS. -->
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <CreatePartition wcm:action="add"><Order>1</Order><Type>EFI</Type><Size>260</Size></CreatePartition>
+            <CreatePartition wcm:action="add"><Order>2</Order><Type>MSR</Type><Size>128</Size></CreatePartition>
+            <CreatePartition wcm:action="add"><Order>3</Order><Type>Primary</Type><Extend>true</Extend></CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <ModifyPartition wcm:action="add"><Order>1</Order><PartitionID>1</PartitionID><Label>System</Label><Format>FAT32</Format></ModifyPartition>
+            <ModifyPartition wcm:action="add"><Order>2</Order><PartitionID>2</PartitionID></ModifyPartition>
+            <ModifyPartition wcm:action="add"><Order>3</Order><PartitionID>3</PartitionID><Label>Windows</Label><Letter>C</Letter><Format>NTFS</Format></ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+
+      <ImageInstall>
+        <OSImage>
+          <InstallFrom>
+            <!--
+              Must match an image name inside install.wim EXACTLY. Evaluation media names
+              its editions differently from retail or volume media, which is the single
+              most common cause of a first build stopping at the edition-picker screen.
+
+              To read the real list from the mounted ISO in WinPE (shift+F10 for a shell):
+                dism /get-wiminfo /wimfile:D:\sources\install.wim
+              Common values on Server 2025 evaluation media:
+                Windows Server 2025 Standard Evaluation
+                Windows Server 2025 Standard Evaluation (Desktop Experience)
+                Windows Server 2025 Datacenter Evaluation
+                Windows Server 2025 Datacenter Evaluation (Desktop Experience)
+              Desktop Experience is deliberate here: the range wants a GUI to RDP into.
+            -->
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/NAME</Key>
+              <Value>Windows Server 2025 Standard Evaluation (Desktop Experience)</Value>
+            </MetaData>
+          </InstallFrom>
+          <InstallTo><DiskID>0</DiskID><PartitionID>3</PartitionID></InstallTo>
+        </OSImage>
+        <WillShowUI>OnError</WillShowUI>
+      </ImageInstall>
+
+      <UserData>
+        <!-- No ProductKey element at all: evaluation media activates its own 180-day term. -->
+        <AcceptEula>true</AcceptEula>
+        <FullName>Administrator</FullName>
+        <Organization>lab.internal</Organization>
+      </UserData>
+    </component>
+  </settings>
+
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+
+      <UserAccounts>
+        <AdministratorPassword><Value>${admin_password}</Value><PlainText>true</PlainText></AdministratorPassword>
+      </UserAccounts>
+
+      <!-- Logging in once is what lets FirstLogonCommands run at all. -->
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <LogonCount>1</LogonCount>
+        <Username>Administrator</Username>
+        <Password><Value>${admin_password}</Value><PlainText>true</PlainText></Password>
+      </AutoLogon>
+
+      <FirstLogonCommands>
+        <!--
+          Bring up WinRM so Packer can connect and take over. Written inline rather than as
+          a script on the CD because the CD's drive letter is no more predictable here than
+          it was in WinPE.
+
+          Basic auth over unencrypted HTTP is the well-trodden Packer path and is confined
+          to the build: the VM lives on the isolated lab VLAN, exists for under an hour, and
+          its Administrator password is replaced per clone by cloudbase-init after sysprep.
+          Switching to NTLM (winrm_use_ntlm) would encrypt the payload if that ever matters.
+        -->
+        <SynchronousCommand wcm:action="add"><Order>1</Order>
+          <CommandLine>cmd.exe /c winrm quickconfig -q -force</CommandLine>
+          <Description>Enable WinRM</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>2</Order>
+          <CommandLine>cmd.exe /c winrm set winrm/config/service/auth @{Basic="true"}</CommandLine>
+          <Description>Allow basic auth</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>3</Order>
+          <CommandLine>cmd.exe /c winrm set winrm/config/service @{AllowUnencrypted="true"}</CommandLine>
+          <Description>Allow unencrypted transport</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>4</Order>
+          <CommandLine>cmd.exe /c netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
+          <Description>Open WinRM in the firewall</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>5</Order>
+          <CommandLine>cmd.exe /c net stop winrm &amp; net start winrm</CommandLine>
+          <Description>Restart WinRM to apply</Description></SynchronousCommand>
+      </FirstLogonCommands>
+    </component>
+  </settings>
+</unattend>
