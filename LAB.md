@@ -137,6 +137,56 @@ constraint, not the workstations.
 The node already carries a Windows 10 22H2 consumer ISO from earlier work. It would also
 serve for `flare01`, but Windows 10 passed end of support in October 2025, so prefer 11.
 
+## The forest, and its deliberate weaknesses
+
+**Structure.** Everything lives under one top-level `LAB` OU rather than in the default
+`Users` and `Computers` containers, for the reason that makes it a good habit rather than a
+preference: **you cannot link a GPO to the default containers.** Anything that starts life in
+`CN=Computers` needs moving before policy reaches it, and `redircmp` exists precisely because
+so many environments discover this late.
+
+```
+lab.internal
+└── LAB
+    ├── Servers
+    ├── Workstations
+    ├── Groups
+    └── Users
+        ├── Staff
+        ├── IT
+        └── ServiceAccounts
+```
+
+**Weaknesses are declared, not improvised.** A range you cannot attack teaches nothing, but a
+weakness you forget you planted teaches the wrong lesson: you find a path six months later and
+cannot tell whether it is something you built or something you broke. So every deliberate
+misconfiguration is an entry in `group_vars`, toggled by name:
+
+```yaml
+lab_weaknesses:
+  - kerberoastable_service_account   # SPN on a user with a crackable password
+  - asrep_roastable_user             # preauth disabled
+  - acl_path_to_domain_admins        # helpdesk group holds GenericAll over a privileged group
+  - unconstrained_delegation_host    # a member server trusted for delegation
+  - credential_in_sysvol_script      # a logon script with a password in it
+```
+
+Three properties follow from that shape and are the whole point of it. The list is a
+**review surface**: you can read what the range is supposed to be vulnerable to without
+reading the roles. It is **reversible**: turn one off, rerun, and check whether your detection
+still fires, which is the difference between an attack lab and a detection lab. And it makes
+the forest **honest about itself**, because a clean forest is `lab_weaknesses: []` and is worth
+building at least once, so you know what normal looks like before you break it.
+
+Seeded account passwords belong in `secrets/lab.yaml` even though several are meant to be
+crackable. Not because they are sensitive, but so the repository never carries something that
+reads like a real credential list.
+
+**Later, and worth its own toggles:** Active Directory Certificate Services. The ESC family of
+misconfigurations is a large part of the modern attack surface and none of it exists until a
+CA does. Add it as a member server role with its own declared weaknesses rather than folding
+it into the DC.
+
 ## What OpenTofu owns, and what it deliberately does not
 
 The repo's invariant is that any host can be rebuilt from this repository alone. That is
