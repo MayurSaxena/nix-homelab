@@ -243,6 +243,33 @@ already describes.
 Back that one up, and leave the rest of the `lab` pool out of the job. This is the same
 judgement the LXC side already makes by setting `backup = true` on `/persistent` alone.
 
+## What a bare clone gives you
+
+A template cloned by hand, with no cloud-init drive and no OpenTofu, is already usable.
+Verified on a scratch clone: sshd running, the QEMU guest agent reporting, and the Ansible
+key accepted. Nothing else had to happen.
+
+That is the intended shape, and it is worth stating because it inverts the obvious reading of
+this directory. OpenTofu and cloud-init are not prerequisites for a working guest; they are
+optional layers that add a **fixed address** and a **chosen hostname** on top of one. A
+machine that needs neither -- a CTF box, a throwaway to test something -- can be a right-click
+clone in the Proxmox UI and still be reachable by key.
+
+| | Bare clone | Clone through OpenTofu |
+|---|---|---|
+| Reachable by SSH key | yes | yes |
+| Guest agent reporting | yes | yes |
+| Address | DHCP lease | static, from cloud-init |
+| Hostname | OOBE-generated, e.g. `ADMINIS-FNNQLK3` | the name in `vms.tf` |
+| In the `lab` pool, tagged | only if you say so | yes |
+
+The DHCP lease is not automatic, and getting there took a fix. The build gives itself a
+static address so Packer has a deterministic host to talk to, and that address survives into
+the image: the first scratch clone came up on `10.0.90.99` with its adapter still named
+`Ethernet`. `SetupComplete.cmd` now resets the adapter to DHCP on first boot, before the
+cloudbase-init service starts, so a bare clone gets a lease while a cloud-init clone still
+gets whatever cloud-init assigns.
+
 ## What cloud-init does and does not do here
 
 Proxmox and cloudbase-init only half agree, and the half that fails does so silently. Verified
