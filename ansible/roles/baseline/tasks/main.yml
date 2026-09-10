@@ -12,17 +12,14 @@
     state: started
     start_mode: auto
 
-- name: Set the computer name
-  # Cloud-init cannot do this: Proxmox writes the hostname into user-data as cloud-config,
-  # and cloudbase-init reads local-hostname from meta-data, which Proxmox leaves empty. It
-  # matters before domain join, where the computer name becomes the account name.
-  ansible.windows.win_hostname:
-    name: "{{ inventory_hostname }}"
-  register: _hostname
-
-- name: Reboot if the computer name changed
-  ansible.windows.win_reboot:
-  when: _hostname.reboot_required
+# No hostname task. Cloudbase-init already sets it, and the log proves it:
+#
+#   cloudconfigplugins.set_hostname [-] Changing hostname to 'lab-dc01'
+#
+# Proxmox writes `hostname:` into user-data as cloud-config, and cloudbase-init's cloud-config
+# handler acts on it even though SetHostNamePlugin's own metadata lookup (local-hostname, from
+# meta-data) finds nothing. An earlier version of this role set the hostname itself and
+# triggered a reboot to apply it; both were doing work already done.
 
 - name: Set the timezone
   ansible.windows.win_timezone:

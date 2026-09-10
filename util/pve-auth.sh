@@ -69,8 +69,54 @@ _pve_ticket_exchange() {
   resp_csrf=$( jq -r '.data.CSRFPreventionToken' <<<"${resp}" )
 }
 
+## A PVE ticket is valid for two hours, so a run that needs several tofu or API calls should
+## not redeem a TOTP code for each one. Cache it, keyed on the endpoint and username, and
+## reuse it while it is comfortably inside that window.
+##
+## The cache holds a bearer credential, so it lives outside the repo, in the user's cache
+## directory at mode 0600 -- the same exposure as an ssh-agent socket, and for the same
+## reason: the alternative is re-authenticating constantly. Set PVE_AUTH_REFRESH=1 to ignore
+## it, and deleting the file is always safe.
+_pve_cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/nix-homelab"
+_pve_cache="${_pve_cache_dir}/pve-ticket-$(printf '%s' "${PROXMOX_VE_ENDPOINT}${PROXMOX_VE_USERNAME}" | shasum -a 256 | cut -c1-16)"
+_pve_max_age=6000 ## 100 minutes, inside PVE's two hours with room for a long apply
+
+_pve_cache_load() {
+  [ "${PVE_AUTH_REFRESH:-0}" = "1" ] && return 1
+  [ -r "${_pve_cache}" ] || return 1
+  ## shellcheck disable=SC1090
+  . "${_pve_cache}"
+  [ -n "${_cached_ticket:-}" ] || return 1
+  age=$(( $(date +%s) - ${_cached_at:-0} ))
+  [ "$age" -lt "$_pve_max_age" ] || return 1
+  ## Age is necessary but not sufficient: a ticket is also void if the node rebooted or the
+  ## account changed. Prove it works rather than trusting the clock.
+  code=$(curl -q -s -k -o /dev/null -w '%{http_code}' \
+    -H "Cookie: PVEAuthCookie=${_cached_ticket}" \
+    "${PROXMOX_VE_ENDPOINT}api2/json/version")
+  [ "$code" = "200" ] || return 1
+  auth_ticket="${_cached_ticket}"
+  resp_csrf="${_cached_csrf:-}"
+  return 0
+}
+
+_pve_cache_store() {
+  mkdir -p "${_pve_cache_dir}" 2>/dev/null || return 0
+  umask 077
+  {
+    printf '_cached_at=%s\n' "$(date +%s)"
+    printf '_cached_ticket=%s\n' "${auth_ticket}"
+    printf '_cached_csrf=%s\n' "${resp_csrf}"
+  } > "${_pve_cache}"
+  chmod 600 "${_pve_cache}" 2>/dev/null || true
+}
+
 _totp_derived=0
-_pve_ticket_exchange || return 1
+if _pve_cache_load; then
+  : ## reusing a cached ticket; no TOTP code is redeemed
+else
+  _pve_ticket_exchange || return 1
+fi
 
 ## PVE refuses a TOTP code it has already redeemed, and answers with a null ticket instead of
 ## an error. So two commands inside the same 30-second window (`just packer-token` then
@@ -96,10 +142,12 @@ if [ "${auth_ticket}" = "null" ] || [ -z "${auth_ticket}" ]; then
   return 1
 fi
 
+_pve_cache_store
+
 export PROXMOX_VE_AUTH_TICKET="${auth_ticket}"
 export PROXMOX_VE_CSRF_PREVENTION_TOKEN="${resp_csrf}"
 
-unset -f _derive_totp _pve_ticket_exchange
+unset -f _derive_totp _pve_ticket_exchange _pve_cache_load _pve_cache_store
 
 ## the ticket is what tofu actually authenticates with from here; don't leave a derived
 ## plaintext password sitting in the shell any longer than the exchange above needed it for.
