@@ -25,11 +25,6 @@
       nixos-rebuild
       alejandra
       opentofu
-      # The Windows lab's build and configure halves (see windows/README.md). Packer is
-      # BSL-licensed and so unfree; home-manager runs with useGlobalPkgs, which picks up
-      # nixpkgs.config.allowUnfree from modules/macos/base.nix rather than needing its own.
-      packer
-      ansible
       devenv
       claude-code
       just # runs the recipes in ./justfile

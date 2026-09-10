@@ -8,35 +8,30 @@
 # create. Observed exactly that on the first template.
 $ErrorActionPreference = 'Stop'
 
-# Two packages, not one, and the distinction cost a whole build to find.
+# The VirtIO guest tools: every driver plus the QEMU guest agent, from one installer.
 #
-#   virtio-win-gt-x64.msi   every VirtIO driver, including vioserial
-#   guest-agent\qemu-ga-x86_64.msi   the QEMU-GA service itself
-#
-# The guest tools package installs the driver the agent needs but not the agent, and the
-# standalone agent package installs the agent but not the driver. Install either alone and
-# Proxmox never sees the guest: with only the agent, the service runs with no channel to the
-# host; with only the tools, `Get-Service QEMU-GA` reports that no such service exists.
+# virtio-win-guest-tools.exe rather than the two MSIs it wraps, and the distinction matters
+# because getting it wrong is invisible. virtio-win-gt-x64.msi ships the vioserial driver the
+# guest agent needs but not the agent itself; guest-agent\qemu-ga-x86_64.msi ships the agent
+# but not the driver. Install either alone and Proxmox never sees the guest -- with only the
+# agent, a service with no channel to the host; with only the drivers, no QEMU-GA service at
+# all. Both of those shipped in a template before this script asserted its way out of it.
 $ErrorActionPreference = 'Stop'
 
 # The virtio-win ISO's drive letter is assigned at boot and is not predictable, so find the
-# volume by looking for the installers rather than assuming D: or E:.
-function Find-OnAnyDrive([string]$relative) {
-    Get-PSDrive -PSProvider FileSystem |
-        ForEach-Object { Join-Path $_.Root $relative } |
-        Where-Object { Test-Path $_ } |
-        Select-Object -First 1
+# volume by looking for the installer rather than assuming D: or E:.
+$exe = Get-PSDrive -PSProvider FileSystem |
+    ForEach-Object { Join-Path $_.Root 'virtio-win-guest-tools.exe' } |
+    Where-Object { Test-Path $_ } |
+    Select-Object -First 1
+
+if (-not $exe) {
+    throw "virtio-win-guest-tools.exe not found on any drive. Is the virtio-win ISO still attached? Packer unmounts it only after provisioning."
 }
 
-foreach ($pkg in 'virtio-win-gt-x64.msi', 'guest-agent\qemu-ga-x86_64.msi') {
-    $msi = Find-OnAnyDrive $pkg
-    if (-not $msi) {
-        throw "$pkg not found on any drive. Is the virtio-win ISO still attached? Packer unmounts it only after provisioning."
-    }
-    Write-Host "Installing $msi"
-    $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart' -Wait -PassThru -NoNewWindow
-    if ($p.ExitCode -notin @(0, 3010)) { throw "msiexec exited $($p.ExitCode) for $pkg" }
-}
+Write-Host "Installing VirtIO guest tools from $exe"
+$p = Start-Process $exe -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru -NoNewWindow
+if ($p.ExitCode -notin @(0, 3010)) { throw "guest tools installer exited $($p.ExitCode)" }
 
 foreach ($svc in 'QEMU-GA', 'BalloonService') {
     $s = Get-Service $svc -ErrorAction SilentlyContinue

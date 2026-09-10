@@ -132,7 +132,12 @@
     # loads it through direnv on the Mac; CI runs the linters through it. Nothing here
     # is a service dependency -- those come from the host configurations.
     devShells = forAllSystems (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
+      # Not legacyPackages: packer is BSL-licensed and so unfree, and the devShell needs its
+      # own allowUnfree rather than borrowing the Mac's.
+      pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfree = true;
+      };
     in {
       default = pkgs.mkShellNoCC {
         packages = with pkgs; [
@@ -142,6 +147,13 @@
           ssh-to-age # tofu provisioner: host key -> age recipient
           oath-toolkit # util/pve-auth.sh: TOTP for the Proxmox API
           opentofu
+          # The Windows lab's build and configure halves. Here rather than in the Mac's
+          # home.packages, which is where they started: the Mac auto-upgrades to main
+          # nightly, so anything living only on a branch vanishes from it overnight and
+          # `just packer-build` fails with "command not found" the next morning. Repo
+          # tooling belongs to the repo.
+          packer # unfree (BSL); see nixpkgs.config below
+          ansible
           just
           alejandra
           statix
