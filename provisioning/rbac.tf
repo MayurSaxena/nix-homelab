@@ -55,25 +55,28 @@ resource "proxmox_virtual_environment_user" "packer" {
 # deleted or logged into caddy, dns or plex. The role blocks privilege escalation; it does
 # nothing to limit blast radius across guests. Only the ACL path can do that.
 #
-# Packer builds each template at a fixed vm_id, so the guest-level grants name those three
-# ids exactly. PVE stores ACLs as plain strings and does not require the guest to exist, so
-# these can be granted before the first build creates them.
+# Packer builds each template at a fixed vm_id, so the guest-level grants name ids rather
+# than the whole of /vms. They name a reserved *block* rather than the ids currently in use:
+# PVE stores ACLs as plain strings and does not require the guest to exist, so reserving the
+# block up front means adding a template later -- a Linux image, or the Windows 11 Enterprise
+# build that Credential Guard work would need -- costs no permission change and no second
+# apply against RBAC. Ten is far more templates than this node will plausibly carry, and is
+# still nothing like granting /vms.
 locals {
+  packer_template_vmids = range(9100, 9110)
+
   # id => path. Keys are cosmetic, but keep tofu's plan output readable.
-  packer_acl_paths = {
-    tpl_ws2025    = "/vms/9100"               # Server 2025 template build VM
-    tpl_win11_ent = "/vms/9101"               # Windows 11 Enterprise template build VM
-    tpl_win11_pro = "/vms/9102"               # Windows 11 Pro template build VM
-    iso_store     = "/storage/local"          # read the install ISOs, upload the generated autounattend ISO
-    disk_store    = "/storage/local-zfs"      # allocate the build VM's disks
-    bridge        = "/sdn/zones/localnetwork" # SDN.Use on vmbr0; propagates to the bridge and its VLAN subpaths
-    node          = "/nodes/proxmox"          # Sys.Audit only; everything else in the role is meaningless here
-  }
+  packer_acl_paths = merge(
+    { for id in local.packer_template_vmids : "template_${id}" => "/vms/${id}" },
+    {
+      iso_store  = "/storage/local"          # read the install ISOs, upload the generated autounattend ISO
+      disk_store = "/storage/local-zfs"      # allocate the build VM's disks
+      bridge     = "/sdn/zones/localnetwork" # SDN.Use on vmbr0; propagates to the bridge and its VLAN subpaths
+      node       = "/nodes/proxmox"          # Sys.Audit only; everything else in the role is meaningless here
+    }
+  )
 }
 
-# One entry per path. The role is a superset at every path: granting VM.Config.CPU on
-# /storage/local is inert, and splitting the role into per-path subsets would trade real
-# clarity for no additional restriction.
 resource "proxmox_virtual_environment_acl" "packer" {
   for_each = local.packer_acl_paths
 

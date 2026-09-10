@@ -126,6 +126,39 @@ rollback Windows cannot detect. Establish it at the Phase 2 gate rather than ass
 note `qm config <vmid> | grep vmgenid`, snapshot, change something, roll back, compare. This
 only matters once a second DC exists, but it is cheap to settle while the range is small.
 
+## What here is Windows-specific, and what is not
+
+Most of this pipeline is not really about Windows. It is about *guests the flake cannot
+configure*, which today means Windows but tomorrow could mean a Kali or Parrot VM in the
+range, or a production appliance that ships as an image rather than a package. The two VMs
+already on the node (`parrot`, `onion`) are exactly that shape and are currently built by
+hand, outside OpenTofu.
+
+The line drawn here is **whether a thing holds OpenTofu state**, because that decides
+whether generalising it later is free or painful:
+
+| Piece | Generic? | Why now, or why later |
+|---|---|---|
+| `provisioning/modules/qemu-vm` | **Yes, from the start** | Holds state. Renaming it later means `moved` blocks or `tofu state mv` against every VM built from it. Costs nothing to name generically today. |
+| `provisioning/vms.tf` | **Yes, from the start** | One file for every QEMU guest, lab and production alike, keeping `main.tf` LXC-only. |
+| `packer@pve` ACL block | **Yes, from the start** | Grants a reserved template VMID range rather than the ids in use, so a new template needs no permission change. |
+| `packer/` and `ansible/` layout | **Deferred, deliberately** | No state. Hoisting them out of `windows/` later is a `git mv` and one path in a recipe. Restructuring now would be guessing at a second image pipeline that does not exist. |
+| Windows roles and unattend files | **No, and that is fine** | `sysprep`, cloudbase-init, VirtIO driver injection and `microsoft.ad` are Windows by nature. |
+
+So `modules/qemu-vm` takes `os_type`, `bios`, `machine` and whether to attach TPM state as
+variables rather than hardcoding the Windows answers. Windows guests pass `win11`, OVMF and
+TPM; a Linux guest passes `l26` and skips the TPM. Everything else — clone source, cloud-init,
+CPU, memory, disk, VLAN, tags, pool, `lifecycle.ignore_changes` on the template — is identical
+either way and is why the module is worth having at all.
+
+**The obvious follow-on**, not done here: `parrot` and `onion` exist outside OpenTofu, so
+they contradict the repo's rebuild-from-this-repo-alone invariant. Once `qemu-vm` is proven
+by the lab, importing them is a `tofu import` per VM plus a module block, and the invariant
+holds for the whole node rather than just the containers.
+
+These decisions belong in `CLAUDE.md` eventually, alongside the LXC decision procedures.
+They live here until Phase 5, when there is enough built to describe accurately.
+
 ## Tooling
 
 `packer` and `ansible` come from the Mac's home-manager profile
