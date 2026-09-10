@@ -1,0 +1,25 @@
+---
+dc_forest_mode: WinThreshold
+dc_domain_mode: WinThreshold
+
+# Disable machine account password rotation across the domain.
+#
+# Indefensible in production, correct here. Domain members rotate their computer account
+# password on a schedule; revert a DC past a rotation and every member loses its secure
+# channel, greeting you with "the trust relationship between this workstation and the primary
+# domain failed". Since rolling a VM back is the normal way to reset an exercise, that would
+# be a constant tax. See LAB.md.
+dc_disable_machine_password_rotation: true
+
+# The OU tree. Everything lives under one top-level OU rather than the default containers,
+# because a GPO cannot be linked to CN=Computers or CN=Users.
+dc_root_ou: LAB
+dc_child_ous:
+  - Servers
+  - Workstations
+  - Groups
+  - Users
+dc_user_ous:
+  - Staff
+  - IT
+  - ServiceAccounts

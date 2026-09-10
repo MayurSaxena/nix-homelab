@@ -1,0 +1,7 @@
+---
+- name: Build the forest
+  hosts: domain_controllers
+  gather_facts: true
+  roles:
+    - baseline
+    - domain_controller

@@ -1,0 +1,78 @@
+---
+- name: Read the DSRM password
+  ansible.builtin.set_fact:
+    dc_dsrm_password: >-
+      {{ lookup('community.sops.sops', lab_secrets_file, extract='["dsrm-password"]') | trim }}
+  no_log: true
+
+- name: Derive the domain's base DN
+  ansible.builtin.set_fact:
+    dc_base_dn: "{{ lab_domain.split('.') | map('regex_replace', '^', 'DC=') | join(',') }}"
+
+# Creates the forest and installs the DNS role with it. Idempotent: on a host that is already
+# a domain controller this reports no change rather than trying again.
+- name: Promote to the first domain controller of a new forest
+  microsoft.ad.domain:
+    dns_domain_name: "{{ lab_domain }}"
+    domain_netbios_name: "{{ lab_netbios }}"
+    safe_mode_password: "{{ dc_dsrm_password }}"
+    forest_mode: "{{ dc_forest_mode }}"
+    domain_mode: "{{ dc_domain_mode }}"
+    reboot: true
+  no_log: true
+
+# Promotion makes this host a DNS server, so it must now resolve against itself. A domain
+# controller pointed at an external resolver cannot find its own SRV records, and the symptoms
+# read as replication or Kerberos faults rather than as a DNS setting.
+- name: Point the DC's resolver at itself
+  ansible.windows.win_dns_client:
+    adapter_names: '*'
+    dns_servers:
+      - 127.0.0.1
+
+# Anything outside the forest goes to technitium, which is what gives the lab the internet and
+# the rest of the homelab without standing up a second resolver.
+- name: Forward everything else to technitium
+  ansible.windows.win_shell: |
+    $want = '{{ lab_upstream_dns }}'
+    $have = @((Get-DnsServerForwarder).IPAddress.IPAddressToString)
+    if ($have -notcontains $want) {
+        Set-DnsServerForwarder -IPAddress $want | Out-Null
+        Write-Output 'changed'
+    }
+  register: dc_forwarder
+  changed_when: "'changed' in dc_forwarder.stdout"
+
+- name: Create the root OU
+  microsoft.ad.ou:
+    name: "{{ dc_root_ou }}"
+    path: "{{ dc_base_dn }}"
+    state: present
+
+- name: Create the child OUs
+  microsoft.ad.ou:
+    name: "{{ item }}"
+    path: "OU={{ dc_root_ou }},{{ dc_base_dn }}"
+    state: present
+  loop: "{{ dc_child_ous }}"
+
+- name: Create the user OUs
+  microsoft.ad.ou:
+    name: "{{ item }}"
+    path: "OU=Users,OU={{ dc_root_ou }},{{ dc_base_dn }}"
+    state: present
+  loop: "{{ dc_user_ous }}"
+
+# See LAB.md: reverting a DC past a member's password rotation breaks that member's secure
+# channel, and rolling a VM back is the normal way to reset an exercise here.
+- name: Stop domain members rotating their computer account passwords
+  ansible.windows.win_shell: |
+    $p = 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters'
+    $cur = (Get-ItemProperty -Path $p -Name DisablePasswordChange -ErrorAction SilentlyContinue).DisablePasswordChange
+    if ($cur -ne 1) {
+        Set-ItemProperty -Path $p -Name DisablePasswordChange -Value 1 -Type DWord
+        Write-Output 'changed'
+    }
+  register: dc_pwrot
+  changed_when: "'changed' in dc_pwrot.stdout"
+  when: dc_disable_machine_password_rotation
