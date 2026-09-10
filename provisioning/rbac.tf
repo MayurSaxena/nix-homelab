@@ -77,6 +77,23 @@ locals {
   )
 }
 
+# Apply ACL changes with `-parallelism=1`.
+#
+# Every ACL write is a read-modify-write of the same /etc/pve/user.cfg on the node. Applying
+# a batch at OpenTofu's default parallelism of ten raced: an apply that planned "10 to add,
+# 3 to destroy" also silently removed four rows it never touched, leaving state claiming
+# fourteen entries while PVE had ten. Nothing in the plan output hints at it, and the only
+# symptom is a permission failure much later, partway through a build.
+#
+#   just apply -parallelism=1 -target=proxmox_virtual_environment_acl.packer
+#
+# A refresh does detect the drift afterwards and re-adds the rows, so it is recoverable
+# rather than dangerous. Verify against PVE's own GET /access/permissions after any ACL
+# change rather than trusting the apply's exit code.
+#
+# One entry per path. The role is a superset at every path: granting VM.Config.CPU on
+# /storage/local is inert, and splitting the role into per-path subsets would trade real
+# clarity for no additional restriction.
 resource "proxmox_virtual_environment_acl" "packer" {
   for_each = local.packer_acl_paths
 
@@ -89,10 +106,10 @@ resource "proxmox_virtual_environment_acl" "packer" {
 # The API token is deliberately NOT declared here.
 #
 # OpenTofu would store its secret in provisioning/terraform.tfstate as a plain string on the
-# resource's `value` attribute, and that file is committed to this public repository. State
-# encryption makes that ciphertext rather than cleartext, but it would still be the only
-# credential in the repo not protected by the age/YubiKey path every other secret uses, and
-# marking an attribute sensitive only suppresses CLI output, never storage.
+# resource's `value` attribute. That file is gitignored today, but it is a working copy on
+# one Mac with no backup, and marking an attribute sensitive only suppresses CLI output,
+# never storage. Keeping the credential out of it entirely means the question does not
+# reopen if the state ever does get committed.
 #
 # So tofu owns the parts with no secret in them (the role, the user, the ACLs above) and the
 # credential is minted out-of-band and kept in secrets/msaxena.yaml alongside the Proxmox
