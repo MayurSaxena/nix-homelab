@@ -135,6 +135,12 @@ packer-build template:
     export PKR_VAR_admin_password=$(sops -d --extract '["build-admin-password"]' secrets/lab.yaml)
     export PKR_VAR_clone_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
     export PKR_VAR_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
+    # Packer connects to the build VM by key, so it needs the private half as a file: ssh
+    # takes a key from neither stdin nor the environment. Removed when the recipe exits.
+    key=$(mktemp); trap 'rm -f "$key"' EXIT
+    chmod 600 "$key"
+    sops -d --extract '["ansible-ssh-private-key"]' secrets/lab.yaml > "$key"
+    export PKR_VAR_ansible_private_key_file="$key"
     # Build first, retire second.
     #
     # The old recipe deleted the existing template before building its replacement, because

@@ -134,48 +134,41 @@
 
       <FirstLogonCommands>
         <!--
-          Order matters here, and the first two exist because the lab VLAN has no DHCP.
+          Bring the machine to a state Packer can drive, using SSH rather than WinRM.
+          Order matters.
 
-          1. The QEMU guest agent is how Packer's Proxmox builder learns the VM's address.
-             Installing it later, from a provisioner, is too late: Packer cannot connect in
+          1. The QEMU guest agent, first, because it is how the Proxmox builder learns a VM's
+             address. Installing it from a provisioner is too late: Packer must connect in
              order to run that provisioner. The loop covers the virtio ISO's unpredictable
-             drive letter the same way the driver paths above do.
-          2. Without a DHCP server on VLAN 90 the interface would come up with a link-local
-             address and nothing could reach it. Set the build address explicitly. This is
-             build-only; sysprep discards it and cloudbase-init assigns the clone's real
-             address from the cloud-init drive.
+             drive letter, the same way the driver paths above do.
+          2. A static build address. The lab VLAN does serve DHCP now, so this is no longer
+             strictly required, it is kept because it makes the build deterministic and
+             removes any dependence on agent discovery, which has failed before.
+          3. OpenSSH, with the Ansible key. This replaces the four commands that used to
+             enable WinRM with basic authentication over unencrypted HTTP: Packer connects
+             by key over the same transport Ansible will use afterwards, so the build needs
+             no password on the wire and the image needs no second remote-management stack.
+             The key is on the same generated CD as this file, and sshd will only read it
+             from ProgramData with inheritance stripped.
         -->
         <SynchronousCommand wcm:action="add"><Order>1</Order>
-          <CommandLine>cmd.exe /c for %i in (D E F G H) do @if exist %i:\virtio-win-gt-x64.msi msiexec /i %i:\virtio-win-gt-x64.msi /qn /norestart</CommandLine>
-          <Description>Install VirtIO guest tools (drivers + agent) so Packer can discover the IP</Description></SynchronousCommand>
+          <CommandLine>cmd.exe /c for %i in (D E F G H) do @if exist %i:\virtio-win-guest-tools.exe %i:\virtio-win-guest-tools.exe /install /quiet /norestart</CommandLine>
+          <Description>Install VirtIO guest tools (drivers + agent)</Description></SynchronousCommand>
         <SynchronousCommand wcm:action="add"><Order>2</Order>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$a = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1; New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress ${build_ip} -PrefixLength ${build_prefix} -DefaultGateway ${build_gateway}; Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ${build_dns}"</CommandLine>
-          <Description>Static build address, because the lab VLAN has no DHCP</Description></SynchronousCommand>
-        <!--
-          Bring up WinRM so Packer can connect and take over. Written inline rather than as
-          a script on the CD because the CD's drive letter is no more predictable here than
-          it was in WinPE.
-
-          Basic auth over unencrypted HTTP is the well-trodden Packer path and is confined
-          to the build: the VM lives on the isolated lab VLAN, exists for under an hour, and
-          its Administrator password is replaced per clone by cloudbase-init after sysprep.
-          Switching to NTLM (winrm_use_ntlm) would encrypt the payload if that ever matters.
-        -->
+          <Description>Deterministic build address</Description></SynchronousCommand>
         <SynchronousCommand wcm:action="add"><Order>3</Order>
-          <CommandLine>cmd.exe /c winrm quickconfig -q -force</CommandLine>
-          <Description>Enable WinRM</Description></SynchronousCommand>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-WindowsCapability -Online -Name (Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Select-Object -First 1 -ExpandProperty Name)"</CommandLine>
+          <Description>Install the OpenSSH server</Description></SynchronousCommand>
         <SynchronousCommand wcm:action="add"><Order>4</Order>
-          <CommandLine>cmd.exe /c winrm set winrm/config/service/auth @{Basic="true"}</CommandLine>
-          <Description>Allow basic auth</Description></SynchronousCommand>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "New-Item -Path 'HKLM:\SOFTWARE\OpenSSH' -Force | Out-Null; New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value \"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe\" -PropertyType String -Force | Out-Null; Set-Service sshd -StartupType Automatic; Start-Service sshd"</CommandLine>
+          <Description>PowerShell as the default shell, then start sshd</Description></SynchronousCommand>
         <SynchronousCommand wcm:action="add"><Order>5</Order>
-          <CommandLine>cmd.exe /c winrm set winrm/config/service @{AllowUnencrypted="true"}</CommandLine>
-          <Description>Allow unencrypted transport</Description></SynchronousCommand>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$src = (Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root 'authorized_keys' } | Where-Object { Test-Path $_ } | Select-Object -First 1); $dst = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'; Copy-Item $src $dst -Force; icacls $dst /inheritance:r /grant 'SYSTEM:F' /grant 'BUILTIN\Administrators:F'"</CommandLine>
+          <Description>Install the Ansible key where Windows sshd will read it</Description></SynchronousCommand>
         <SynchronousCommand wcm:action="add"><Order>6</Order>
-          <CommandLine>cmd.exe /c netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
-          <Description>Open WinRM in the firewall</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>7</Order>
-          <CommandLine>cmd.exe /c net stop winrm &amp; net start winrm</CommandLine>
-          <Description>Restart WinRM to apply</Description></SynchronousCommand>
+          <CommandLine>cmd.exe /c netsh advfirewall firewall add rule name="OpenSSH-22" dir=in action=allow protocol=TCP localport=22</CommandLine>
+          <Description>Open SSH in the firewall</Description></SynchronousCommand>
       </FirstLogonCommands>
     </component>
   </settings>

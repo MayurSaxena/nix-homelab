@@ -32,9 +32,9 @@ variable "admin_password" {
   type        = string
   sensitive   = true
   description = <<-EOT
-    Local Administrator password for the build only. Sysprep generalises it away and
-    cloudbase-init sets a per-clone password on first boot, so this never reaches a
-    running range VM.
+    Autologon password for the build VM, and nothing else. FirstLogonCommands only run if
+    someone logs in, so the unattend needs one; Packer itself authenticates by key. Sysprep
+    generalises it away, so it never reaches a clone.
   EOT
 }
 
@@ -62,6 +62,15 @@ variable "build_dns" {
   type        = string
   default     = "10.0.10.2"
   description = "technitium, so the build can resolve cloudbase.it to fetch cloudbase-init."
+}
+
+variable "ansible_private_key_file" {
+  type        = string
+  description = <<-EOT
+    Path to the Ansible private key, materialised by `just packer-build` for the length of
+    the run. A file rather than the key itself because ssh takes a key from neither stdin
+    nor the environment.
+  EOT
 }
 
 variable "ansible_public_key" {
@@ -183,6 +192,11 @@ source "proxmox-iso" "ws2025" {
     iso_storage_pool = "local"
     unmount          = true
     cd_content = {
+      # The unattend copies this to administrators_authorized_keys at first logon. It rides
+      # on the same generated CD so nothing has to be fetched over a network that does not
+      # exist yet, and it is a public key, so the CD carries no secret.
+      "authorized_keys" = "${var.ansible_public_key}\n"
+
       "autounattend.xml" = templatefile("${path.root}/autounattend.xml", {
         admin_password = var.admin_password
         build_ip       = var.build_ip
@@ -210,17 +224,18 @@ source "proxmox-iso" "ws2025" {
   boot_wait    = "2s"
   boot_command = ["<enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter><wait1><enter>"]
 
-  communicator   = "winrm"
-  winrm_username = "Administrator"
-  winrm_password = var.admin_password
-  # The address is known, so do not depend on guest-agent discovery to find it. The agent is
-  # still installed early by the unattend, because the builder waits on it regardless.
-  winrm_host = var.build_ip
-  # Generous: this covers the whole unattended install, not just a reboot.
-  # Setup plus FirstLogonCommands runs in about twenty-five minutes. Forty-five leaves room
-  # for a slow Windows Update pass without turning every failed run into a ninety-minute
-  # wait before the log says anything useful.
-  winrm_timeout = "45m"
+  # SSH, not WinRM, and the same transport Ansible uses afterwards. The unattend installs
+  # OpenSSH and the Ansible key at first logon, so Packer authenticates by key from the
+  # start: no password crosses the wire, and the image carries one remote-management stack
+  # instead of two. WinRM's four unattend commands and its basic-auth-over-unencrypted-HTTP
+  # configuration are gone with it.
+  communicator = "ssh"
+  ssh_username = "Administrator"
+  # The address is known, so this does not depend on guest-agent discovery to find it.
+  ssh_host             = var.build_ip
+  ssh_private_key_file = var.ansible_private_key_file
+  # Covers the whole unattended install, not just a reboot.
+  ssh_timeout = "45m"
 }
 
 build {
@@ -231,7 +246,6 @@ build {
     environment_vars = ["ANSIBLE_PUBLIC_KEY=${var.ansible_public_key}"]
     scripts = [
       "${path.root}/../common/scripts/install-guest-tools.ps1",
-      "${path.root}/../common/scripts/install-openssh.ps1",
       "${path.root}/../common/scripts/install-cloudbase-init.ps1",
     ]
   }
