@@ -71,6 +71,61 @@ constraint, not the workstations.
 The node already carries a Windows 10 22H2 consumer ISO from earlier work. It would also
 serve for `flare01`, but Windows 10 passed end of support in October 2025, so prefer 11.
 
+## Resetting, and what that means for the DC
+
+Snapshots are an optimisation here, not the lifecycle. The forest is built by `microsoft.ad`
+from `ansible/group_vars`, so the source of truth for the domain is the playbook, not a
+snapshot sitting on the node. Rebuilding `lab-dc01` from nothing is a clone, a promotion and
+a reboot. That stays true only under one discipline: **anything worth keeping in the forest
+goes into the role, never only into the running DC.** It is the same invariant the NixOS
+hosts run on, and it is what makes a DC safe to throw away.
+
+So a domain controller never *has* to be rolled back. It gets rolled back because that takes
+seconds instead of half an hour.
+
+Three reset needs, and only one of them touches the DC:
+
+| Situation | What to do |
+|---|---|
+| Broke a workstation, or detonated something on it | Revert that VM alone; the DC is untouched |
+| Rerun a whole exercise | Revert the range as a set, DC and members together |
+| Changed the forest design, or the evaluation expired | Rebuild with `tofu apply` and the playbook |
+
+The middle row is why snapshot names are shared across the range rather than chosen per VM.
+A range rollback moves every machine backwards in lockstep, and the lockstep is what makes
+it safe.
+
+### The two failure modes
+
+**USN rollback** is the famous one, and it does not apply here. It is a *replication*
+divergence, so it takes two or more DCs to happen at all, and the range runs a single DC by
+default. If you later add a second — itself a worthwhile exercise — Proxmox exposes a VM
+Generation ID (`vmgenid` in the VM config, present on every VM on this node). Windows Server
+2012 and later use it to notice they have been rolled back: the DC resets its invocation ID,
+drops its RID pool and performs a non-authoritative restore rather than silently diverging.
+
+**Machine account passwords** are the one that will actually bite, and unlike USN rollback it
+bites with a single DC too. Domain members rotate their computer account password on a
+schedule. Revert the DC past a rotation and the member loses its secure channel, which
+surfaces as "the trust relationship between this workstation and the primary domain failed".
+The `domain_controller` role therefore sets a GPO disabling machine account password changes
+domain-wide. That would be indefensible in production and is exactly right here: it removes
+the whole class of problem and lets the DC and its members be reverted independently of each
+other.
+
+Time skew is a distant third. A reverted DC's clock jumps backwards, Kerberos tolerates only
+a few minutes of drift, and it resyncs on boot.
+
+### One thing still unverified
+
+The Proxmox OpenTofu provider does not expose `vmgenid`, so VMs created by
+`provisioning/windows.tf` inherit whatever PVE does by default. Every VM already on this node
+carries one, so that default appears to be "generate" — but **whether PVE issues a _new_ one
+on rollback has not been confirmed here**, and a rollback that leaves the ID unchanged is a
+rollback Windows cannot detect. Establish it at the Phase 2 gate rather than assuming it:
+note `qm config <vmid> | grep vmgenid`, snapshot, change something, roll back, compare. This
+only matters once a second DC exists, but it is cheap to settle while the range is small.
+
 ## Tooling
 
 `packer` and `ansible` come from the Mac's home-manager profile
