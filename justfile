@@ -117,6 +117,7 @@ packer-build template:
     export PKR_VAR_proxmox_token=$(sops -d --extract '["proxmox"]["packer-token-secret"]' secrets/msaxena.yaml)
     export PKR_VAR_admin_password=$(sops -d --extract '["build-admin-password"]' secrets/lab.yaml)
     export PKR_VAR_clone_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
+    export PKR_VAR_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
     # Packer will not replace an existing VMID, so a second build of the same template dies
     # at "Creating VM" with "already exists". Retire the old one first. Safe because the
     # qemu-vm module takes full clones rather than linked ones: guests already built from

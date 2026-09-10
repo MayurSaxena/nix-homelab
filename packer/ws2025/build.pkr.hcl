@@ -64,6 +64,14 @@ variable "build_dns" {
   description = "technitium, so the build can resolve cloudbase.it to fetch cloudbase-init."
 }
 
+variable "ansible_public_key" {
+  type        = string
+  description = <<-EOT
+    Baked into the template's administrators_authorized_keys, so a clone is reachable by key
+    with no bootstrap credential at all. Not secret; it is the public half.
+  EOT
+}
+
 variable "clone_password" {
   type        = string
   sensitive   = true
@@ -217,6 +225,7 @@ build {
   sources = ["source.proxmox-iso.ws2025"]
 
   provisioner "powershell" {
+    environment_vars = ["ANSIBLE_PUBLIC_KEY=${var.ansible_public_key}"]
     scripts = [
       "${path.root}/../common/scripts/install-guest-tools.ps1",
       "${path.root}/../common/scripts/install-openssh.ps1",

@@ -259,19 +259,33 @@ that read it find nothing and do nothing. There is no error anywhere: the clone 
 correct static address, with a hostname nobody chose and a password nobody knows, and the
 first symptom is a 401 from WinRM twenty minutes later.
 
-So the work is split by what actually functions:
+There is a second layer to this, found by trying the obvious fix and watching it fail.
+Writing `AdministratorPassword` into the sysprep answer file **also does not work**: a clone
+built that way still rejected every credential. What a clone's OOBE actually leaves behind is
+a machine sitting in the **Public** firewall profile with sshd not running, reachable on
+nothing but the one all-profiles WinRM rule the build's own unattend created. Ports 135, 139,
+445 and 3389 are all closed. None of that is fixable remotely, which is how a template that
+built perfectly produces a guest nobody can reach.
 
-- **Cloud-init owns the network.** It is the one part Proxmox and cloudbase-init agree on.
-- **The template owns the password.** `sysprep.ps1` writes `AdministratorPassword` into the
-  answer file at build time, which also enables the built-in account that OOBE otherwise
-  leaves disabled on a generalised image. Every clone therefore boots with the same known
-  credential, which Ansible replaces with key authentication on its first run.
-- **Ansible owns the hostname**, set before domain join, where the computer name starts to
-  matter.
+So the work is split by what provably runs, not by what ought to:
 
-Supplying our own meta-data through `cicustom` snippets would let cloudbase-init do all
-three, at the cost of generating a per-VM snippet file from the module. Worth revisiting only
-if something else needs custom meta-data anyway.
+- **Cloud-init owns the network.** The one thing Proxmox and cloudbase-init agree on.
+- **`SetupComplete.cmd` owns the clone's initial state.** It runs once, as SYSTEM, before any
+  login, and it is how cloudbase-init itself gets started -- which makes it the only
+  first-boot mechanism on this image with a perfect record. `sysprep.ps1` appends to it:
+  enable the account, force sshd on, open port 22 on all profiles, and move the connection
+  out of the Public profile. It truncates itself afterwards so the password it sets does not
+  persist in cleartext in every clone.
+- **The template owns the SSH key.** Baked into `administrators_authorized_keys` at build
+  time, with the ACL stripped to SYSTEM and Administrators.
+- **Ansible owns everything after that**, and needs no bootstrap credential at all.
+
+That last point is a reversal from the original design, where Ansible would authenticate once
+with a cloud-init password and install its own key. Nothing sets that password, so the
+bootstrap step was removed rather than repaired -- which is how cloud images have always
+worked. Every clone trusting one lab key is the same trust model as every clone sharing one
+baked password, without the password. `clone-admin-password` survives in `secrets/lab.yaml`
+purely as an emergency console credential.
 
 ### The guest agent needs a driver, not just a service
 

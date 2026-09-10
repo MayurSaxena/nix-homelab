@@ -8,59 +8,39 @@ $unattend = Join-Path $cbDir 'conf\Unattend.xml'
 if (-not (Test-Path $unattend)) { throw "cloudbase-init's Unattend.xml is missing at $unattend; did install-cloudbase-init.ps1 run?" }
 if (-not $env:CLONE_PASSWORD)   { throw "CLONE_PASSWORD is not set; the build must pass it in." }
 
-# Bake the Administrator password into the sysprep answer file.
+# Guarantee the clone's state from SetupComplete.cmd rather than from the answer file.
 #
-# It cannot come from cloud-init, and the reason is worth writing down because everything
-# about the setup looks like it should work. Proxmox puts the password and the hostname in
-# *user-data*, as Linux cloud-config (`password:`, `hostname:`). Cloudbase-init does not read
-# them there: SetUserPasswordPlugin wants `admin_pass` and SetHostNamePlugin wants
-# `local-hostname`, both from *meta-data*, and the meta-data Proxmox generates contains
-# nothing but an instance-id. Network configuration is the exception -- Proxmox writes it in
-# the version-1 format cloudbase-init does understand, which is why a clone comes up on the
-# right address with credentials nobody can use.
+# The answer file was tried first and does not work: writing AdministratorPassword into
+# cloudbase-init's Unattend.xml produced a clone whose account still rejected every
+# credential. What a clone's OOBE actually leaves behind is a machine in the Public firewall
+# profile with only the explicit all-profiles WinRM rule reachable -- 135, 139, 445 and 3389
+# all closed -- and sshd not running. None of that is recoverable remotely, which is how a
+# working template produces an unreachable guest.
 #
-# So: cloud-init owns the network, this owns the password, and Ansible owns the hostname.
-# Setting AdministratorPassword here also enables the built-in account, which OOBE otherwise
-# leaves disabled on a generalised image. Windows scrubs the password from the copy it caches
-# in C:\Windows\Panther, so it does not persist in the clone in cleartext.
-[xml]$x = Get-Content $unattend
-$ns  = 'urn:schemas-microsoft-com:unattend'
-$nsm = New-Object System.Xml.XmlNamespaceManager($x.NameTable)
-$nsm.AddNamespace('u', $ns)
-
-$oobe = $x.SelectSingleNode("/u:unattend/u:settings[@pass='oobeSystem']", $nsm)
-if (-not $oobe) {
-    $oobe = $x.CreateElement('settings', $ns)
-    $oobe.SetAttribute('pass', 'oobeSystem')
-    $x.DocumentElement.AppendChild($oobe) | Out-Null
-}
-$comp = $oobe.SelectSingleNode("u:component[@name='Microsoft-Windows-Shell-Setup']", $nsm)
-if (-not $comp) {
-    $comp = $x.CreateElement('component', $ns)
-    $comp.SetAttribute('name', 'Microsoft-Windows-Shell-Setup')
-    $comp.SetAttribute('processorArchitecture', 'amd64')
-    $comp.SetAttribute('publicKeyToken', '31bf3856ad364e35')
-    $comp.SetAttribute('language', 'neutral')
-    $comp.SetAttribute('versionScope', 'nonSxS')
-    $oobe.AppendChild($comp) | Out-Null
-}
-$existing = $comp.SelectSingleNode('u:UserAccounts', $nsm)
-if ($existing) { $comp.RemoveChild($existing) | Out-Null }
-
-$ua = $x.CreateElement('UserAccounts', $ns)
-$ap = $x.CreateElement('AdministratorPassword', $ns)
-$v  = $x.CreateElement('Value', $ns);     $v.InnerText  = $env:CLONE_PASSWORD
-$pt = $x.CreateElement('PlainText', $ns); $pt.InnerText = 'true'
-$ap.AppendChild($v)  | Out-Null
-$ap.AppendChild($pt) | Out-Null
-$ua.AppendChild($ap) | Out-Null
-$comp.AppendChild($ua) | Out-Null
-$x.Save($unattend)
-Write-Host "Administrator password written into $unattend"
+# SetupComplete.cmd, by contrast, provably runs on this image: it is how cloudbase-init gets
+# started, and cloudbase-init is the one thing that has worked on every clone. So append to
+# it. It runs once, as SYSTEM, before any login.
+#
+# The password is set here as an emergency console credential and the file truncates itself
+# afterwards, so it does not persist in cleartext inside every clone. Ansible does not use it;
+# it authenticates with the key baked in by install-openssh.ps1.
 
 # Registers cloudbase-init to run during the clone's first boot, which is what applies the
-# network configuration before anyone can log in.
+# network configuration before anyone can log in. This writes SetupComplete.cmd.
 & (Join-Path $cbDir 'bin\SetSetupComplete.cmd')
+
+$setupComplete = Join-Path $env:SystemRoot 'Setup\Scripts\SetupComplete.cmd'
+if (-not (Test-Path $setupComplete)) { throw "SetSetupComplete.cmd did not produce $setupComplete" }
+
+Add-Content -Path $setupComplete -Encoding ASCII -Value @"
+net user Administrator "$env:CLONE_PASSWORD" /active:yes
+sc config sshd start= auto
+net start sshd
+netsh advfirewall firewall add rule name="OpenSSH-22" dir=in action=allow protocol=TCP localport=22
+powershell -NoProfile -Command "Get-NetConnectionProfile | Set-NetConnectionProfile -NetworkCategory Private"
+type nul > "%~f0"
+"@
+Write-Host "first-boot commands appended to $setupComplete"
 
 Write-Host "Running sysprep; the VM will power off and Packer will convert it to a template."
 & "$env:SystemRoot\System32\Sysprep\Sysprep.exe" /generalize /oobe /shutdown /unattend:"$unattend"

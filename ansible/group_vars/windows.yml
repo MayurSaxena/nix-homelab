@@ -1,10 +1,14 @@
 ---
-# Bootstrap credential only. Cloud-init cannot set this (see LAB.md), so the template bakes
-# it in at sysprep time and every clone boots with it. The baseline role's first act is to
-# install an SSH key and stop depending on it.
+# No ansible_password. The Ansible public key is baked into the template's
+# administrators_authorized_keys, so a clone is reachable by key from its first boot with no
+# bootstrap credential at all.
 #
-# `extract` takes sops' own tree-path syntax -- '["key"]', the same form `sops --extract`
-# uses on the command line -- not a bare key name. A bare name fails at run time with
-# "component <key> doesn't end with ]", which reads like a parser bug rather than a syntax
-# error in this file.
-ansible_password: "{{ lookup('community.sops.sops', lab_secrets_file, extract='["clone-admin-password"]') }}"
+# That is a reversal from the original design, in which Ansible would authenticate once with
+# a password cloud-init had set and then install its own key. Nothing sets that password:
+# Proxmox writes it into user-data as Linux cloud-config while cloudbase-init reads
+# admin_pass from meta-data, and the sysprep answer file did not work either. Baking the key
+# removes the bootstrap step rather than fixing it, which is how cloud images have always
+# worked. See LAB.md.
+#
+# clone-admin-password still exists in secrets/lab.yaml as an emergency console credential,
+# set by SetupComplete.cmd on first boot. Ansible does not use it.

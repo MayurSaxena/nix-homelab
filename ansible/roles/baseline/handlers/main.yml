@@ -1,5 +1,2 @@
 ---
-- name: restart sshd
-  ansible.windows.win_service:
-    name: sshd
-    state: restarted
+# No handlers: the SSH key is baked into the template, so nothing here restarts sshd.

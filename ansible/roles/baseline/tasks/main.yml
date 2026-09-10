@@ -2,28 +2,9 @@
 # Runs on every Windows guest, and is the first thing to touch a fresh clone. Its job is to
 # take the machine off the bootstrap password and make it addressable, in that order.
 
-- name: Read the Ansible public key
-  ansible.builtin.set_fact:
-    baseline_pubkey: >-
-      {{ lookup('community.sops.sops', lab_secrets_file, extract='["ansible-ssh-public-key"]') | trim }}
-  no_log: true
-
-# Windows sshd ignores ~/.ssh/authorized_keys for every account in the Administrators group.
-# It reads this file instead, and refuses it outright unless the ACL grants nobody but SYSTEM
-# and Administrators -- inherited permissions from ProgramData are enough to make it reject
-# the file silently, falling back to a password prompt with nothing logged at default levels.
-# See LAB.md.
-- name: Install the Ansible key where Windows sshd will actually read it
-  ansible.windows.win_copy:
-    content: "{{ baseline_pubkey }}\n"
-    dest: C:\ProgramData\ssh\administrators_authorized_keys
-  notify: restart sshd
-
-- name: Lock down administrators_authorized_keys so sshd will accept it
-  ansible.windows.win_shell: |
-    $f = 'C:\ProgramData\ssh\administrators_authorized_keys'
-    icacls $f /inheritance:r /grant "SYSTEM:F" /grant "BUILTIN\Administrators:F"
-  changed_when: false
+# The key and the ACL are baked into the template by install-openssh.ps1, so there is nothing
+# to install here. The role still asserts the state it depends on, because the whole class of
+# failure this lab has produced is a thing that looks configured and is not.
 
 - name: Ensure sshd is running and starts at boot
   ansible.windows.win_service:
