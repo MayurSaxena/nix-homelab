@@ -82,9 +82,9 @@
       "The Unarchiver" = 425424353;
       "Tailscale" = 1475387142;
       "WireGuard" = 1451685025;
-      "Keynote" = 409183694;
-      "Numbers" = 409203825;
-      "Pages" = 409201541;
+      # "Keynote" = 409183694;
+      # "Numbers" = 409203825;
+      # "Pages" = 409201541;
       "Pixelmator Pro" = 1289583905;
       "Xcode" = 497799835;
     };

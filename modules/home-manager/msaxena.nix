@@ -11,6 +11,11 @@
       curl
       wget
       jq
+      # Default global Node. Needed on PATH for GUI apps that spawn node/npx and never see
+      # a shell - Claude Desktop's MCP servers - so direnv/devenv can't cover it; per-project
+      # majors still come from devenv. Shadows the unmanaged /usr/local/bin/node 18 pkg
+      # install, since /etc/profiles/per-user precedes /usr/local/bin on PATH.
+      nodejs_24
       nerd-fonts.fira-code
       nixos-rebuild
       alejandra
