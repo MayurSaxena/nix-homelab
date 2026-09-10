@@ -101,6 +101,27 @@ packer-build template:
     export PKR_VAR_proxmox_token=$(sops -d --extract '["proxmox"]["packer-token-secret"]' secrets/msaxena.yaml)
     export PKR_VAR_admin_password=$(sops -d --extract '["build-admin-password"]' secrets/lab.yaml)
     export PKR_VAR_clone_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
+    # Packer will not replace an existing VMID, so a second build of the same template dies
+    # at "Creating VM" with "already exists". Retire the old one first. Safe because the
+    # module takes full clones rather than linked ones: guests already built from this
+    # template do not reference it, so removing it cannot affect them.
+    vmid=$(grep -oE '^[[:space:]]*vm_id[[:space:]]*=[[:space:]]*[0-9]+' packer/{{template}}/build.pkr.hcl | grep -oE '[0-9]+' | head -1)
+    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
+          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
+    cfg=$(curl -sk "${auth[@]}" "${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu/${vmid}/config" 2>/dev/null)
+    if [ "$(jq -r '.data.template // 0' <<<"$cfg")" = "1" ] \
+       && [[ "$(jq -r '.data.name // ""' <<<"$cfg")" == tpl-* ]]; then
+        echo "retiring existing template ${vmid} ($(jq -r .data.name <<<"$cfg"))"
+        curl -sk -X DELETE "${auth[@]}" "${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu/${vmid}" >/dev/null
+        # PVE deletes asynchronously; creating into the id before it is gone fails the same way.
+        for _ in $(seq 1 30); do
+            curl -sfk "${auth[@]}" "${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu/${vmid}/config" >/dev/null 2>&1 || break
+            sleep 2
+        done
+    elif [ -n "$(jq -r '.data.name // ""' <<<"$cfg")" ]; then
+        echo "ERROR: VMID ${vmid} exists but is not a tpl-* template. Refusing to touch it." >&2
+        exit 1
+    fi
     cd packer/{{template}}
     packer init .
     packer build .

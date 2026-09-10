@@ -1,0 +1,5 @@
+---
+# Bootstrap credential only. Cloud-init cannot set this (see LAB.md), so the template bakes
+# it in at sysprep time and every clone boots with it. The baseline role's first act is to
+# install an SSH key and stop depending on it.
+ansible_password: "{{ lookup('community.sops.sops', lab_secrets_file, extract='clone-admin-password') }}"

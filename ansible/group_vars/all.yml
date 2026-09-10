@@ -1,0 +1,13 @@
+---
+lab_domain: lab.internal
+lab_netbios: LAB
+lab_subnet: 10.0.90.0/24
+lab_gateway: 10.0.90.1
+
+# The DC forwards here for anything outside the forest, so the lab resolves the internet and
+# the rest of the homelab without a second resolver.
+lab_upstream_dns: 10.0.10.2
+
+# Credentials are read at run time with the community.sops lookup rather than being stored
+# here, so this file stays committable. See LAB.md.
+lab_secrets_file: "{{ playbook_dir }}/../../secrets/lab.yaml"

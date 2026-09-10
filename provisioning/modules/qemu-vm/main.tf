@@ -117,6 +117,13 @@ resource "proxmox_virtual_environment_vm" "vm" {
   on_boot = var.startup_order != null
   started = true
 
+  # Pull the plug rather than asking politely. The provider's graceful path shuts a guest
+  # down through the QEMU guest agent, so a guest whose agent is broken -- which is exactly
+  # the guest you are most likely to be destroying -- leaves `tofu destroy` waiting on a
+  # shutdown that never happens, with no PVE task in flight to show why. These are lab VMs
+  # rebuilt from a playbook; there is no state in them worth a clean unmount.
+  stop_on_destroy = true
+
   # Rebuilding a template must not destroy the VMs already cloned from it. Same reasoning as
   # the nixos-lxc module ignoring template_file_id: the clone source matters at creation and
   # is meaningless afterwards.
