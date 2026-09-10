@@ -286,46 +286,35 @@ that read it find nothing and do nothing. There is no error anywhere: the clone 
 correct static address, with a hostname nobody chose and a password nobody knows, and the
 first symptom is a 401 from WinRM twenty minutes later.
 
-There is a second layer to this, found by trying the obvious fix and watching it fail.
-Writing `AdministratorPassword` into the sysprep answer file **also does not work**: a clone
-built that way still rejected every credential. What a clone's OOBE actually leaves behind is
-a machine sitting in the **Public** firewall profile with sshd not running, reachable on
-nothing but the one all-profiles WinRM rule the build's own unattend created. Ports 135, 139,
-445 and 3389 are all closed. None of that is fixable remotely, which is how a template that
-built perfectly produces a guest nobody can reach.
+There is a second layer, and finding it took two wrong turns worth recording.
 
-So the work is split by what provably runs, not by what ought to:
+Writing `AdministratorPassword` into the sysprep answer file does not work: a clone built that
+way rejects the credential. Neither does re-establishing state from `SetupComplete.cmd`, which
+was the next attempt: a clone came up with that file still at its full length, when it
+truncates itself on execution, and with cloudbase-init still `Manual` and `Stopped`. That
+second failure was the worse of the two, because a script that never runs never scrubs itself,
+so every clone carried the break-glass password in cleartext at a known path.
 
-- **Cloud-init owns the network.** The one thing Proxmox and cloudbase-init agree on.
-- **`SetupComplete.cmd` owns the clone's initial state.** It runs once, as SYSTEM, before any
-  login, and it is how cloudbase-init itself gets started -- which makes it the only
-  first-boot mechanism on this image with a perfect record. `sysprep.ps1` appends to it:
-  enable the account, force sshd on, open port 22 on all profiles, and move the connection
-  out of the Public profile. It truncates itself afterwards so the password it sets does not
-  persist in cleartext in every clone.
-- **The template owns the SSH key.** Baked into `administrators_authorized_keys` at build
-  time, with the ACL stripped to SYSTEM and Administrators.
-- **Ansible owns everything after that**, and needs no bootstrap credential at all.
+Testing a live clone showed the whole mechanism was unnecessary. **Most of what a clone needs
+survives sysprep already:**
 
-That last point is a reversal from the original design, where Ansible would authenticate once
-with a cloud-init password and install its own key. Nothing sets that password, so the
-bootstrap step was removed rather than repaired -- which is how cloud images have always
-worked. Every clone trusting one lab key is the same trust model as every clone sharing one
-baked password, without the password. `clone-admin-password` survives in `secrets/lab.yaml`
-purely as an emergency console credential.
+| | Survives generalise? |
+|---|---|
+| Administrator password | yes, verified against a live clone |
+| sshd running | yes, the Automatic start type is preserved |
+| Firewall rules | yes |
+| cloudbase-init running | **no**, its installer leaves the service on `Manual` |
 
-### A clone's first reported address is the wrong one
+So the work splits by what survives rather than by what a first-boot script can re-do:
 
-A guest boots briefly on the address baked into the template by the build, and cloudbase-init
-replaces it with the real one a moment later. OpenTofu polls the guest agent as soon as it
-answers, which can land inside that window, so `ipv4_addresses` in state sometimes records
-`10.0.90.99` rather than the guest's actual address.
-
-Harmless -- nothing reads that attribute, and the module's output is informational -- but
-worth knowing before it sends someone chasing a network fault that does not exist. The
-authority is `qm agent <vmid> network-get-interfaces`, or simply connecting. A give-away that
-you are looking at the settled state rather than the transient one: cloudbase-init renames the
-interface to `eth0`, so an adapter still called `Ethernet` has not been configured yet.
+- **Cloud-init owns the network and the hostname.** The one part Proxmox and cloudbase-init
+  agree on, plus the cloud-config `hostname:` key its user-data handler acts on.
+- **The build owns everything else.** `sysprep.ps1` sets the clone password and flips
+  cloudbase-init to `Automatic`, both build-time settings that outlive generalisation. That
+  one start type is the entire remainder of what a first-boot script used to do.
+- **The template owns the SSH key.** Baked into `administrators_authorized_keys` with the ACL
+  stripped to SYSTEM and Administrators.
+- **Ansible owns everything after that**, and needs no bootstrap credential.
 
 ### Proxmox's cloud-init password field does nothing here
 
