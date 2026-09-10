@@ -38,6 +38,32 @@ variable "admin_password" {
   EOT
 }
 
+# The lab VLAN deliberately has no DHCP server: range VMs get static addresses from
+# OpenTofu, and leaving DHCP free means the lab domain controller can serve it later without
+# a fight. A template build therefore has to bring its own address. .99 is reserved for that
+# and sits outside every block windows/README.md allocates to real machines, so two builds
+# would collide with each other but never with a range VM.
+variable "build_ip" {
+  type    = string
+  default = "10.0.90.99"
+}
+
+variable "build_prefix" {
+  type    = number
+  default = 24
+}
+
+variable "build_gateway" {
+  type    = string
+  default = "10.0.90.1"
+}
+
+variable "build_dns" {
+  type        = string
+  default     = "10.0.10.2"
+  description = "technitium, so the build can resolve cloudbase.it to fetch cloudbase-init."
+}
+
 variable "node" {
   type    = string
   default = "proxmox"
@@ -128,6 +154,10 @@ source "proxmox-iso" "ws2025" {
     cd_content = {
       "autounattend.xml" = templatefile("${path.root}/autounattend.xml", {
         admin_password = var.admin_password
+        build_ip       = var.build_ip
+        build_prefix   = var.build_prefix
+        build_gateway  = var.build_gateway
+        build_dns      = var.build_dns
       })
     }
   }
@@ -142,6 +172,9 @@ source "proxmox-iso" "ws2025" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = var.admin_password
+  # The address is known, so do not depend on guest-agent discovery to find it. The agent is
+  # still installed early by the unattend, because the builder waits on it regardless.
+  winrm_host = var.build_ip
   # Generous: this covers the whole unattended install, not just a reboot.
   winrm_timeout = "90m"
 }

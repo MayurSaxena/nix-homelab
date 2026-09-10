@@ -129,6 +129,24 @@
 
       <FirstLogonCommands>
         <!--
+          Order matters here, and the first two exist because the lab VLAN has no DHCP.
+
+          1. The QEMU guest agent is how Packer's Proxmox builder learns the VM's address.
+             Installing it later, from a provisioner, is too late: Packer cannot connect in
+             order to run that provisioner. The loop covers the virtio ISO's unpredictable
+             drive letter the same way the driver paths above do.
+          2. Without a DHCP server on VLAN 90 the interface would come up with a link-local
+             address and nothing could reach it. Set the build address explicitly. This is
+             build-only; sysprep discards it and cloudbase-init assigns the clone's real
+             address from the cloud-init drive.
+        -->
+        <SynchronousCommand wcm:action="add"><Order>1</Order>
+          <CommandLine>cmd.exe /c for %i in (D E F G H) do @if exist %i:\guest-agent\qemu-ga-x86_64.msi msiexec /i %i:\guest-agent\qemu-ga-x86_64.msi /qn /norestart</CommandLine>
+          <Description>Install QEMU guest agent so Packer can discover the IP</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>2</Order>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$a = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1; New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress ${build_ip} -PrefixLength ${build_prefix} -DefaultGateway ${build_gateway}; Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ${build_dns}"</CommandLine>
+          <Description>Static build address, because the lab VLAN has no DHCP</Description></SynchronousCommand>
+        <!--
           Bring up WinRM so Packer can connect and take over. Written inline rather than as
           a script on the CD because the CD's drive letter is no more predictable here than
           it was in WinPE.
@@ -138,19 +156,19 @@
           its Administrator password is replaced per clone by cloudbase-init after sysprep.
           Switching to NTLM (winrm_use_ntlm) would encrypt the payload if that ever matters.
         -->
-        <SynchronousCommand wcm:action="add"><Order>1</Order>
+        <SynchronousCommand wcm:action="add"><Order>3</Order>
           <CommandLine>cmd.exe /c winrm quickconfig -q -force</CommandLine>
           <Description>Enable WinRM</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>2</Order>
+        <SynchronousCommand wcm:action="add"><Order>4</Order>
           <CommandLine>cmd.exe /c winrm set winrm/config/service/auth @{Basic="true"}</CommandLine>
           <Description>Allow basic auth</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>3</Order>
+        <SynchronousCommand wcm:action="add"><Order>5</Order>
           <CommandLine>cmd.exe /c winrm set winrm/config/service @{AllowUnencrypted="true"}</CommandLine>
           <Description>Allow unencrypted transport</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>4</Order>
+        <SynchronousCommand wcm:action="add"><Order>6</Order>
           <CommandLine>cmd.exe /c netsh advfirewall firewall add rule name="WinRM-HTTP" dir=in action=allow protocol=TCP localport=5985</CommandLine>
           <Description>Open WinRM in the firewall</Description></SynchronousCommand>
-        <SynchronousCommand wcm:action="add"><Order>5</Order>
+        <SynchronousCommand wcm:action="add"><Order>7</Order>
           <CommandLine>cmd.exe /c net stop winrm &amp; net start winrm</CommandLine>
           <Description>Restart WinRM to apply</Description></SynchronousCommand>
       </FirstLogonCommands>
