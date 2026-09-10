@@ -32,7 +32,19 @@ if (-not $env:CLONE_PASSWORD)   { throw "CLONE_PASSWORD is not set; the build mu
 $setupComplete = Join-Path $env:SystemRoot 'Setup\Scripts\SetupComplete.cmd'
 if (-not (Test-Path $setupComplete)) { throw "SetSetupComplete.cmd did not produce $setupComplete" }
 
+# The DHCP reset is first, and it is what makes a bare clone usable.
+#
+# The build gives itself a static address so Packer has a deterministic host to connect to,
+# and that address survives into the image: a clone taken straight from the template, with no
+# cloud-init drive, comes up on 10.0.90.99 with its adapter still named Ethernet. Verified on
+# a scratch clone. Two of those would collide, and none of them sit in the DHCP scope.
+#
+# Resetting here rather than before sysprep is deliberate: this script talks to Packer over
+# that very address, so tearing it down mid-build would drop the connection before sysprep
+# ran. SetupComplete.cmd runs on the clone instead, before the cloudbase-init service starts,
+# so a clone with a cloud-init drive still ends up with whatever address cloud-init assigns.
 Add-Content -Path $setupComplete -Encoding ASCII -Value @"
+powershell -NoProfile -Command "Get-NetAdapter -Physical | ForEach-Object { Remove-NetIPAddress -InterfaceIndex `$_.ifIndex -AddressFamily IPv4 -Confirm:`$false -ErrorAction SilentlyContinue; Set-NetIPInterface -InterfaceIndex `$_.ifIndex -Dhcp Enabled; Set-DnsClientServerAddress -InterfaceIndex `$_.ifIndex -ResetServerAddresses }"
 net user Administrator "$env:CLONE_PASSWORD" /active:yes
 sc config sshd start= auto
 net start sshd
