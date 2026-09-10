@@ -117,6 +117,11 @@ resource "proxmox_virtual_environment_vm" "vm" {
   on_boot = var.startup_order != null
   started = true
 
+  # NOTE: this only takes effect for guests created after it was added. It is read from the
+  # resource's stored state at destroy time, not from configuration, so adding it to an
+  # existing guest requires an apply before it helps -- a guest already stuck on a graceful
+  # shutdown has to be stopped out of band first.
+  #
   # Pull the plug rather than asking politely. The provider's graceful path shuts a guest
   # down through the QEMU guest agent, so a guest whose agent is broken -- which is exactly
   # the guest you are most likely to be destroying -- leaves `tofu destroy` waiting on a
