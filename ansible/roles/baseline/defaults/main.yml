@@ -1,0 +1,6 @@
+---
+baseline_timezone: "GMT Standard Time"
+baseline_enable_rdp: true
+# Evaluation media only. Rearming retail or unactivated consumer Windows is pointless at
+# best; the task is guarded on the edition actually being an evaluation.
+baseline_rearm_evaluation: true

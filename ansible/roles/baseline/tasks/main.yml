@@ -1,0 +1,94 @@
+---
+# Runs on every Windows guest, and is the first thing to touch a fresh clone. Its job is to
+# take the machine off the bootstrap password and make it addressable, in that order.
+
+- name: Read the Ansible public key
+  ansible.builtin.set_fact:
+    baseline_pubkey: >-
+      {{ lookup('community.sops.sops', lab_secrets_file, extract='ansible-ssh-public-key') | trim }}
+  no_log: true
+
+# Windows sshd ignores ~/.ssh/authorized_keys for every account in the Administrators group.
+# It reads this file instead, and refuses it outright unless the ACL grants nobody but SYSTEM
+# and Administrators -- inherited permissions from ProgramData are enough to make it reject
+# the file silently, falling back to a password prompt with nothing logged at default levels.
+# See LAB.md.
+- name: Install the Ansible key where Windows sshd will actually read it
+  ansible.windows.win_copy:
+    content: "{{ baseline_pubkey }}\n"
+    dest: C:\ProgramData\ssh\administrators_authorized_keys
+  notify: restart sshd
+
+- name: Lock down administrators_authorized_keys so sshd will accept it
+  ansible.windows.win_shell: |
+    $f = 'C:\ProgramData\ssh\administrators_authorized_keys'
+    icacls $f /inheritance:r /grant "SYSTEM:F" /grant "BUILTIN\Administrators:F"
+  changed_when: false
+
+- name: Ensure sshd is running and starts at boot
+  ansible.windows.win_service:
+    name: sshd
+    state: started
+    start_mode: auto
+
+- name: Set the computer name
+  # Cloud-init cannot do this: Proxmox writes the hostname into user-data as cloud-config,
+  # and cloudbase-init reads local-hostname from meta-data, which Proxmox leaves empty. It
+  # matters before domain join, where the computer name becomes the account name.
+  ansible.windows.win_hostname:
+    name: "{{ inventory_hostname }}"
+  register: _hostname
+
+- name: Reboot if the computer name changed
+  ansible.windows.win_reboot:
+  when: _hostname.reboot_required
+
+- name: Set the timezone
+  ansible.windows.win_timezone:
+    timezone: "{{ baseline_timezone }}"
+
+- name: Enable RDP
+  ansible.windows.win_regedit:
+    path: HKLM:\System\CurrentControlSet\Control\Terminal Server
+    name: fDenyTSConnections
+    data: 0
+    type: dword
+  when: baseline_enable_rdp
+
+- name: Open RDP in the firewall
+  community.windows.win_firewall_rule:
+    name: "Remote Desktop (TCP-In)"
+    localport: 3389
+    action: allow
+    direction: in
+    protocol: tcp
+    state: present
+    enabled: true
+  when: baseline_enable_rdp
+
+- name: Check whether this is evaluation media
+  ansible.windows.win_shell: |
+    (Get-CimInstance SoftwareLicensingProduct -Filter "PartialProductKey IS NOT NULL AND ApplicationId='55c92734-d682-4d71-983e-d6ec3f16059f'").Description
+  register: _lic
+  changed_when: false
+
+# Resets the evaluation clock. Each build of a template consumes one of a small number of
+# rearms, so this runs once per clone rather than on every playbook run.
+- name: Rearm the evaluation period
+  ansible.windows.win_shell: cscript //B C:\Windows\System32\slmgr.vbs /rearm
+  when:
+    - baseline_rearm_evaluation
+    - "'EVAL' in (_lic.stdout | upper)"
+  register: _rearm
+  failed_when:
+    - _rearm.rc != 0
+    - "'exceeded' not in (_rearm.stdout | lower)"
+  changed_when: _rearm.rc == 0
+
+# The guest agent is how Proxmox reports a VM's address and shuts it down cleanly, and a
+# broken one is invisible until tofu hangs on destroy. Assert rather than assume.
+- name: Confirm the QEMU guest agent is running
+  ansible.windows.win_service_info:
+    name: QEMU-GA
+  register: _ga
+  failed_when: _ga.services | length == 0 or _ga.services[0].state != 'started'

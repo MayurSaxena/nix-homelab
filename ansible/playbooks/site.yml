@@ -1,0 +1,9 @@
+---
+# Everything, in dependency order. Safe to run repeatedly: a second run should report zero
+# changed tasks, and one that does not is a bug rather than noise.
+
+- name: Baseline every Windows guest
+  hosts: windows
+  gather_facts: true
+  roles:
+    - baseline
