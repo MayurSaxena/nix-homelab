@@ -76,13 +76,31 @@ resource "proxmox_virtual_environment_user" "packer" {
 # build that Credential Guard work would need -- costs no permission change and no second
 # apply against RBAC. Ten is far more templates than this node will plausibly carry, and is
 # still nothing like granting /vms.
+# A pool, because a per-VMID grant deletes itself.
+#
+# PVE removes a guest's ACL entries when that guest is destroyed. Packer deletes its build VM
+# whenever a build fails, so the grant on /vms/9100 vanished along with it and the *next*
+# build 403'd at "Creating VM" -- a failed build silently revoking its own permission to
+# retry, which reads as a credential problem and is not one. Observed exactly that.
+#
+# A pool is not a guest, so a grant on it outlives the guests inside it. Packer creates its
+# build VM into this pool, and OpenTofu puts lab guests here too, which also makes a range
+# wipe a pool filter rather than a list of names to remember.
+resource "proxmox_virtual_environment_pool" "lab" {
+  pool_id = "lab"
+  comment = "Lab guests on VLAN 90, and the templates they are cloned from."
+}
+
 locals {
   packer_template_vmids = range(9100, 9110)
 
   # id => path. Keys are cosmetic, but keep tofu's plan output readable.
   packer_acl_paths = merge(
+    # Retained as well as the pool grant below, not instead of it. These cover a template
+    # that already exists; the pool grant is what survives a build VM being destroyed.
     { for id in local.packer_template_vmids : "template_${id}" => "/vms/${id}" },
     {
+      lab_pool   = "/pool/${proxmox_virtual_environment_pool.lab.pool_id}"
       iso_store  = "/storage/local"          # read the install ISOs, upload the generated autounattend ISO
       disk_store = "/storage/local-zfs"      # allocate the build VM's disks
       bridge     = "/sdn/zones/localnetwork" # SDN.Use on vmbr0; propagates to the bridge and its VLAN subpaths

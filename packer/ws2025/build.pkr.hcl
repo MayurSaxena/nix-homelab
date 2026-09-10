@@ -88,8 +88,15 @@ source "proxmox-iso" "ws2025" {
 
   # Fixed, because provisioning/rbac.tf grants packer@pve on a reserved block of template
   # VMIDs rather than on /vms. A VMID outside 9100-9109 will fail with a permission error.
-  vm_id                = 9100
-  vm_name              = "tpl-ws2025"
+  vm_id   = 9100
+  vm_name = "tpl-ws2025"
+
+  # Not cosmetic. PVE deletes a guest's ACL entries when the guest is destroyed, so the
+  # grant on /vms/9100 disappears every time a build fails and cleans up after itself, and
+  # the next run 403s at "Creating VM". Building into a pool that packer@pve is granted on
+  # gives the permission somewhere to live that outlives the VM. See provisioning/rbac.tf.
+  pool = "lab"
+
   template_name        = "tpl-ws2025"
   template_description = "Windows Server 2025 Standard Eval, Desktop Experience. Built by Packer; do not edit in place."
 
