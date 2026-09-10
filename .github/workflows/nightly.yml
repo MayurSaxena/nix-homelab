@@ -1,0 +1,75 @@
+---
+# The unattended half of "pushing to main deploys": bump flake.lock, rebuild the base
+# image, and check the result. Deliberately does NOT gate the bump on the check -- a host
+# that stops evaluating fails its own upgrade, stays on its last good generation and pings
+# Discord, while every other host carries on. Holding the lock back would stall all of
+# them for one.
+#
+# Everything here runs with the workflow's own GITHUB_TOKEN; there is no long-lived
+# personal token. The trade is that pushes made with that token trigger no other
+# workflow, which is why CI is called explicitly below rather than relied on to fire.
+name: Nightly
+on:
+  schedule:
+    # 5PM UTC --> 3AM AEST, an hour before the hosts pull it
+    - cron: 0 17 * * *
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-lock:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: nix flake update
+      - id: commit
+        run: |
+          if git diff --quiet -- flake.lock; then
+            echo "flake.lock unchanged"
+          else
+            git config user.name "Flake Bot"
+            git config user.email "actions@github.com"
+            git add flake.lock
+            git commit --signoff -m "Auto-update flake.lock"
+            git push origin HEAD:main
+          fi
+          # The nightly release always tracks the tip of main, lock change or not, so a
+          # human commit to the base module reaches the image within a day too.
+          git tag -f nightly
+          git push -f origin nightly
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  image:
+    # The image is nixpkgs' own proxmox-lxc variant of the base-lxc configuration --
+    # a flake output pinned by the same lock as everything else, rather than whatever
+    # `nix run github:nix-community/nixos-generators` resolves to today.
+    needs: update-lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.update-lock.outputs.sha }}
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: |
+          nix build '.#nixosConfigurations.base-lxc.config.system.build.image' --out-link result
+          # Fixed asset name: provisioning/images.tf downloads exactly this file.
+          cp -L result/tarball/*.tar.xz nixos-proxmox-lxc-standard.tar.xz
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: nightly
+          prerelease: true
+          preserve_order: false
+          files: nixos-proxmox-lxc-standard.tar.xz
+
+  check:
+    needs: update-lock
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.update-lock.outputs.sha }}
+    secrets:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}

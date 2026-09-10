@@ -26,7 +26,7 @@ provisioning/          # OpenTofu configs for Proxmox LXC provisioning
 secrets/               # SOPS-encrypted secrets (age + YubiKey)
 assets/                # Committed in the clear — hookscript and public keys only
 util/                  # pve-auth.sh — sourced, not executed, for 2FA against the PVE API
-.github/workflows/     # CI: LXC image generation, flake.lock auto-update
+.github/workflows/     # CI: nightly lock bump + base image; lint and eval on every push
 ```
 
 ## How It Fits Together
@@ -45,8 +45,11 @@ Four systems hand off to each other:
 3. **The first `nixos-rebuild switch` makes it itself.** Impermanence turns on, services
    start, secrets decrypt against the host key OpenTofu already registered.
 4. **`system.autoUpgrade` keeps it current.** Each NixOS host pulls this repo daily and
-   switches. A separate workflow updates `flake.lock` on main and re-tags `nightly`,
-   rebuilding the images. The Mac is excluded — see *Deploying on a New Mac*.
+   switches. A nightly workflow updates `flake.lock` on main, re-tags `nightly`, rebuilds
+   the image, and evaluates every host so a bump that breaks one is announced on Discord
+   before that host tries it — but never held back: the other hosts still move, and the
+   broken one stays on its last good generation. The Mac is excluded — see *Deploying on
+   a New Mac*.
 
 Pushing to main therefore deploys. There is no staging step.
 
@@ -101,7 +104,8 @@ in `nixosConfigurations`, which isn't always the module name in `provisioning/ma
 
 ### Base Images
 
-CI publishes a single image, rebuilt on every push of the `nightly` tag: `base-lxc` →
+CI publishes a single image, rebuilt by the nightly workflow (it is nixpkgs' own image
+output `nixosConfigurations.base-lxc.config.system.build.image`): `base-lxc` →
 `nixos-proxmox-lxc-standard.tar.xz`, tracked as one template resource,
 `nixos-standard-nightly`, in `provisioning/images.tf`. Every host's `ct_template_id` points at
 it — there used to be a `prod` tag and a `remotebuild` variant, both gone (see
@@ -211,6 +215,8 @@ just                              # list every recipe
 just fmt                          # alejandra
 just hosts                        # every host this flake can build
 just check <host>                 # build a host without switching
+just check-all                    # evaluate every host and the Mac, as CI does
+just lint                         # statix + deadnix, as CI does
 just deploy <host> <ip>           # first switch from the working tree, nothing committed
 just plan / just apply            # tofu, with Proxmox auth handled (needs a YubiKey)
 just secret <file>                # edit an encrypted file
@@ -231,6 +237,11 @@ source util/pve-auth.sh                                                 # auth f
 cd provisioning && tofu apply
 ./provisioning/onboard-host.sh <flake-host-key> <container-ip>          # finish a new host
 ```
+
+The repo has a devShell with the tools its scripts need (sops, age, ssh-to-age, oathtool,
+opentofu, just, the linters); `.envrc` loads it through direnv, so nothing has to be
+installed by hand. GitHub Actions pins every action to a commit SHA and Dependabot proposes
+the bumps; a `DISCORD_WEBHOOK` repository secret, if set, gets one message per red CI run.
 
 Every host in `nixosConfigurations` also gets an SSH alias on the Mac automatically, so it is
 `ssh plex`, not `ssh root@plex`. The list is derived, so a new host needs no SSH change.

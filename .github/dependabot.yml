@@ -1,0 +1,9 @@
+---
+# The workflows pin every action to a commit SHA, so a new release of an action reaches
+# this repo only as a pull request from here, never by a tag moving underneath us.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

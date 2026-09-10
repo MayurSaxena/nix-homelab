@@ -1,0 +1,115 @@
+---
+# Report-only checks: lint, then evaluate every host and the Mac. Nothing here gates a
+# deploy -- hosts pull main nightly regardless -- so a red run is an early warning naming
+# which host will fail tonight, not a barrier. Called from nightly.yml after the lock bump
+# (a push made with GITHUB_TOKEN never triggers `on: push`, so it has to be called), and
+# runs on its own for every human push and pull request.
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to check; empty means the triggering commit.
+        type: string
+        required: false
+        default: ""
+    secrets:
+      DISCORD_WEBHOOK:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - name: Format (alejandra)
+        run: nix develop --command alejandra --check .
+      - name: Lint (statix)
+        run: nix develop --command statix check .
+      - name: Dead code (deadnix)
+        # --no-lambda-pattern-names: host files destructure `outputs` for uniformity and
+        # modules carry `inputs`/`pkgs` in their heads by convention (CLAUDE.md).
+        run: nix develop --command deadnix --fail --no-lambda-pattern-names .
+
+  hosts:
+    # The matrix is read from the flake so a new host is checked the moment it is
+    # registered, with nothing to add here.
+    runs-on: ubuntu-latest
+    outputs:
+      nixos: ${{ steps.list.outputs.nixos }}
+      darwin: ${{ steps.list.outputs.darwin }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - id: list
+        run: |
+          echo "nixos=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames)" >> "$GITHUB_OUTPUT"
+          echo "darwin=$(nix eval --json .#darwinConfigurations --apply builtins.attrNames)" >> "$GITHUB_OUTPUT"
+
+  eval-nixos:
+    # Evaluation only: cheap, and it is what catches option renames, typos and a secrets
+    # key that no longer exists. Whether a package still *compiles* is left to the
+    # hosts' own nightly builds on nix-builder.
+    needs: hosts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJSON(needs.hosts.outputs.nixos) }}
+    name: eval ${{ matrix.host }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: nix eval --raw '.#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath'
+
+  eval-darwin:
+    needs: hosts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJSON(needs.hosts.outputs.darwin) }}
+    name: eval ${{ matrix.host }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: nix eval --raw '.#darwinConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath'
+
+  notify:
+    # One Discord message per red run, to the same channel as the hosts' own failure
+    # notifier, so tonight's breakage is announced once before it happens on every host.
+    # Silent when the DISCORD_WEBHOOK repository secret is unset.
+    needs: [lint, eval-nixos, eval-darwin]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK not set; skipping notification"
+            exit 0
+          fi
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | .key' <<<"$RESULTS" | paste -sd, -)
+          payload=$(jq -n --arg f "$failed" --arg r "$REF" --arg u "$RUN_URL" \
+            '{content: "🔴 **CI** failed on `\($r)`: \($f)\n\($u)"}')
+          # --fail so a revoked webhook shows up here rather than silently succeeding.
+          curl -sS --fail --max-time 20 -H 'Content-Type: application/json' -X POST -d "$payload" "$WEBHOOK" >/dev/null

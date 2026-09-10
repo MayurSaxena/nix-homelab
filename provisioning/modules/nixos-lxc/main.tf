@@ -139,8 +139,11 @@ HOSTNAME=${self.ipv4["eth0"]} #${self.initialization[0].hostname}.${self.initial
 # which then silently encrypts nothing to this host. Fail loudly instead.
 age_key=""
 attempt=1
+# ssh-to-age comes from the flake's devShell (direnv); the ad-hoc, unpinned copy is
+# only a fallback for when the shell isn't loaded.
+if command -v ssh-to-age >/dev/null 2>&1; then sta=ssh-to-age; else sta="nix shell nixpkgs#ssh-to-age --command ssh-to-age"; fi
 while [ "$attempt" -le 30 ]; do
-  candidate=$(nix shell nixpkgs#ssh-to-age --command sh -c "ssh-keyscan -t ed25519 -T 5 $HOSTNAME 2>/dev/null | ssh-to-age" 2>/dev/null | head -n1 || true)
+  candidate=$(ssh-keyscan -t ed25519 -T 5 $HOSTNAME 2>/dev/null | $sta 2>/dev/null | head -n1 || true)
   case "$candidate" in
     age1*)
       age_key=$candidate

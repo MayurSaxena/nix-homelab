@@ -45,19 +45,32 @@ rootfs wipe (`/boot`, `/nix`, `/persistent`, `/sbin`, `/bin`). Only `/persistent
 ungated variable** (`custom_hookscript`) — `rootfs_impermanence = true` alone gets you the
 volumes and no rollback. See Provisioning.
 
-**2. The container boots a CI base image.** GitHub Actions builds one LXC image on every push
-of the `nightly` tag via nixos-generators and attaches it to a GitHub Release. This is just
-enough NixOS to be SSH-reachable and sops-capable — a bootstrap, not the host.
+**2. The container boots a CI base image.** The nightly workflow builds one LXC image —
+nixpkgs' own `nixosConfigurations.base-lxc.config.system.build.image` output,
+which every configuration has — and attaches it to the `nightly` GitHub Release. This is
+just enough NixOS to be SSH-reachable and sops-capable — a bootstrap, not the host.
 
 **3. The first `nixos-rebuild switch` applies the real config.** This is where the host
 becomes itself: impermanence turns on, services start, secrets get decrypted using the
 host key that tofu already registered.
 
 **4. `system.autoUpgrade` keeps it current.** Every host pulls
-`github:MayurSaxena/nix-homelab` daily (18:00 UTC + up to 120min jitter) and switches. A
-separate daily workflow runs `nix flake update`, commits `flake.lock` straight to main, and
-force-pushes the `nightly` tag — which re-triggers the image build. So a merged change
-reaches every host within a day without anyone touching a container.
+`github:MayurSaxena/nix-homelab` daily (18:00 UTC + up to 120min jitter) and switches. An
+hour earlier, `.github/workflows/nightly.yml` runs `nix flake update`, commits `flake.lock`
+straight to main, force-pushes the `nightly` tag, rebuilds the image, and then calls
+`ci.yml` to evaluate every host against the new lock. That check is **report-only by
+design**: a host that stops evaluating fails its own upgrade, stays on its last good
+generation and pings Discord, while every other host carries on. Do not turn it into a gate
+on the lock commit — holding the bump back would stall the whole fleet for one host, which
+is the opposite of what the daily upgrade is for. So a merged change reaches every host
+within a day without anyone touching a container.
+
+`ci.yml` also runs on every human push and pull request (alejandra, statix, deadnix, and an
+eval of each host's toplevel), and a `DISCORD_WEBHOOK` repository secret, if present, gets
+one message per red run. Every action is pinned to a commit SHA; Dependabot proposes bumps.
+The workflows use only the ephemeral `GITHUB_TOKEN` — there is no personal access token —
+which is why `nightly.yml` *calls* `ci.yml` instead of relying on its push to trigger it
+(pushes made with that token never trigger other workflows).
 
 **The Mac is the exception to step 4.** nix-darwin has no `system.autoUpgrade`, so
 `custom.auto-upgrade-mac` (`modules/macos/auto-upgrade.nix`) supplies one: a root
@@ -91,6 +104,8 @@ The consequence worth internalising: **pushing to main deploys.** There is no st
 flake.nix              Inputs, both config builders, every host registration
 justfile               `just` recipes for the commands with flags worth not retyping
 .sops.yaml             Which age keys decrypt which secret files (tofu-managed)
+.envrc / statix.toml   direnv loads the flake's devShell (the tools the scripts need);
+                       statix config disables the two lints the repo's style contradicts
 hosts/<name>.nix       One file per host — service config and little else
 modules/nixos/         Base module + the custom.* capability modules
 modules/macos/         nix-darwin equivalents (deliberately not shared with NixOS): base
@@ -272,8 +287,9 @@ from `nurpkgs`: `yamtrack` and `trek` each import
 `inputs.nur.repos.msaxena.modules.nixos.<name>`, which needs no new input because NUR is
 already one (see *When a package isn't in nixpkgs*). Anything in nixpkgs needs no import, and
 the base module already brings in sops-nix, NUR, impermanence and the `custom.*` modules.
-Adding a module from a *new* flake input is a three-place change: flake input, host `imports`, and — if it needs an overlay — an inline
-module list in `flake.nix`, never `nixpkgs.overlays` in the host file.
+Adding a module from a *new* flake input is a three-place change: flake input, host
+`imports`, and — if it needs an overlay — an inline module list in `flake.nix`, never
+`nixpkgs.overlays` in the host file.
 
 ---
 
@@ -678,8 +694,8 @@ numbers written here — they're tuned per service and change.
 
 ### Choosing `ct_template_id`
 
-There's no choice to make. CI publishes a single image, rebuilt on every push of the
-`nightly` tag — one resource, `nixos-standard-nightly`, in `provisioning/images.tf` — and
+There's no choice to make. CI publishes a single image, rebuilt by the nightly workflow
+— one resource, `nixos-standard-nightly`, in `provisioning/images.tf` — and
 every host's `ct_template_id` points at it. There used to be a `prod` tag (never automated;
 only a human could push it, and it had gone stale) and a `remotebuild` variant (pre-baked
 `custom.remote-builds.enable` for hosts that couldn't reach `nix-builder` during bootstrap);
@@ -860,6 +876,8 @@ forget live. `just` on its own lists them.
 ```bash
 just fmt                          # nix fmt . (alejandra)
 just check <host>                 # build a host without switching
+just check-all                    # nix flake check --no-build --all-systems: what CI runs
+just lint                         # statix + deadnix from the devShell
 just unit <host> <unit>           # a unit's serviceConfig, for persistence decisions
 just deploy <host> <ip>           # first switch from the working tree, nothing committed
 just plan / just apply [-target=module.<name>]   # tofu, Proxmox auth handled for you

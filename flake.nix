@@ -116,6 +116,41 @@
     # so that we can use `nix fmt .` at the shell
     formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.alejandra);
 
+    # Every host as a check, so `nix flake check --no-build --all-systems` proves that
+    # everything still *evaluates* -- which is what CI runs on every push. Building is
+    # what the hosts themselves do nightly; the checks are never built in CI.
+    checks = {
+      x86_64-linux =
+        nixpkgs.lib.mapAttrs (_: host: host.config.system.build.toplevel)
+        self.nixosConfigurations;
+      aarch64-darwin =
+        nixpkgs.lib.mapAttrs (_: host: host.config.system.build.toplevel)
+        self.darwinConfigurations;
+    };
+
+    # The tools this repo's scripts and recipes reach for, pinned by this lock. `.envrc`
+    # loads it through direnv on the Mac; CI runs the linters through it. Nothing here
+    # is a service dependency -- those come from the host configurations.
+    devShells = forAllSystems (system: let
+      pkgs = nixpkgs.legacyPackages.${system};
+    in {
+      default = pkgs.mkShellNoCC {
+        packages = with pkgs; [
+          sops
+          age
+          age-plugin-yubikey
+          ssh-to-age # tofu provisioner: host key -> age recipient
+          oath-toolkit # util/pve-auth.sh: TOTP for the Proxmox API
+          opentofu
+          just
+          alejandra
+          statix
+          deadnix
+          jq
+        ];
+      };
+    });
+
     # All Mac builds go here, where key is hostname and value is the config file
     darwinConfigurations = {
       "Mayurs-MacBook-Pro" = mkDarwinConfig ./hosts/Mayurs-MacBook-Pro.nix;

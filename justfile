@@ -26,6 +26,15 @@ check host:
 check-mac:
     nix build .#darwinConfigurations.Mayurs-MacBook-Pro.config.system.build.toplevel
 
+# Evaluate every host and the Mac without building anything: what CI does on every push.
+check-all:
+    nix flake check --no-build --all-systems
+
+# The linters CI runs (statix, deadnix), from the flake's devShell.
+lint:
+    nix develop --command statix check .
+    nix develop --command deadnix --fail --no-lambda-pattern-names .
+
 # Read a unit's serviceConfig, for working out persistence (CLAUDE.md step 2).
 unit host name:
     nix eval .#nixosConfigurations.{{host}}.config.systemd.services.{{name}}.serviceConfig

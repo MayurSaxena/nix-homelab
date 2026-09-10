@@ -43,7 +43,13 @@ if [[ $(jq -r '.data.NeedTFA' <<<"${resp}") == 1 ]]; then
       echo "See CLAUDE.md's 'Authenticating to the Proxmox API' section, or pass a live code as \$1." >&2
       return 1
     fi
-    _user_totp_password=$(nix shell nixpkgs#oath-toolkit --command oathtool --totp -b "${totp_secret}")
+    ## oathtool comes from the flake's devShell (direnv); fall back to an ad-hoc,
+    ## unpinned copy only when the shell isn't loaded.
+    if command -v oathtool >/dev/null 2>&1; then
+      _user_totp_password=$(oathtool --totp -b "${totp_secret}")
+    else
+      _user_totp_password=$(nix shell nixpkgs#oath-toolkit --command oathtool --totp -b "${totp_secret}")
+    fi
   fi
   resp=$( curl -q -s -k  -H "CSRFPreventionToken: ${resp_csrf}" --data-urlencode  "username=${PROXMOX_VE_USERNAME}" --data-urlencode "tfa-challenge=${auth_ticket}" --data-urlencode "password=totp:${_user_totp_password}"  "${PROXMOX_VE_ENDPOINT}${proxmox_api_ticket_path}" )
   auth_ticket=$( jq -r '.data.ticket' <<<"${resp}" )

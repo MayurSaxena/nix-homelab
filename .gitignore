@@ -30,3 +30,5 @@ override.tf.json
 .terraform.tfstate.lock.info
 .terraformrc
 terraform.rc
+# --- direnv (`use flake` in .envrc) ---
+.direnv/

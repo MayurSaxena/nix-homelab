@@ -1,0 +1,8 @@
+# statix lints, minus the two that contradict this repo's conventions:
+#   repeated_keys -- the host preamble is deliberately one `custom.<x>.enable = ...;`
+#                    line per toggle (CLAUDE.md, "The custom.* namespace"), not a
+#                    nested `custom = { ... }` block.
+#   empty_pattern -- `{...}:` is the conventional head of a module that takes no args.
+disabled = ["repeated_keys", "empty_pattern"]
+nix_version = "2.4"
+ignore = [".direnv", "result"]

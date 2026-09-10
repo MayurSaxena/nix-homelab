@@ -1,5 +1,6 @@
-# CI publishes a single LXC base image, rebuilt on every push of the `nightly`
-# tag (see .github/workflows/generate-lxc.yml). There used to be a `prod` tag
+# CI publishes a single LXC base image, rebuilt by the nightly workflow after
+# it bumps flake.lock (see .github/workflows/nightly.yml); the `nightly` tag
+# and release always track the tip of main. There used to be a `prod` tag
 # and a `remotebuild` variant that pre-baked custom.remote-builds.enable for
 # hosts that couldn't reach nix-builder during bootstrap — both are gone.
 # `prod` was never automated (nothing but a human ever pushed it, and it had
