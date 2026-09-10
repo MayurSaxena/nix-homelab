@@ -733,6 +733,13 @@ from `secrets/msaxena.yaml` and computes the current code with `oathtool`, so no
 to be typed in from a phone or authenticator app. Passing a code manually as `$1` still works
 as a fallback (`source util/pve-auth.sh 123456`) if the secret isn't set up yet.
 
+**One source per TOTP window.** The code is only valid for its 30-second window and PVE
+rejects a replay, so sourcing the script twice in quick succession leaves an empty ticket and
+the *next* tofu command fails with `failed to create API client: AuthTicket must include a
+valid username` — which reads like a credential problem and isn't. Wait for the next window
+and source it once. Note also that every shell is separate: source the script and run `tofu`
+in the *same* shell, which is what `just plan`/`just apply` already do.
+
 The script is fully self-contained — `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_USERNAME`/
 `PROXMOX_VE_INSECURE` default inside it and `PROXMOX_VE_PASSWORD` decrypts from
 `proxmox/root_pam-password` in the same secrets file, so `provisioning/.envrc` is no longer a
