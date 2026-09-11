@@ -259,16 +259,22 @@ clone in the Proxmox UI and still be reachable by key.
 |---|---|---|
 | Reachable by SSH key | yes | yes |
 | Guest agent reporting | yes | yes |
-| Address | DHCP lease | static, from cloud-init |
+| Address | **the build's, `10.0.90.99`** | the one in `vms.tf` |
 | Hostname | OOBE-generated, e.g. `ADMINIS-FNNQLK3` | the name in `vms.tf` |
+| Administrator password | the build's | the one in `secrets/lab.yaml` |
 | In the `lab` pool, tagged | only if you say so | yes |
 
-The DHCP lease is not automatic, and getting there took a fix. The build gives itself a
-static address so Packer has a deterministic host to talk to, and that address survives into
-the image: the first scratch clone came up on `10.0.90.99` with its adapter still named
-`Ethernet`. `SetupComplete.cmd` now resets the adapter to DHCP on first boot, before the
-cloudbase-init service starts, so a bare clone gets a lease while a cloud-init clone still
-gets whatever cloud-init assigns.
+**A bare Windows clone inherits the build's address**, because the build sets one in its
+answer file so Packer has a deterministic host to connect to, and that survives into the
+image. It is reachable there, so the clone is usable, but two of them would collide and one
+left running blocks the next build. `just packer-build` refuses to start when anything
+answers on that address, which turns the collision into a message rather than a build that
+silently provisions the wrong machine.
+
+Attempts to reset it to DHCP on the clone were abandoned rather than fixed: doing it before
+sysprep drops the connection Packer is using, and the `SetupComplete.cmd` that once did it
+turned out not to run at all. The residue is a Windows-template quirk, not a property of the
+module. A Linux guest cloned from a downloaded cloud image has no baked address to inherit.
 
 ## Cloud-init does the whole job, once Proxmox is left alone
 
@@ -301,6 +307,25 @@ So the split is simply:
 different function and prints the generic metadata, so `admin_pass` is absent from its output
 even when the drive the guest actually reads contains it. Believing that output is what sent
 this repo down the detour above.
+
+### Telling whether cloud-init actually ran
+
+Not from the console: a healthy lock screen looks the same either way. Three signals do tell
+you, and two need no login.
+
+| Signal | Cloud-init ran | It did not |
+|---|---|---|
+| Hostname | the name from `vms.tf` | OOBE-generated, e.g. `ADMINIS-SS8OQIO` |
+| Address | the one assigned | the build's `10.0.90.99` |
+| Administrator password | the value in `secrets/lab.yaml` | rejected |
+
+`qm agent <vmid> network-get-interfaces` answers the first two together.
+
+**The interface name is not a signal.** Under `nocloud` cloudbase-init renames the adapter to
+`eth0`, which makes a tempting tell; under `configdrive2` -- the format Proxmox picks for
+Windows -- it stays `Ethernet` on a guest where cloud-init demonstrably worked. Verified on a
+clone carrying the right hostname, address and password with an adapter still called
+`Ethernet`.
 
 ### The guest agent needs a driver, not just a service
 
