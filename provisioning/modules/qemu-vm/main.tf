@@ -90,22 +90,24 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   initialization {
     datastore_id = var.vm_disk_datastore
-    # configdrive2, which is what Proxmox itself picks for a Windows ostype when nothing
-    # overrides it, and the comment in its Cloudinit.pm says why: "windows' cloudbased-init
-    # only supports configdrivev2".
+    # No `type`. Proxmox picks the cloud-init format from the guest's ostype, and its choice
+    # is already correct for every OS this module will ever clone:
     #
-    # This was set to "nocloud" and that was the mistake behind a long detour. Proxmox has
-    # first-class cloudbase-init support: generate_configdrive2 branches on the ostype and
-    # calls cloudbase_configdrive2_metadata, which writes admin_pass and public_keys into
-    # metadata. NoCloud gets none of that -- NoCloudConfigDriveService does not even
-    # implement get_admin_password -- so cloudbase-init found no password, generated a
-    # random one, and the credential nobody could explain was Proxmox doing the right thing
-    # and this module telling it not to.
+    #     if (defined(my $format = $conf->{citype})) { return $format; }
+    #     if (defined(my $ostype = $conf->{ostype})) {
+    #         return 'configdrive2' if windows_version($ostype);
+    #     }
+    #     return 'nocloud';
     #
-    # Note that `qm cloudinit dump <vmid> meta` does NOT show this: it calls a different
-    # function and prints the generic metadata, so it will not show admin_pass even when the
-    # drive the guest sees contains it.
-    type = "configdrive2"
+    # configdrive2 for Windows, because that is the only format cloudbase-init reads, and it
+    # is the branch where Proxmox writes admin_pass and public_keys into metadata. nocloud
+    # for everything else, because Linux cloud-init wants MAC-based interface matching.
+    #
+    # Both of the obvious overrides are wrong. "nocloud" was set here first and cost days:
+    # NoCloudConfigDriveService implements no get_admin_password, so cloudbase-init invented a
+    # random password and every workaround built on top of that was solving a problem this
+    # line had created. Pinning "configdrive2" instead fixes Windows and breaks Linux. Saying
+    # nothing is the only setting that is right for both.
 
     dns {
       domain  = var.domain
