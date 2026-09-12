@@ -52,50 +52,51 @@ resource "proxmox_virtual_environment_user" "packer" {
   comment = "Packer image builds (Terraform). Token auth only; no password is set."
   enabled = true
 
-  # ACLs are declared here rather than as separate proxmox_virtual_environment_acl resources.
+  # No acl blocks here: the grants are proxmox_acl resources below.
   #
-  # This resource carries its own `acl` block, and the two models do not coexist: with acl
-  # resources alongside it, OpenTofu reads the live ACLs into this resource at refresh, plans
-  # to delete them all because the config declares none, and the two fight on every apply --
-  # visible in a plan only as an innocuous "1 to change", and capable of removing rows nothing
-  # asked it to touch. An earlier revision suppressed that with ignore_changes. Declaring the
-  # grants here removes the conflict instead of hiding it, and puts the whole grant in one
-  # readable place.
-  #
-  # Scoped to a pool rather than to guest ids. PVE deletes a guest's ACL entries when the
-  # guest is destroyed, so a grant on /vms/<id> revokes itself the first time a build fails
-  # and cleans up after itself -- the next build then 403s at "Creating VM". A pool is not a
-  # guest and outlives the guests inside it, so one entry replaces a block of reserved ids and
-  # there is nothing to reserve in advance or to keep in step with the templates.
-  acl {
-    path      = "/pool/${proxmox_virtual_environment_pool.lab.pool_id}"
-    role_id   = proxmox_virtual_environment_role.packer_build.role_id
-    propagate = true
+  # They were declared inline for a while, because on provider 0.98.1 the two models could
+  # not coexist -- refresh read the live ACLs into this resource, saw a config declaring
+  # none, and planned to delete them all, which showed up in a plan only as an innocuous
+  # "1 to change". Provider 0.107.0 fixed that by no longer populating this block from the
+  # cluster, and deprecated it in the same release, so the inline form is now the
+  # deprecated half of a problem that no longer exists.
+}
+
+# The grants, one resource per path.
+#
+# Scoped to a pool rather than to guest ids. PVE deletes a guest's ACL entries when the
+# guest is destroyed, so a grant on /vms/<id> revokes itself the first time a build fails
+# and cleans up after itself, and the next build then 403s at "Creating VM". A pool is not
+# a guest and outlives the guests inside it, so one entry replaces a block of reserved ids
+# with nothing to reserve in advance or keep in step with the templates.
+#
+# The token is created with privilege separation off, so it inherits these rather than
+# needing its own copies.
+#
+# After changing anything here, check PVE's own answer rather than the apply's exit code:
+#
+#   GET /access/permissions?userid=packer@pve!packerbuild
+#
+# That endpoint returns the privileges PVE actually computes for the token, and it is the
+# only thing that has reliably told the truth about whether a grant landed.
+resource "proxmox_acl" "packer" {
+  for_each = {
+    # Create, configure and destroy the build VM, and the template it becomes.
+    "/pool/${proxmox_virtual_environment_pool.lab.pool_id}" = true
+    # Read the install ISOs; upload and remove the generated autounattend ISO.
+    "/storage/local" = true
+    # Allocate the build VM's disks, EFI vars and TPM state.
+    "/storage/local-zfs" = true
+    # SDN.Use on vmbr0, propagating to the bridge and its VLANs.
+    "/sdn/zones/localnetwork" = true
+    # Sys.Audit only; the rest of the role means nothing at this path.
+    "/nodes/proxmox" = true
   }
 
-  acl {
-    path      = "/storage/local" # read the install ISOs; upload and remove the generated autounattend ISO
-    role_id   = proxmox_virtual_environment_role.packer_build.role_id
-    propagate = true
-  }
-
-  acl {
-    path      = "/storage/local-zfs" # allocate the build VM's disks
-    role_id   = proxmox_virtual_environment_role.packer_build.role_id
-    propagate = true
-  }
-
-  acl {
-    path      = "/sdn/zones/localnetwork" # SDN.Use on vmbr0, propagating to the bridge and its VLANs
-    role_id   = proxmox_virtual_environment_role.packer_build.role_id
-    propagate = true
-  }
-
-  acl {
-    path      = "/nodes/proxmox" # Sys.Audit only; the rest of the role is meaningless here
-    role_id   = proxmox_virtual_environment_role.packer_build.role_id
-    propagate = true
-  }
+  path      = each.key
+  user_id   = proxmox_virtual_environment_user.packer.user_id
+  role_id   = proxmox_virtual_environment_role.packer_build.role_id
+  propagate = each.value
 }
 
 # The API token is deliberately NOT declared here.

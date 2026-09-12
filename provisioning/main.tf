@@ -1,10 +1,29 @@
+# source_raw rather than source_file, because source_file never notices an edit.
+#
+# The provider's read for a local source_file computes its "changed" flag by writing the
+# file's mtime and size into state and then reading back the values it just wrote, so the
+# comparison is against itself and is always false. Editing this script would upload
+# nothing, with a clean plan and a stale script still running on the node -- and this
+# script is what performs every impermanent host's rootfs rollback, so a silent no-op here
+# is expensive. Upstream closed the issue as not planned and named this as the workaround.
+#
+# source_raw.data is ForceNew, so a content change replaces the file deterministically. One
+# consequence to expect rather than be alarmed by: because the resource is replaced, its id
+# reads as "known after apply", so every container referencing it plans as an in-place
+# update. Those settle to the identical volume id (local:snippets/rootfs-impermanence.sh)
+# and change nothing on the container; they are the cost of the script being managed at
+# all, and only appear on an apply where the script's content actually changed.
 resource "proxmox_virtual_environment_file" "nixos_lxc_impermanence_hookscript" {
   content_type = "snippets"
   datastore_id = "local"
   node_name    = var.pve_node_name
-  file_mode    = 0700
-  source_file {
-    path = "../assets/rootfs-impermanence.sh"
+  # Quoted: the schema type is string and HCL has no octal literal, so an unquoted 0700 is
+  # the decimal number 700 that happens to stringify to a value the provider then parses as
+  # octal. Same result, by coincidence rather than by intent.
+  file_mode = "0700"
+  source_raw {
+    data      = file("../assets/rootfs-impermanence.sh")
+    file_name = "rootfs-impermanence.sh"
   }
 }
 
