@@ -1,0 +1,36 @@
+---
+# Join a Windows guest to lab.internal. Opt-in, never automatic.
+#
+# Run it deliberately:
+#     just lab-play join.yml -e targets=test01 -i '10.0.90.123,'
+#
+# Nothing joins a domain as a side effect of being created, because joining is one of the
+# things this lab exists to *watch*: the DNS dependency, the SRV lookups, the computer
+# object appearing, the Kerberos tickets that follow. A box that silently arrived joined
+# teaches none of that, and leaves stale computer objects behind when it is thrown away.
+
+- name: Resolve the domain through the domain controller
+  # A domain member must resolve against AD DNS, and only against it. This is the one place
+  # the DC's address is deliberately forced ahead of technitium: a member that queries a
+  # non-AD resolver gets NXDOMAIN for the SRV records it needs and then fails
+  # intermittently, in ways that look like AD itself is broken.
+  ansible.windows.win_dns_client:
+    adapter_names: "{{ ansible_facts.interfaces | map(attribute='connection_name') | list }}"
+    dns_servers:
+      - "{{ lab_dc_ip }}"
+
+- name: Read the domain join credential
+  ansible.builtin.set_fact:
+    domain_join_password: >-
+      {{ lookup('community.sops.sops', lab_secrets_file, extract='["clone-admin-password"]') | trim }}
+  no_log: true
+
+- name: Join the domain
+  microsoft.ad.membership:
+    dns_domain_name: "{{ lab_domain }}"
+    domain_ou_path: "{{ domain_member_ou }}"
+    domain_admin_user: "{{ lab_domain }}\\Administrator"
+    domain_admin_password: "{{ domain_join_password }}"
+    state: domain
+    reboot: "{{ domain_member_reboot }}"
+  no_log: true

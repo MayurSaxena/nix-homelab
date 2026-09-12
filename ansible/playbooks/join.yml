@@ -1,0 +1,13 @@
+---
+# Join hosts to lab.internal, on purpose and never as a side effect.
+#
+#   just lab-play join.yml -e targets=ctf01
+#   just lab-play join.yml -e targets=all -i '10.0.90.123,'   # an ad-hoc guest, not in inventory
+#
+# `targets` is required rather than defaulted, so a mistyped or forgotten limit cannot join
+# every Windows machine in the lab to the domain.
+- name: Join Windows hosts to the domain
+  hosts: "{{ targets }}"
+  gather_facts: true
+  roles:
+    - domain_member

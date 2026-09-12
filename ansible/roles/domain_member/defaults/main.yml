@@ -1,0 +1,9 @@
+---
+# The OU new members land in. The domain_controller role builds the OU tree; joining
+# straight into the default Computers container works but makes GPO targeting awkward
+# later, and moving a computer object after the fact is a second step nobody remembers.
+domain_member_ou: "OU=Workstations,OU=Lab,DC=lab,DC=internal"
+
+# Reboot to complete the join. True is correct for an unattended run; set it false when you
+# want to watch the pre-reboot state, which is occasionally the whole point of the test.
+domain_member_reboot: true

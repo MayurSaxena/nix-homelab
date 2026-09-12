@@ -8,6 +8,10 @@ lab_gateway: 10.0.90.1
 # the rest of the homelab without a second resolver.
 lab_upstream_dns: 10.0.10.2
 
+# Where the forest lives. Domain members are pointed here and nowhere else; everything that
+# is not a member resolves through technitium, which conditionally forwards lab.internal.
+lab_dc_ip: 10.0.90.10
+
 # Credentials are read at run time with the community.sops lookup rather than being stored
 # here, so this file stays committable. See LAB.md.
 lab_secrets_file: "{{ playbook_dir }}/../../secrets/lab.yaml"

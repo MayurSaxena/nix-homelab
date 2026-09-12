@@ -33,8 +33,25 @@ data "proxmox_virtual_environment_vms" "ws2025_template" {
   }
 }
 
+data "proxmox_virtual_environment_vms" "win11_pro_template" {
+  tags = ["template", "win11-pro"]
+
+  filter {
+    name   = "template"
+    values = ["true"]
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = length(self.vms) == 1
+      error_message = "Expected exactly one template tagged win11-pro, found ${length(self.vms)}. None means it has not been built yet: run `just lab-image win11-pro`. More than one means a build is in flight, or a retirement did not finish."
+    }
+  }
+}
+
 locals {
-  ws2025_template_id = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
+  ws2025_template_id    = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
+  win11_pro_template_id = one(data.proxmox_virtual_environment_vms.win11_pro_template.vms).vm_id
 }
 
 module "dc01" {
@@ -178,20 +195,87 @@ module "kali01" {
   tags    = ["terraform", "linux", "lab", "kali"]
 }
 
-# Renames, not replacements.
+# A rename, not a replacement.
 #
 # Guests were prefixed lab- until the whole lab moved under lab.internal, which said it
-# twice. Without these, OpenTofu reads a renamed module as "destroy that one, create this
-# one" -- which for dc01 would mean rebuilding the forest to change a label.
+# twice. Without this, OpenTofu reads a renamed module as "destroy that one, create this
+# one". dc01 needed the same block and no longer does: it was destroyed rather than
+# renamed, so it is simply created under the new name.
 #
-# Safe to keep indefinitely and safe to run against state that never held the old names:
-# a moved block whose source does not exist is a no-op.
-moved {
-  from = module.lab-dc01
-  to   = module.dc01
-}
-
+# Safe to keep indefinitely and safe to run against state that never held the old name: a
+# moved block whose source does not exist is a no-op.
 moved {
   from = module.lab-kali01
   to   = module.kali01
+}
+
+# The two persistent Windows security boxes.
+#
+# Deliberately two machines rather than one. ctf01 is a stock Windows 11 install with a
+# curated toolset, so it stays representative of a real workstation and can be domain-joined
+# for testing. flare01 runs FLARE-VM, whose installer disables Defender and Windows Update
+# and rewrites enough of Windows that the box stops being representative of anything, which
+# is fine for malware work and the reason it is not the same machine.
+#
+# Both take technitium for DNS, for the same reason kali01 does: neither is a domain member
+# by default, and a non-member pointed at the DC cannot resolve anything at all when the DC
+# is down.
+module "ctf01" {
+  source        = "./modules/qemu-vm"
+  pve_node_name = var.pve_node_name
+
+  vm_name        = "ctf01"
+  vm_description = "CTF and security research workstation (Terraform)"
+  template_vm_id = local.win11_pro_template_id
+
+  os_type = "win11"
+  bios    = "ovmf"
+  machine = "q35"
+
+  num_cpu_cores  = 4
+  memory_size_mb = 8192
+  # Must be at least the template's 80G. Ghidra, the toolset and CTF working files.
+  disk_size_gb = 120
+
+  network_interfaces = { eth0 = 90 }
+  ipv4_settings      = "10.0.90.51/24;10.0.90.1"
+
+  dns_servers = ["10.0.10.2"]
+  domain      = "lab.internal"
+
+  ci_username = "Administrator"
+  ci_password = var.lab_admin_password
+
+  pool_id = "lab"
+  tags    = ["terraform", "windows", "lab", "research"]
+}
+
+module "flare01" {
+  source        = "./modules/qemu-vm"
+  pve_node_name = var.pve_node_name
+
+  vm_name        = "flare01"
+  vm_description = "FLARE-VM malware analysis box (Terraform)"
+  template_vm_id = local.win11_pro_template_id
+
+  os_type = "win11"
+  bios    = "ovmf"
+  machine = "q35"
+
+  # FLARE-VM installs a great deal and is unhappy below 8GB.
+  num_cpu_cores  = 4
+  memory_size_mb = 8192
+  disk_size_gb   = 150
+
+  network_interfaces = { eth0 = 90 }
+  ipv4_settings      = "10.0.90.52/24;10.0.90.1"
+
+  dns_servers = ["10.0.10.2"]
+  domain      = "lab.internal"
+
+  ci_username = "Administrator"
+  ci_password = var.lab_admin_password
+
+  pool_id = "lab"
+  tags    = ["terraform", "windows", "lab", "analysis"]
 }
