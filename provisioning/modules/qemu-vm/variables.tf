@@ -18,10 +18,30 @@ variable "vm_description" {
 
 variable "template_vm_id" {
   type        = number
-  nullable    = false
+  default     = null
   description = <<-EOT
-    VMID of the Packer-built template to clone. See packer/ for how these are made
-    and provisioning/rbac.tf for the block of ids reserved for them.
+    VMID of the Packer-built template to clone. See packer/ for how these are made.
+
+    Exactly one of this and source_image_file_id must be set. Cloning a template is the
+    Windows path, because Microsoft ships no cloud image and one has to be built.
+  EOT
+}
+
+variable "source_image_file_id" {
+  type        = string
+  default     = null
+  description = <<-EOT
+    Volume id of a disk image to build this guest from, e.g.
+    "local:iso/kali-cloud-amd64.img". Put one there with `just lab-cloud-image <name>`.
+
+    Exactly one of this and template_vm_id must be set. This is the Linux path: a
+    distribution's cloud image already carries cloud-init and the guest agent, which is
+    everything a Packer template would have added, so there is no template to build or
+    keep current -- the image is the artifact.
+
+    The disk is copied at creation, so replacing the image later leaves existing guests
+    alone. disk_size_gb must be at least the image's virtual size or PVE refuses the
+    import.
   EOT
 }
 

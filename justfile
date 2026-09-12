@@ -70,6 +70,9 @@ plan *args:
     # Lab guests take their initial Administrator password from here. Decrypted per run
     # rather than kept in a .tfvars file, so it exists only in this process's environment.
     export TF_VAR_lab_admin_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
+    # Linux guests are built from a stock cloud image with no key baked in, so cloud-init
+    # has to authorise one. The Windows templates carry it already.
+    export TF_VAR_lab_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
     cd provisioning && tofu plan {{args}}
 
 # Apply OpenTofu changes; scope to one host with `just apply -target=module.<name>`.
@@ -78,6 +81,9 @@ apply *args:
     set -euo pipefail
     source util/pve-auth.sh
     export TF_VAR_lab_admin_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
+    # Linux guests are built from a stock cloud image with no key baked in, so cloud-init
+    # has to authorise one. The Windows templates carry it already.
+    export TF_VAR_lab_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
     cd provisioning && tofu apply {{args}}
 
 # Delete old system generations, keeping the last five.
@@ -132,6 +138,8 @@ lab-cred key="":
 # because the builder itself differs (Windows installs from an ISO and an answer file;
 # a Linux cloud image is cloned from a disk image and configured by cloud-init). `target`
 # is a key of that configuration's catalog, and names the template it produces.
+
+# Build a golden VM template with Packer: `just packer-build windows win11-pro`.
 packer-build family target *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -211,3 +219,64 @@ packer-token:
     sops set secrets/msaxena.yaml '["proxmox"]["packer-token-id"]' "\"${user}!${tok}\""
     sops set secrets/msaxena.yaml '["proxmox"]["packer-token-secret"]' "\"${value}\""
     echo "wrote proxmox/packer-token-id and proxmox/packer-token-secret to secrets/msaxena.yaml"
+
+# Most Linux distributions need no Packer template at all -- their cloud image already
+# carries cloud-init and the guest agent, which is the entire content of a Windows build.
+# What they do need is unpacking, because essentially none of them publish a bare disk
+# image: `proxmox_virtual_environment_download_file` can decompress gz, lzo, zst and bz2,
+# and the images come as .tar.xz (Kali) or .zip (Parrot's appliance). One tar is cheaper
+# than a second build pipeline.
+#
+# Runs on the node rather than the Mac, so the image is fetched once over the internet
+# instead of being pulled down and pushed back up again.
+#
+# No version is pinned here. The name and the checksum both come from the published
+# SHA256SUMS of the `current` release, so this fetches whatever is current and verifies it,
+# and the file lands under a stable name that provisioning/vms.tf can refer to forever.
+# Re-running it upgrades the image; guests already built from it are untouched, since their
+# disks were copied at creation.
+
+# Fetch a Linux cloud image onto the node: `just lab-cloud-image kali`.
+lab-cloud-image name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{name}}" in
+      kali)
+        base="https://kali.download/cloud-images/current"
+        # The file inside the tar, and the name to publish it under.
+        member="disk.raw"
+        out="kali-cloud-amd64.img"
+        ;;
+      *)
+        echo "unknown image '{{name}}'. Known: kali" >&2
+        exit 1
+        ;;
+    esac
+
+    # .img rather than .qcow2, and the ISO datastore rather than a PVE 9 "import" one:
+    # PVE lists .iso and .img as ISO content, so this needs no storage reconfiguration on
+    # the node, and the provider imports a disk from that volume id perfectly well.
+    iso_dir="/var/lib/vz/template/iso"
+
+    ssh root@10.0.10.3 bash -seu <<REMOTE
+    base="$base"; member="$member"; out="$out"; iso_dir="$iso_dir"
+    # Not /tmp: it is tmpfs on this node, and these images unpack to tens of gigabytes.
+    work="/var/lib/vz/tmp-cloud-image"
+    mkdir -p "\$work" "\$iso_dir"
+    trap 'rm -rf "\$work"' EXIT
+    cd "\$work"
+
+    curl -sSLf -o SHA256SUMS "\$base/SHA256SUMS"
+    line=\$(grep 'amd64' SHA256SUMS | head -1)
+    archive=\$(echo "\$line" | awk '{print \$2}')
+    echo "current image: \$archive"
+
+    curl -SLf --progress-bar -o "\$archive" "\$base/\$archive"
+    echo "\$line" | sha256sum -c -
+
+    # -S writes the file sparsely; these images are mostly holes, so this is the difference
+    # between a few gigabytes and the image's full apparent size.
+    tar -xSJf "\$archive" "\$member"
+    mv -f "\$member" "\$iso_dir/\$out"
+    echo "wrote \$iso_dir/\$out  (\$(du -h --apparent-size "\$iso_dir/\$out" | cut -f1) apparent, \$(du -h "\$iso_dir/\$out" | cut -f1) on disk)"
+    REMOTE

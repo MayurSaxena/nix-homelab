@@ -19,3 +19,16 @@ variable "pve_node_name" {
   description = "The name of the storage where VM/CT data volumes are stored."
   default     = "proxmox"
 }
+
+variable "lab_ansible_public_key" {
+  type        = string
+  nullable    = false
+  description = <<-EOT
+    Public half of the lab's Ansible key, authorised by cloud-init on guests built from a
+    stock cloud image. Exported as TF_VAR_lab_ansible_public_key by the justfile's
+    plan/apply recipes from ansible-ssh-public-key in secrets/lab.yaml.
+
+    Windows guests do not need it here: their template already carries it in
+    administrators_authorized_keys, baked in during the Packer build.
+  EOT
+}

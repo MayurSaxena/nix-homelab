@@ -74,3 +74,51 @@ module "lab-dc01" {
   # Deliberately no startup_order: the range is not production and should not compete with it
   # for boot resources, nor come back automatically after a host reboot.
 }
+
+# The lab's Linux box, built straight from Kali's cloud image.
+#
+# No Packer template and no tag lookup: the image already carries cloud-init and the QEMU
+# guest agent, which is the entire content of a Windows build, so the downloaded image is
+# the artifact. `just lab-cloud-image kali` puts it on the node.
+#
+# Kali rather than Parrot, and that was a real choice: Parrot publishes no cloud image at
+# all -- only live ISOs that install through Calamares, and ~10GB desktop appliances. See
+# LAB.md for the options if Parrot itself is ever wanted.
+module "lab-kali01" {
+  source        = "./modules/qemu-vm"
+  pve_node_name = var.pve_node_name
+
+  vm_name              = "lab-kali01"
+  vm_description       = "Kali Linux attack box, from the official cloud image (Terraform)"
+  source_image_file_id = "local:iso/kali-cloud-amd64.img"
+
+  os_type = "l26"
+
+  # seabios, not the ovmf the Windows guests use. OVMF needs an EFI vars disk, and the
+  # Windows guests get theirs from the template Packer built with one; a guest built from a
+  # bare cloud image has no such inheritance, and this module deliberately declares no
+  # efi_disk of its own. The image boots BIOS perfectly well, so there is nothing to gain.
+  bios    = "seabios"
+  machine = "q35"
+
+  num_cpu_cores  = 4
+  memory_size_mb = 8192
+  # Must be at least the image's virtual size (25GiB) or the import is refused.
+  disk_size_gb = 60
+
+  network_interfaces = { eth0 = 90 }
+  ipv4_settings      = "10.0.90.20/24;10.0.90.1"
+
+  # The DC, so this box resolves lab.internal and can be pointed at the forest it is meant
+  # to be attacking. technitium behind it for everything else, via the DC's forwarder.
+  dns_servers = ["10.0.90.10"]
+  domain      = "lab.internal"
+
+  # kali, not root: the cloud image's own default user, and the one its sudo rules expect.
+  ci_username    = "kali"
+  ci_password    = var.lab_admin_password
+  ci_public_keys = [var.lab_ansible_public_key]
+
+  pool_id = "lab"
+  tags    = ["terraform", "linux", "lab", "kali"]
+}
