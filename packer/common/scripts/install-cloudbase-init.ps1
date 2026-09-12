@@ -2,18 +2,47 @@
 # template come up with its own hostname, address and administrator password instead of a
 # copy of the template's, and it reads those from the cloud-init drive Proxmox attaches.
 #
-# This is the least battle-tested link in the whole pipeline: Proxmox writes NoCloud-format
-# data, and cloudbase-init's NoCloud support is newer than its OpenStack support. The Phase 1
-# gate exercises exactly this. If it misbehaves, the fallback is to let cloudbase-init handle
-# only hostname and password and to set the static address from Ansible instead.
+# Proxmox writes configdrive2 for a Windows guest, which is the format cloudbase-init was
+# built around and the only one that carries an administrator password -- see the conf
+# written below, and LAB.md for how long it took to establish that. It is configured for
+# ConfigDrive and nothing else on purpose.
 $ErrorActionPreference = 'Stop'
 
-$url = 'https://www.cloudbase.it/downloads/CloudbaseInitSetup_Stable_x64.msi'
-$msi = Join-Path $env:TEMP 'CloudbaseInitSetup_Stable_x64.msi'
+# From the project's GitHub releases, not cloudbase.it.
+#
+# cloudbase.it hosts a floating "Stable" MSI, and it is a single small site: it went down
+# mid-build here, six minutes in, and took the build with it. Two things are wrong with
+# depending on it. The obvious one is availability. The subtler one is that "Stable" is not
+# a version -- two builds a month apart could install different software with nothing in
+# this repo recording that, which is the opposite of a reproducible template.
+#
+# The GitHub release asset is version-pinned and checksummed below, so a build either
+# installs exactly this or fails loudly. Bump both together.
+$version = '1.1.8'
+$sha256  = '0E7FA42E0CBC0CE7657F85730B0C6CC7AFC4087A3639DF0FF51A721A0BE19BD5'
+$url     = "https://github.com/cloudbase/cloudbase-init/releases/download/$version/CloudbaseInitSetup_${version}_x64.msi"
+$msi     = Join-Path $env:TEMP "CloudbaseInitSetup_${version}_x64.msi"
 
-Write-Host "Downloading cloudbase-init"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
+
+# Retried, because this is the one step in the build that reaches outside the lab, and
+# failing it wastes the fifteen minutes of Windows installation that came before.
+$attempt = 0
+while ($true) {
+    $attempt++
+    try {
+        Write-Host "Downloading cloudbase-init $version (attempt $attempt)"
+        Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
+        break
+    } catch {
+        if ($attempt -ge 3) { throw "could not download cloudbase-init from $url after $attempt attempts: $_" }
+        Start-Sleep -Seconds (10 * $attempt)
+    }
+}
+
+$actual = (Get-FileHash -Path $msi -Algorithm SHA256).Hash
+if ($actual -ne $sha256) { throw "cloudbase-init checksum mismatch: expected $sha256, got $actual" }
+Write-Host "Verified cloudbase-init $version
 
 # RUN_SERVICE_AS_LOCAL_SYSTEM because the default creates a dedicated account, and a
 # generalised image should not carry one. No sysprep options are passed: sysprep.ps1 runs it
