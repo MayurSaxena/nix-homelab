@@ -20,6 +20,7 @@
       shellAliases = {
         ll = "eza -la --git --group-directories-first";
         ".." = "cd ..";
+        "2fa" = "ykman oath accounts code";
       };
     };
 

@@ -7,7 +7,7 @@
   imports = [
     ./shell.nix # zsh, prompt, CLI tools, Ghostty
     ./git.nix # git, delta, lazygit, gh, ssh
-    ./aerospace.nix # tiling window manager; delete this import to go back to plain macOS
+    # ./aerospace.nix # tiling window manager; delete this import to go back to plain macOS
   ];
 
   home = rec {
@@ -39,6 +39,7 @@
       age
       age-plugin-yubikey
       sops
+      ykman
     ];
 
     # Set the home directory differently based on platform
