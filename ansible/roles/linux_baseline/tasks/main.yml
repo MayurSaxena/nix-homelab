@@ -4,6 +4,13 @@
 # The list is deliberately short. A distribution cloud image arrives with cloud-init, a
 # working network and a sane user, which is most of what a Packer template would have been
 # built to supply -- so this role exists to close the gaps, not to build a machine.
+#
+# One rule governs most of what follows: **on Kali, a package installed after the image was
+# built arrives disabled.** /usr/lib/systemd/system-preset/99-default.preset is
+# `disable *.service` and 95-kali.preset is the whitelist, so dpkg's preset policy switches
+# off anything the whitelist does not name. Every `enabled: true` below is therefore
+# load-bearing rather than belt-and-braces, and any package added here needs the same
+# treatment.
 
 - name: Install the QEMU guest agent
   # Not supplied by the image, despite it being a cloud image: Kali's genericcloud build
@@ -32,48 +39,28 @@
   become: true
 
 
-- name: Re-apply netplan on every boot
-  # Works around a real defect in Kali's cloud image, root cause not established.
+- name: Ensure netplan's backend-configuration unit is enabled
+  # Without this the guest loses its address on every boot after the first, and is then
+  # reachable only from the Proxmox console.
   #
-  # The image only ever gets its address from cloud-init's first-boot run. On every boot
-  # after that, netplan's systemd generator writes its unit symlinks but emits no
-  # .network files at all, so /run/systemd/network stays empty, systemd-networkd starts
-  # with nothing to do and eth0 is left "off (unmanaged)" with no address. Running
-  # `netplan generate` by hand produces the files correctly from the very same YAML, so
-  # the configuration is fine and it is the generator's boot-time run that does nothing.
+  # The chain is worth knowing, because none of it is a bug in anything:
   #
-  # Observed on both a snapshot rollback and a plain `systemctl reboot`, which is what
-  # rules out its being anything to do with snapshots. The consequence without this is a
-  # box that works until the first time you restart it and is then reachable only from the
-  # Proxmox console -- which for a machine whose whole purpose is to be reverted to a
-  # snapshot would be fatal.
+  #   1. Proxmox's cloud-init defaults ciupgrade on, so first boot dist-upgrades the image.
+  #   2. That takes netplan from 1.1.2 to 1.2.1.
+  #   3. netplan 1.2 deliberately moved .network/.link generation OUT of its systemd
+  #      generator (which now only validates and writes unit symlinks) and into this new
+  #      netplan-configure.service.
+  #   4. The unit is new to the system, so dpkg defers to the preset policy -- and Kali's
+  #      base-files ships `disable *.service`, with the whitelist in 95-kali.preset
+  #      predating netplan 1.2. So it installs disabled and nothing generates the config.
   #
-  # `netplan apply` rather than a hand-written .network file, so cloud-init stays the
-  # source of truth: OpenTofu changing the address still takes effect.
-  ansible.builtin.copy:
-    dest: /etc/systemd/system/netplan-apply-at-boot.service
-    mode: "0644"
-    content: |
-      [Unit]
-      Description=Apply netplan configuration at boot
-      Documentation=https://github.com/MayurSaxena/nix-homelab LAB.md
-      After=systemd-networkd.service
-      Before=network-online.target
-      Wants=network.target
-
-      [Service]
-      Type=oneshot
-      RemainAfterExit=yes
-      ExecStart=/usr/sbin/netplan apply
-
-      [Install]
-      WantedBy=multi-user.target
-  become: true
-  notify: Reload systemd
-
-- name: Enable the boot-time netplan apply
+  # First boot works anyway because cloud-init applies the network itself for a new
+  # instance, then writes /run/cloud-init/.skip-network and correctly stays out of the way
+  # afterwards. So the failure is invisible on the boot that creates the machine.
+  #
+  # Ordering matters and this unit has it right: Before=systemd-networkd.service, in
+  # sysinit.target, which also keeps network-online.target meaningful.
   ansible.builtin.systemd_service:
-    name: netplan-apply-at-boot.service
+    name: netplan-configure.service
     enabled: true
-    daemon_reload: true
   become: true

@@ -332,6 +332,48 @@ declares, and templates are tagged as such, so a slip of the finger cannot destr
 domain controller or the image everything else is cloned from. That is the whole difference
 between a pet and a throwaway, enforced rather than remembered.
 
+## Linux guests: two things that bite on the second boot
+
+Both of these are invisible on the boot that creates the machine, which is what makes them
+worth writing down.
+
+**Test the second boot, always.** A cloud image is built and tested at one set of package
+versions, and Proxmox's cloud-init turns on `package_upgrade` by default, so the first boot
+dist-upgrades it to whatever the distribution's HEAD is before you ever log in. That can
+cross a major version boundary of a package the machine needs in order to boot correctly.
+Treat "reboot it once and confirm it comes back" as a mandatory acceptance check for any new
+Linux guest, exactly like the second-activation check when onboarding an LXC.
+
+That is not hypothetical. It is precisely what happened here:
+
+1. Proxmox's `ciupgrade` default dist-upgraded Kali on first boot.
+2. That took netplan from 1.1.2 to 1.2.1.
+3. netplan 1.2 deliberately moved `.network`/`.link` generation **out** of its systemd
+   generator -- which now only validates and writes unit symlinks -- into a new
+   `netplan-configure.service`.
+4. That unit installed **disabled** (see below), so nothing generated the network config.
+
+First boot still worked, because cloud-init applies the network itself for a new instance
+and then writes `/run/cloud-init/.skip-network` and correctly stays out of the way. Every
+boot after that came up with `eth0` unmanaged and no address, reachable only from the
+console. `linux_baseline` enables the unit.
+
+**On Kali, a package installed after the image was built arrives disabled.**
+`/usr/lib/systemd/system-preset/99-default.preset` is `disable *.service` and
+`95-kali.preset` is the whitelist, so dpkg's preset policy switches off anything the
+whitelist does not name -- and the whitelist predates netplan 1.2. Every `enabled: true` in
+`linux_baseline` is therefore load-bearing rather than belt-and-braces, and anything added
+there needs the same treatment.
+
+The diagnostic order for "the address is right in the YAML but the interface is down" is
+`ls /run/systemd/network` and `systemctl is-enabled netplan-configure.service` -- not
+cloud-init, which is a red herring here and correctly reports itself done.
+
+**Leaving `package_upgrade` on is the deliberate choice.** Turning it off
+(`initialization { upgrade = false }`) would have hidden this, but only until someone ran
+`apt upgrade`, and it would leave every lab guest unpatched on first boot. Fix what the
+upgrade breaks; do not stop upgrading.
+
 ## Backups
 
 Reproducibility is the backup for most of this. Range VMs rebuild from the playbook and
