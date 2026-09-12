@@ -896,12 +896,13 @@ debugging session, and none of them are Windows-specific:
   not a guest and outlives the guests in it. `provisioning/rbac.tf` does both, and the pool
   grant is the one that matters.
 
-- **`proxmox_virtual_environment_user` manages ACLs too**, via an `acl` block of its own.
-  Declaring none on it does not mean "leave them alone", it means "there should be none", so
-  the user resource and any separate `proxmox_virtual_environment_acl` resources delete and
-  recreate each other on every apply. The damage depends on which order they run in and shows
-  up in a plan only as an innocuous "1 to change". `ignore_changes = [acl]` on the user makes
-  the ACL resources the single writer.
+- **ACLs belong in `proxmox_acl` resources, not in a user's inline `acl` block.** The block
+  on `proxmox_virtual_environment_user` is deprecated, and the reason people reach for it is
+  gone: on providers before 0.107.0 refresh read live ACLs into the user resource, saw a
+  config declaring none, and planned to delete them all — visible in a plan only as an
+  innocuous "1 to change". 0.107.0 stopped populating the block from the cluster and
+  deprecated it in the same release. If you find `ignore_changes = [acl]` or inline blocks
+  anywhere, they are working around that old behaviour and should become `proxmox_acl`.
 
 - **`stop_on_destroy` is read from stored state, not from configuration.** Adding it to the
   module does nothing for guests that already exist, so a guest whose agent is broken still
