@@ -286,6 +286,44 @@ first run with the password cloudbase-init set, writes the key to
 `administrators_authorized_keys` with the right ACL, and every run after that uses the key.
 The password stays a bootstrap credential rather than becoming a standing one.
 
+## Getting into a guest
+
+Everything below uses one credential, `clone-admin-password` in `secrets/lab.yaml`, which
+cloud-init sets on every guest at first boot:
+
+```bash
+just lab-cred clone-admin-password    # copies it to the clipboard
+just lab-cred                         # lists what else is in there
+```
+
+| | Account | RDP | SSH |
+|---|---|---|---|
+| Windows (`dc01`, `ctf01`, `flare01`) | `Administrator` | enabled by the `baseline` role | key **or** password |
+| Kali (`kali01`) | `kali` | needs the `linux_remote_desktop` role | key **or** password |
+| Ad-hoc guests | as above, by OS | same, once the role has run | key from first boot |
+
+**Neither protocol works on a brand-new guest until Ansible has run.** cloud-init gets it
+on the network with a password and the SSH key, and that is all: RDP is off by default on
+Windows, and a Linux cloud image has no desktop at all for RDP to show. `just lab-play`
+is what makes a guest usable by a human, not just by Ansible.
+
+**The SSH key is the same one Ansible uses**, and it is in `secrets/lab.yaml` as
+`ansible-ssh-private-key`. For a guest whose address you know:
+
+```bash
+just lab-cred ansible-ssh-private-key   # or extract it to a file and use ssh -i
+```
+
+Password authentication is deliberately enabled on Linux guests
+(`linux_ssh_password_auth`), because the cloud image ships it off and you need the password
+for the console and RDP anyway. Turn it off for anything ever exposed beyond VLAN 90.
+
+**One password opens every guest, and that is a deliberate lab trade-off.** It keeps
+`just lab-cred` a single lookup rather than a per-host hunt, on a range whose forest is
+seeded with deliberate weaknesses anyway. It is the wrong pattern for anything holding real
+data, and the place to change it is `ci_password` in `provisioning/vms.tf`, which is a
+per-guest argument already.
+
 ## The pet lifecycle
 
 Declared guests share one shape, whichever OS they run: **deploy, configure, snapshot,

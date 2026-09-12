@@ -13,6 +13,13 @@ all:
       vars:
         ansible_user: kali
 
+    # Guests that should have a desktop and RDP, which is opt-in: a cloud image ships
+    # without one, and the install is a couple of gigabytes, so it is not something every
+    # Linux guest should quietly acquire.
+    linux_desktop:
+      hosts:
+        kali01:
+
     windows:
       vars:
         ansible_connection: ssh

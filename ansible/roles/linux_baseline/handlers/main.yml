@@ -6,3 +6,9 @@
     state: started
   become: true
 
+
+- name: Reload sshd
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: reloaded
+  become: true

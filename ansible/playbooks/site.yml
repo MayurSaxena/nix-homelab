@@ -8,6 +8,12 @@
   roles:
     - linux_baseline
 
+- name: Install a desktop and RDP where it is wanted
+  hosts: linux_desktop
+  gather_facts: true
+  roles:
+    - linux_remote_desktop
+
 - name: Baseline every Windows guest
   hosts: windows
   gather_facts: true
