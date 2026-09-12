@@ -88,43 +88,56 @@ resource "proxmox_virtual_environment_vm" "vm" {
     }
   }
 
-  initialization {
-    datastore_id = var.vm_disk_datastore
-    # No `type`. Proxmox picks the cloud-init format from the guest's ostype, and its choice
-    # is already correct for every OS this module will ever clone:
-    #
-    #     if (defined(my $format = $conf->{citype})) { return $format; }
-    #     if (defined(my $ostype = $conf->{ostype})) {
-    #         return 'configdrive2' if windows_version($ostype);
-    #     }
-    #     return 'nocloud';
-    #
-    # configdrive2 for Windows, because that is the only format cloudbase-init reads, and it
-    # is the branch where Proxmox writes admin_pass and public_keys into metadata. nocloud
-    # for everything else, because Linux cloud-init wants MAC-based interface matching.
-    #
-    # Both of the obvious overrides are wrong. "nocloud" was set here first and cost days:
-    # NoCloudConfigDriveService implements no get_admin_password, so cloudbase-init invented a
-    # random password and every workaround built on top of that was solving a problem this
-    # line had created. Pinning "configdrive2" instead fixes Windows and breaks Linux. Saying
-    # nothing is the only setting that is right for both.
+  # A guest whose image has no cloud-init agent gets no cloud-init drive.
+  #
+  # Attaching one anyway is not harmless: Proxmox adds a CD-ROM the guest ignores, and
+  # OpenTofu then owns an address the guest never reads, so `ip_config` here and the real
+  # address on the box drift apart silently while the plan stays clean. Better to have no
+  # opinion than a wrong one that looks authoritative.
+  #
+  # Such a guest has to reach its address some other way -- DHCP reservation, or a step in
+  # its Ansible role -- and is configured by Ansible over SSH exactly like any other, since
+  # nothing downstream of here depends on how the address was set.
+  dynamic "initialization" {
+    for_each = var.enable_cloud_init ? [1] : []
+    content {
+      datastore_id = var.vm_disk_datastore
+      # No `type`. Proxmox picks the cloud-init format from the guest's ostype, and its choice
+      # is already correct for every OS this module will ever clone:
+      #
+      #     if (defined(my $format = $conf->{citype})) { return $format; }
+      #     if (defined(my $ostype = $conf->{ostype})) {
+      #         return 'configdrive2' if windows_version($ostype);
+      #     }
+      #     return 'nocloud';
+      #
+      # configdrive2 for Windows, because that is the only format cloudbase-init reads, and it
+      # is the branch where Proxmox writes admin_pass and public_keys into metadata. nocloud
+      # for everything else, because Linux cloud-init wants MAC-based interface matching.
+      #
+      # Both of the obvious overrides are wrong. "nocloud" was set here first and cost days:
+      # NoCloudConfigDriveService implements no get_admin_password, so cloudbase-init invented a
+      # random password and every workaround built on top of that was solving a problem this
+      # line had created. Pinning "configdrive2" instead fixes Windows and breaks Linux. Saying
+      # nothing is the only setting that is right for both.
 
-    dns {
-      domain  = var.domain
-      servers = var.dns_servers
-    }
-
-    ip_config {
-      ipv4 {
-        address = var.ipv4_settings == "dhcp" ? "dhcp" : split(";", var.ipv4_settings)[0]
-        gateway = var.ipv4_settings == "dhcp" ? null : split(";", var.ipv4_settings)[1]
+      dns {
+        domain  = var.domain
+        servers = var.dns_servers
       }
-    }
 
-    user_account {
-      username = var.ci_username
-      password = var.ci_password
-      keys     = var.ci_public_keys
+      ip_config {
+        ipv4 {
+          address = var.ipv4_settings == "dhcp" ? "dhcp" : split(";", var.ipv4_settings)[0]
+          gateway = var.ipv4_settings == "dhcp" ? null : split(";", var.ipv4_settings)[1]
+        }
+      }
+
+      user_account {
+        username = var.ci_username
+        password = var.ci_password
+        keys     = var.ci_public_keys
+      }
     }
   }
 

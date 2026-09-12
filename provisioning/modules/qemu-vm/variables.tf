@@ -145,3 +145,18 @@ variable "startup_order" {
   default     = null
   description = "Set to also mark the guest as start-on-boot, matching the nixos-lxc module."
 }
+
+variable "enable_cloud_init" {
+  type        = bool
+  default     = true
+  description = <<-EOT
+    Attach a cloud-init drive. True for any template built by this repo's Packer
+    configurations, which install cloudbase-init on Windows and use the distribution's own
+    cloud-init on Linux.
+
+    Set it false for an image that has no cloud-init agent, so that OpenTofu does not
+    declare an address and an account the guest will never read. Such a guest needs its
+    address from DHCP or from its Ansible role, and `ipv4_settings`, `ci_username`,
+    `ci_password` and `ci_public_keys` are ignored.
+  EOT
+}
