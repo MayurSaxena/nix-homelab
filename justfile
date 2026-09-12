@@ -368,3 +368,130 @@ lab-revert guest name="golden":
     until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.lock // "none"')" = "none" ]; do sleep 3; done
     curl -sk -X POST "${auth[@]}" "$api/$vmid/status/start" >/dev/null
     echo "{{guest}} reverted to {{name}} and starting"
+
+# Redeploy a pet from scratch, on the current template, and re-baseline it.
+#
+# This is the "blow it away and start again" path, as opposed to `lab-revert`, which only
+# rewinds to a restore point on the machine you already have. Use it to pick up a newer
+# base image, or when a guest has been broken past the point a snapshot helps.
+#
+# Everything it does is a command you could run yourself; the value is that it does them in
+# the right order and does not let you forget the snapshot at the end, which is the step
+# that makes the next revert possible.
+#
+# The apply prompts, deliberately. Recreating a guest destroys it first, and that is worth
+# reading a plan for -- particularly for dc01, where it means rebuilding the forest.
+
+# Redeploy a pet from scratch and re-baseline it: `just lab-rebuild kali01`.
+lab-rebuild guest:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> marking {{guest}} for replacement"
+    (cd provisioning && tofu taint "module.{{guest}}.proxmox_virtual_environment_vm.vm")
+    echo "==> recreating {{guest}}"
+    just apply
+    echo "==> waiting for {{guest}} to answer on SSH"
+    ip=$(cd provisioning && tofu output -raw {{guest}}_ipv4 2>/dev/null || true)
+    if [ -z "$ip" ]; then
+        # No output declared for this guest; fall back to the inventory, which is the other
+        # place its address is written down.
+        ip=$(cd ansible && ansible-inventory --host {{guest}} 2>/dev/null | jq -r '.ansible_host')
+    fi
+    until nc -z -G 3 "$ip" 22 2>/dev/null; do sleep 10; done
+    echo "==> configuring {{guest}}"
+    just lab-play site.yml --limit {{guest}}
+    echo "==> taking the golden snapshot"
+    just lab-snapshot {{guest}}
+    echo "{{guest}} rebuilt, configured and snapshotted"
+
+# Throwaway guests, which are deliberately not OpenTofu's business.
+#
+# Declaring a machine you will delete this evening applies a rebuild-from-repo guarantee to
+# something defined by not needing one, and charges an HCL edit and a commit for it. These
+# land in the lab pool on VLAN 90 like everything else, take a DHCP lease from technitium's
+# .100-.199 range with the lab.internal suffix, and are reachable by name and by the Ansible
+# key from first boot.
+#
+# They are not domain-joined. Joining is the thing you most often want to *test*, so it is a
+# play you run, not something that has already happened to the box.
+
+# Clone a throwaway guest: `just lab-spawn tpl-win11-pro test01`.
+lab-spawn template name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source util/pve-auth.sh
+    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
+          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
+    base="${PROXMOX_VE_ENDPOINT}api2/json"
+    api="$base/nodes/proxmox/qemu"
+
+    tplid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{template}}" '.data[] | select(.name==$n and .template==1) | .vmid') \
+        || { echo "no template named {{template}}. Templates: $(curl -sk "${auth[@]}" "$api" | jq -r '.data[]|select(.template==1)|.name' | tr '\n' ' ')" >&2; exit 1; }
+    if curl -sk "${auth[@]}" "$api" | jq -e --arg n "{{name}}" '.data[] | select(.name==$n)' >/dev/null; then
+        echo "a guest named {{name}} already exists" >&2; exit 1
+    fi
+    newid=$(curl -sk "${auth[@]}" "$base/cluster/nextid" | jq -er '.data')
+
+    echo "cloning {{template}} ($tplid) to {{name}} ($newid)"
+    curl -sk -X POST "${auth[@]}" --data-urlencode "newid=$newid" --data-urlencode 'name={{name}}' \
+        --data-urlencode 'full=1' --data-urlencode 'pool=lab' --data-urlencode 'target=proxmox' \
+        "$api/$tplid/clone" >/dev/null
+    # Cloning is a task and the guest does not exist until it finishes.
+    until curl -sk "${auth[@]}" "$api/$newid/config" 2>/dev/null | jq -e '.data' >/dev/null 2>&1 \
+          && [ "$(curl -sk "${auth[@]}" "$api/$newid/status/current" | jq -r '.data.lock // "none"')" = "none" ]; do sleep 3; done
+
+    # The cloud-init user differs by OS and nothing on the template records which is right,
+    # so it is derived from the template name. Kali's cloud image owns the `kali` account and
+    # its sudo rules; Windows has Administrator.
+    case "{{template}}" in
+      *kali*) ciuser=kali ;;
+      *)      ciuser=Administrator ;;
+    esac
+
+    echo "setting cloud-init: user $ciuser, DHCP, technitium"
+    curl -sk -X POST "${auth[@]}" \
+        --data-urlencode "ciuser=$ciuser" \
+        --data-urlencode "cipassword=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)" \
+        --data-urlencode "sshkeys=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)" \
+        --data-urlencode 'ipconfig0=ip=dhcp' \
+        --data-urlencode 'nameserver=10.0.10.2' \
+        --data-urlencode 'searchdomain=lab.internal' \
+        --data-urlencode 'tags=adhoc;lab' \
+        "$api/$newid/config" >/dev/null
+
+    curl -sk -X POST "${auth[@]}" "$api/$newid/status/start" >/dev/null
+    echo "{{name}} ($newid) started. It will take a DHCP lease; find it with:"
+    echo "    ssh root@10.0.10.3 'qm agent $newid network-get-interfaces'"
+
+# Destroy a throwaway guest: `just lab-despawn test01`.
+lab-despawn name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source util/pve-auth.sh
+    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
+          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
+    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
+    guest=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{name}}" '.data[] | select(.name==$n)') \
+        || { echo "no guest named {{name}}" >&2; exit 1; }
+    vmid=$(echo "$guest" | jq -r '.vmid')
+
+    # The guard that makes this safe to type quickly.
+    #
+    # OpenTofu tags everything it declares `terraform`, and templates are tagged `template`.
+    # Refusing both means a slip of the finger cannot destroy the domain controller or the
+    # image everything else is cloned from -- which is the entire difference between a
+    # throwaway and a pet, enforced rather than remembered.
+    tags=$(echo "$guest" | jq -r '.tags // ""')
+    case ";$tags;" in
+      *';terraform;'*|*';template;'*)
+        echo "{{name}} ($vmid) is tagged '$tags': it is declared in OpenTofu or is a template, not a throwaway." >&2
+        echo 'Destroy a declared guest with tofu, and rebuild it with `just lab-rebuild {{name}}`.' >&2
+        exit 1
+        ;;
+    esac
+
+    echo "stopping and destroying {{name}} ($vmid)"
+    curl -sk -X POST "${auth[@]}" "$api/$vmid/status/stop" >/dev/null 2>&1 || true
+    until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.status')" = "stopped" ]; do sleep 2; done
+    curl -sk -X DELETE "${auth[@]}" --data-urlencode 'purge=1' --data-urlencode 'destroy-unreferenced-disks=1' "$api/$vmid" >/dev/null
+    echo "{{name}} destroyed"
