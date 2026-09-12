@@ -31,3 +31,49 @@
     state: started
   become: true
 
+
+- name: Re-apply netplan on every boot
+  # Works around a real defect in Kali's cloud image, root cause not established.
+  #
+  # The image only ever gets its address from cloud-init's first-boot run. On every boot
+  # after that, netplan's systemd generator writes its unit symlinks but emits no
+  # .network files at all, so /run/systemd/network stays empty, systemd-networkd starts
+  # with nothing to do and eth0 is left "off (unmanaged)" with no address. Running
+  # `netplan generate` by hand produces the files correctly from the very same YAML, so
+  # the configuration is fine and it is the generator's boot-time run that does nothing.
+  #
+  # Observed on both a snapshot rollback and a plain `systemctl reboot`, which is what
+  # rules out its being anything to do with snapshots. The consequence without this is a
+  # box that works until the first time you restart it and is then reachable only from the
+  # Proxmox console -- which for a machine whose whole purpose is to be reverted to a
+  # snapshot would be fatal.
+  #
+  # `netplan apply` rather than a hand-written .network file, so cloud-init stays the
+  # source of truth: OpenTofu changing the address still takes effect.
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/netplan-apply-at-boot.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Apply netplan configuration at boot
+      Documentation=https://github.com/MayurSaxena/nix-homelab LAB.md
+      After=systemd-networkd.service
+      Before=network-online.target
+      Wants=network.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/sbin/netplan apply
+
+      [Install]
+      WantedBy=multi-user.target
+  become: true
+  notify: Reload systemd
+
+- name: Enable the boot-time netplan apply
+  ansible.builtin.systemd_service:
+    name: netplan-apply-at-boot.service
+    enabled: true
+    daemon_reload: true
+  become: true

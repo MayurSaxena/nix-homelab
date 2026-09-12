@@ -156,11 +156,17 @@ module "kali01" {
   network_interfaces = { eth0 = 90 }
   ipv4_settings      = "10.0.90.50/24;10.0.90.1"
 
-  # The DC, so this box resolves lab.internal and can be pointed at the forest it is meant
-  # to be attacking. It sits in the pets block at .50, not the workstation block: it is not
-  # domain-joined and nothing looks it up by a fixed address, but it is a machine you come
-  # back to rather than one you throw away. technitium behind it for everything else, via the DC's forwarder.
-  dns_servers = ["10.0.90.10"]
+  # technitium, not the domain controller.
+  #
+  # Only a domain *member* has to resolve against AD DNS, and this is not one. Pointing a
+  # non-member at the DC makes it depend on the DC being up to resolve anything at all,
+  # including the internet, which is the wrong failure mode for the box you attack the DC
+  # *from*. technitium conditionally forwards lab.internal to the DC, so the forest stays
+  # fully resolvable from here, which is what actually matters.
+  #
+  # It sits in the pets block at .50, not the workstation block: nothing looks it up at a
+  # fixed address, but it is a machine you come back to rather than throw away.
+  dns_servers = ["10.0.10.2"]
   domain      = "lab.internal"
 
   # kali, not root: the cloud image's own default user, and the one its sudo rules expect.

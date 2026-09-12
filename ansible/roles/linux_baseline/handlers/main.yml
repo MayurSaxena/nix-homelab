@@ -5,3 +5,8 @@
     enabled: true
     state: started
   become: true
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true
