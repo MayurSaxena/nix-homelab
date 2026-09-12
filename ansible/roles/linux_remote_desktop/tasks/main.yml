@@ -1,0 +1,42 @@
+---
+# A desktop and RDP on a Linux guest.
+#
+# Kali's cloud image is deliberately minimal -- it prints "This is a minimal installation of
+# Kali Linux" at login and ships no desktop at all, so there is nothing for RDP to show.
+# That is the right default for a cloud image and the wrong one for a box you want to sit in
+# front of, so this role is opt-in per host rather than part of linux_baseline.
+
+- name: Install the desktop and xrdp
+  ansible.builtin.apt:
+    name: "{{ linux_desktop_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  # Several gigabytes over a slow mirror.
+  async: "{{ linux_desktop_timeout }}"
+  poll: 30
+
+- name: Enable xrdp
+  # Load-bearing, not belt-and-braces: on Kali every package installed after the image was
+  # built arrives disabled, because 99-default.preset is `disable *.service` and the
+  # whitelist in 95-kali.preset only names what shipped. See linux_baseline.
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  become: true
+  loop:
+    - xrdp
+    - xrdp-sesman
+
+- name: Point xrdp sessions at XFCE
+  # Without this xrdp authenticates, shows a grey screen and drops the session, which looks
+  # like a broken login rather than a missing window manager.
+  ansible.builtin.copy:
+    dest: /home/{{ ansible_user }}/.xsession
+    content: "startxfce4\n"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  become: true

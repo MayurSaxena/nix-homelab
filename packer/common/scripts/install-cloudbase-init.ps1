@@ -20,8 +20,11 @@ $ErrorActionPreference = 'Stop'
 # installs exactly this or fails loudly. Bump both together.
 $version = '1.1.8'
 $sha256  = '0E7FA42E0CBC0CE7657F85730B0C6CC7AFC4087A3639DF0FF51A721A0BE19BD5'
-$url     = "https://github.com/cloudbase/cloudbase-init/releases/download/$version/CloudbaseInitSetup_${version}_x64.msi"
-$msi     = Join-Path $env:TEMP "CloudbaseInitSetup_${version}_x64.msi"
+# The tag is dotted and the asset name is underscored, which is easy to get wrong and
+# produces a 404 rather than anything that reads like a naming mistake.
+$asset   = "CloudbaseInitSetup_$($version -replace '\.','_')_x64.msi"
+$url     = "https://github.com/cloudbase/cloudbase-init/releases/download/$version/$asset"
+$msi     = Join-Path $env:TEMP $asset
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -53,6 +56,21 @@ $p = Start-Process msiexec.exe -ArgumentList `
 if ($p.ExitCode -ne 0) { throw "msiexec exited $($p.ExitCode)" }
 
 $confDir = Join-Path $env:ProgramFiles 'Cloudbase Solutions\Cloudbase-Init\conf'
+
+# Prove the install actually produced what the rest of the build depends on.
+#
+# msiexec returning 0 is not the same as cloudbase-init being installed and complete, and
+# the failure mode without this check is genuinely misleading: the build carries on, and
+# sysprep.ps1 fails several minutes later saying Unattend.xml is missing -- which reads like
+# a sysprep problem rather than an install that quietly did nothing. Fail here, where the
+# cause is.
+$unattend = Join-Path $confDir 'Unattend.xml'
+if (-not (Test-Path $confDir))  { throw "cloudbase-init installed but $confDir does not exist; the MSI layout may have changed" }
+if (-not (Test-Path $unattend)) {
+    throw ("cloudbase-init installed but $unattend is missing. Files present in ${confDir}: " +
+           ((Get-ChildItem $confDir -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name) -join ', '))
+}
+Write-Host "cloudbase-init $version installed; Unattend.xml present"
 
 # Configured for ConfigDrive, which is what Proxmox emits for a Windows guest.
 #
