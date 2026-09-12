@@ -110,20 +110,30 @@
 
       <UserData>
         <!--
-          Evaluation media needs no key: it activates its own 180-day term, and the
-          /IMAGE/NAME above is what picks the edition, so setup never shows a key page.
-          The same is true of retail media, which is why product_key is empty for every
-          template today and this element is omitted entirely.
+          An empty Key is how you install without a product key, and it is required rather
+          than optional: from Windows 20H2 onward, omitting the ProductKey element entirely
+          makes Setup stop on the "Product key" page and wait for a human. Observed exactly
+          that on Windows 11 Pro retail media, two minutes into an otherwise clean build.
 
-          It exists because that is media-dependent rather than certain. If a build ever
-          stops on the "Activate Windows" page, put the published KMS client setup key for
-          that edition in the catalog in build.pkr.hcl and it will be filled in here. Such
-          a key selects an edition and activates nothing on its own, which is exactly the
-          unactivated install this lab wants.
+          Evaluation media never showed that page, which is why the element was missing
+          here at all. Emitting it unconditionally costs evaluation media nothing and is
+          one code path instead of two.
+
+          WillShowUI Never keeps the page suppressed rather than letting it reappear on a
+          validation warning. Note this is the windowsPE key, whose real job is choosing an
+          edition out of install.wim; the /IMAGE/NAME above already does that, so there is
+          nothing for it to decide. The separate Shell-Setup ProductKey, which is the one
+          that would actually activate Windows, is deliberately absent: these guests are
+          meant to run unactivated.
+
+          If a future template does need a key, put it in the catalog in build.pkr.hcl and
+          it lands here. Prefer the published KMS client setup key for that edition, which
+          selects an edition and activates nothing on its own.
         -->
-%{ if product_key != "" ~}
-        <ProductKey><Key>${product_key}</Key><WillShowUI>OnError</WillShowUI></ProductKey>
-%{ endif ~}
+        <ProductKey>
+          <Key>${product_key}</Key>
+          <WillShowUI>Never</WillShowUI>
+        </ProductKey>
         <AcceptEula>true</AcceptEula>
         <FullName>Administrator</FullName>
         <Organization>lab.internal</Organization>
