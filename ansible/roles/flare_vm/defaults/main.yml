@@ -1,0 +1,5 @@
+---
+# FLARE-VM's installer is interactive and reboots repeatedly, so this role installs it once
+# and then leaves it alone. Set this true to run it again on a box that already has it.
+flare_vm_force: false
+flare_vm_url: https://raw.githubusercontent.com/mandiant/VM-Packages/main/VM-Packages/install.ps1

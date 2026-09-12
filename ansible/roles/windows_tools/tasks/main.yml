@@ -1,0 +1,38 @@
+---
+# A curated security toolset on a stock Windows install.
+#
+# Deliberately not FLARE-VM. That installer rewrites a great deal of Windows -- Defender
+# off, Explorer settings, a reboot loop -- which is right for a dedicated malware box and
+# wrong for a machine that should stay representative of a normal domain-joined workstation.
+# flare01 is the other box; see the flare_vm role.
+
+- name: Install the security toolset
+  chocolatey.chocolatey.win_chocolatey:
+    name: "{{ windows_tools_packages }}"
+    state: present
+    timeout: "{{ windows_tools_timeout }}"
+  register: choco_result
+  # Chocolatey exits 3010 when a package wants a reboot, which is success plus a note.
+  failed_when:
+    - choco_result.rc is defined
+    - choco_result.rc not in [0, 3010]
+
+- name: Put Sysinternals on PATH for every user
+  # The package drops the suite in a directory that is not on PATH, so `procmon` from a
+  # shell fails and the tools get run by hunting for the .exe instead. This is the single
+  # difference between "installed" and "usable".
+  ansible.windows.win_path:
+    elements:
+      - '%ChocolateyInstall%\lib\sysinternals\tools'
+    scope: machine
+    state: present
+
+- name: Accept the Sysinternals EULA ahead of first run
+  # Every Sysinternals tool blocks on a EULA dialog the first time it runs, per user. On a
+  # box driven over SSH that is an invisible hang rather than a prompt.
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Sysinternals
+    name: EulaAccepted
+    data: 1
+    type: dword
+    state: present

@@ -19,3 +19,18 @@
   gather_facts: true
   roles:
     - domain_controller
+
+- name: Install the security toolset on the research workstation
+  hosts: research
+  gather_facts: true
+  roles:
+    - windows_tools
+
+# Last, and on its own machine. The installer disables Defender, reboots repeatedly and
+# takes about an hour, so it is guarded to run once and is not what puts flare01 back after
+# a bad day -- `just lab-revert flare01` is.
+- name: Install FLARE-VM on the analysis box
+  hosts: analysis
+  gather_facts: true
+  roles:
+    - flare_vm
