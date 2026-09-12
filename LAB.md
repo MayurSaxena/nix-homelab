@@ -19,16 +19,17 @@ Two standards apply, and they pull in different directions on purpose:
 
 ## Addressing and DNS
 
-VLAN 90 is `10.0.90.0/24`, gateway `10.0.90.1`, with **UniFi serving DHCP from `.100` to
-`.199`** and handing out technitium (`10.0.10.2`) as the resolver.
+VLAN 90 is `10.0.90.0/24`, gateway `10.0.90.1`, with **technitium serving DHCP from `.100`
+to `.199`** (its `VLAN90` scope) and handing out the `lab.internal` search suffix, so a
+disposable guest comes up resolvable by name with nothing configured on it.
 
 | Block | Use | Assigned by |
 |---|---|---|
-| `.10`&ndash;`.19` | Servers. `lab-dc01` is `.10`. | OpenTofu, static |
-| `.20`&ndash;`.39` | Domain-joined workstations. `lab-ws01` is `.21`. | OpenTofu, static |
-| `.50`&ndash;`.59` | Pets. `flare01` is `.50`. | OpenTofu, static |
+| `.10`&ndash;`.19` | Servers. `dc01` is `.10`. | OpenTofu, static |
+| `.20`&ndash;`.39` | Domain-joined workstations. | OpenTofu, static |
+| `.50`&ndash;`.59` | Pets. `kali01` is `.50`, `ctf01` `.51`, `flare01` `.52`. | OpenTofu, static |
 | `.99` | Packer builds, and nothing else. | The unattend, static |
-| `.100`&ndash;`.199` | Everything disposable: CTF boxes, research VMs, live ISOs. | UniFi DHCP |
+| `.100`&ndash;`.199` | Everything disposable: ad-hoc test hosts, live ISOs. | technitium DHCP |
 
 **Static only where it earns it.** A machine takes a static address if something must find it
 at a known place: the domain controller, anything domain-joined (which also needs the DC as
@@ -44,14 +45,20 @@ Microsoft's guidance is that domain members resolve only against AD DNS, and the
 honour that here is to give them their resolver statically rather than through DHCP.
 
 Technitium conditionally forwards `lab.internal` to the DC, so a disposable box on DHCP can
-still resolve `lab-dc01.lab.internal` in order to attack it. That is the point of keeping the
+still resolve `dc01.lab.internal` in order to attack it. That is the point of keeping the
 whole lab on one flat VLAN rather than separating the AD range: a firewall between your Kali
 box and your domain controller sits in the path of exactly the traffic you care about.
 
 `.99` exists because a Packer build has no OpenTofu behind it. It is deliberately outside
 every other block, so two concurrent builds collide with each other, which is obvious, rather
-than with a range VM, which would not be. The address is build-only: sysprep discards it, and
-cloud-init assigns the clone its real one.
+than with a range VM, which would not be. It also sits just below the DHCP pool, so it can
+never be handed to anything else.
+
+The address is build-only, but only because the build explicitly gives it back: sysprep does
+*not* undo a static address on its own, so `sysprep.ps1` resets the adapter to DHCP before
+generalising. Without that the template's resting state is the build address, and every
+clone made without cloud-init -- which is exactly what an ad-hoc guest is -- sits on `.99`
+and collides with the next build.
 
 ## Media
 
@@ -121,9 +128,10 @@ That leaves three routes, and they differ enough to be a real decision rather th
 detail:
 
 - **The official appliance.** Genuine Parrot, but the image has to be unzipped on the node
-  by hand before OpenTofu can import it, and it almost certainly ships without cloud-init.
-  Something has to put an address on it before first boot, because **VLAN 90 has no DHCP
-  server** -- so a guest that cannot be configured before it boots cannot be reached at all.
+  by hand before OpenTofu can import it, and it probably ships without cloud-init -- not
+  confirmed, since nobody has opened the 10GB image. Without cloud-init it would come up on
+  DHCP with whatever credentials the appliance ships with, and would need configuring by
+  hand before Ansible could take over.
 - **A Debian cloud image plus Parrot's repositories** (`deb.parrot.sh`, `parrot-core` and
   the `parrot-tools-*` metapackages). Fully declarative, native cloud-init, and identical
   in shape to every other Linux guest here. It is Parrot's tooling on Debian rather than
@@ -234,10 +242,11 @@ So the line is durability, not technology:
 
 | | Declared in `provisioning/vms.tf` | Created ad hoc |
 |---|---|---|
-| **What** | `lab-dc01`, member servers, `lab-ws01`, `flare01` | CTF boxes, research VMs, anything booted from a live ISO |
+| **What** | `dc01`, `kali01`, `ctf01`, `flare01`, member servers | Ad-hoc test hosts, anything booted from a live ISO |
 | **Address** | Static, from OpenTofu | DHCP |
 | **Config** | Ansible role, reproducible | Whatever the task needs; usually nothing |
 | **If lost** | Rebuild from the playbook | Shrug |
+| **Snapshots** | A `golden` snapshot after Ansible converges; revert to it freely | Take your own, mid-task, and lose them with the guest |
 
 Both land in the `lab` pool and on VLAN 90, so the two kinds can see each other, which is the
 entire point of keeping the lab flat. Ad-hoc guests are cloned straight from a template or a
@@ -378,7 +387,7 @@ than trusting that it does.
 
 Snapshots are an optimisation here, not the lifecycle. The forest is built by `microsoft.ad`
 from `ansible/group_vars`, so the source of truth for the domain is the playbook, not a
-snapshot sitting on the node. Rebuilding `lab-dc01` from nothing is a clone, a promotion and
+snapshot sitting on the node. Rebuilding `dc01` from nothing is a clone, a promotion and
 a reboot. That stays true only under one discipline: **anything worth keeping in the forest
 goes into the role, never only into the running DC.** It is the same invariant the NixOS
 hosts run on, and it is what makes a DC safe to throw away.

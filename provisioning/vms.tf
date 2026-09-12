@@ -37,11 +37,11 @@ locals {
   ws2025_template_id = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
 }
 
-module "lab-dc01" {
+module "dc01" {
   source        = "./modules/qemu-vm"
   pve_node_name = var.pve_node_name
 
-  vm_name        = "lab-dc01"
+  vm_name        = "dc01"
   vm_description = "lab.internal domain controller (Terraform)"
   template_vm_id = local.ws2025_template_id
 
@@ -84,11 +84,11 @@ module "lab-dc01" {
 # Kali rather than Parrot, and that was a real choice: Parrot publishes no cloud image at
 # all -- only live ISOs that install through Calamares, and ~10GB desktop appliances. See
 # LAB.md for the options if Parrot itself is ever wanted.
-module "lab-kali01" {
+module "kali01" {
   source        = "./modules/qemu-vm"
   pve_node_name = var.pve_node_name
 
-  vm_name              = "lab-kali01"
+  vm_name              = "kali01"
   vm_description       = "Kali Linux attack box, from the official cloud image (Terraform)"
   source_image_file_id = "local:iso/kali-cloud-amd64.img"
 
@@ -107,10 +107,12 @@ module "lab-kali01" {
   disk_size_gb = 60
 
   network_interfaces = { eth0 = 90 }
-  ipv4_settings      = "10.0.90.20/24;10.0.90.1"
+  ipv4_settings      = "10.0.90.50/24;10.0.90.1"
 
   # The DC, so this box resolves lab.internal and can be pointed at the forest it is meant
-  # to be attacking. technitium behind it for everything else, via the DC's forwarder.
+  # to be attacking. It sits in the pets block at .50, not the workstation block: it is not
+  # domain-joined and nothing looks it up by a fixed address, but it is a machine you come
+  # back to rather than one you throw away. technitium behind it for everything else, via the DC's forwarder.
   dns_servers = ["10.0.90.10"]
   domain      = "lab.internal"
 
@@ -121,4 +123,22 @@ module "lab-kali01" {
 
   pool_id = "lab"
   tags    = ["terraform", "linux", "lab", "kali"]
+}
+
+# Renames, not replacements.
+#
+# Guests were prefixed lab- until the whole lab moved under lab.internal, which said it
+# twice. Without these, OpenTofu reads a renamed module as "destroy that one, create this
+# one" -- which for dc01 would mean rebuilding the forest to change a label.
+#
+# Safe to keep indefinitely and safe to run against state that never held the old names:
+# a moved block whose source does not exist is a no-op.
+moved {
+  from = module.lab-dc01
+  to   = module.dc01
+}
+
+moved {
+  from = module.lab-kali01
+  to   = module.kali01
 }

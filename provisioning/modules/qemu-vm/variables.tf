@@ -103,8 +103,13 @@ variable "ipv4_settings" {
   type        = string
   description = <<-EOT
     Either "dhcp", or "<cidr>;<gateway>" for a static address, e.g.
-    "10.0.90.10/24;10.0.90.1". The lab VLAN has no DHCP server, so lab guests must be
-    static. Same encoding as the nixos-lxc module, deliberately.
+    "10.0.90.10/24;10.0.90.1". Same encoding as the nixos-lxc module, deliberately.
+
+    VLAN 90 does have DHCP, serving 10.0.90.100-199 with the lab.internal suffix, so
+    "dhcp" works. Declared guests are static anyway, and below .100: a machine other
+    machines are configured to find -- a domain controller above all -- cannot have an
+    address that moves. Leave the DHCP range to ad-hoc guests, which are not declared here
+    at all.
   EOT
 }
 

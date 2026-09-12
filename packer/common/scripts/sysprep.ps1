@@ -23,5 +23,27 @@ if (-not (Test-Path $unattend)) { throw "cloudbase-init's Unattend.xml is missin
 Set-Service -Name cloudbase-init -StartupType Automatic
 Write-Host "cloudbase-init will start on every boot and apply cloud-init config"
 
+# Hand the adapter back to DHCP before generalising.
+#
+# The build gives itself a fixed address (Packer pins ssh_host, because the Proxmox
+# plugin's own address discovery does not resolve here). Sysprep does not undo that, so
+# every clone of this template came up on the build address until cloud-init got around to
+# changing it -- and a clone made *without* cloud-init, which is exactly what an ad-hoc
+# throwaway is, simply sat on it forever. Two of those at once is an address conflict, and
+# one of them is the next Packer build connecting to the wrong machine.
+#
+# Resetting here means the template's resting state is DHCP: a declared guest still gets
+# its static address from cloud-init, and an ad-hoc clone gets a lease and is reachable
+# with no further help.
+$adapter = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1
+if ($adapter) {
+    # -Confirm:$false because this runs unattended and both cmdlets prompt by default.
+    Remove-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue
+    Remove-NetRoute -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue
+    Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -Dhcp Enabled
+    Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ResetServerAddresses
+    Write-Host "Adapter reset to DHCP; the template no longer carries the build address"
+}
+
 Write-Host "Running sysprep; the VM will power off and Packer will convert it to a template."
 & "$env:SystemRoot\System32\Sysprep\Sysprep.exe" /generalize /oobe /shutdown /unattend:"$unattend"

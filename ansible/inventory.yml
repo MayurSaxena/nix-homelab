@@ -6,6 +6,13 @@
 # inventory plugin that can filter on the `lab` pool. Do not build that until something needs it.
 all:
   children:
+    linux:
+      hosts:
+        kali01:
+          ansible_host: 10.0.90.50
+      vars:
+        ansible_user: kali
+
     windows:
       vars:
         ansible_connection: ssh
@@ -16,13 +23,24 @@ all:
       children:
         domain_controllers:
           hosts:
-            lab-dc01:
+            dc01:
               ansible_host: 10.0.90.10
         domain_members:
           hosts: {}
         workstations:
           hosts: {}
+        # The two persistent Windows security boxes, deliberately separate.
+        #
+        # ctf01 is a normal Windows 11 workstation with a curated toolset, so it stays
+        # representative of a real host and can be domain-joined for testing. flare01 runs
+        # FLARE-VM, whose installer disables Defender and rewrites enough of Windows that
+        # the box stops being representative of anything -- which is fine for malware work
+        # and the reason it is not the same machine.
+        research:
+          hosts:
+            ctf01:
+              ansible_host: 10.0.90.51
         analysis:
           hosts:
             flare01:
-              ansible_host: 10.0.90.50
+              ansible_host: 10.0.90.52
