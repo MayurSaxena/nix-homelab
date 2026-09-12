@@ -142,6 +142,30 @@
   </settings>
 
   <settings pass="oobeSystem">
+    <!--
+      Locale, again, for a different pass.
+
+      The International-Core-WinPE component above covers Setup's own UI and nothing else.
+      Without this second component OOBE has no locale of its own, so it asks: "Is this the
+      right country or region?", then the keyboard layout, then a second keyboard layout.
+      Those pages wait for a human forever.
+
+      Server 2025 does not ask, which is why this was missing and why the omission survived
+      a working build. Windows 11 does. That difference cost a 45-minute SSH timeout on a
+      guest that had installed perfectly and was simply sitting on the region page.
+
+      Note the component name differs from the WinPE one: Microsoft-Windows-International-
+      Core, with no suffix.
+    -->
+    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
     <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
                publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
                xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
