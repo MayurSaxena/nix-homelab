@@ -15,7 +15,6 @@
   "jupyter.jupyterServerType": "local",
   "jupyter.disableJupyterAutoStart": true,
   "terminal.integrated.fontFamily": "JetBrainsMono Nerd Font",
-  "python.defaultInterpreterPath": "/Users/msaxena/venv/bpod/bin/python",
   "python.venvFolders": ["venv"],
   "editor.formatOnSave": true,
   "notebook.output.textLineLimit": 100,
@@ -24,13 +23,6 @@
     "editor.defaultFormatter": "vscode.json-language-features"
   },
   "editor.minimap.enabled": false,
-  "jupyter.kernels.excludePythonEnvironments": [
-    "~/venv/crunch/bin/python3",
-    "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.8/bin/python3.8",
-    "/usr/bin/python3",
-    "/var/tmp/sage-9.4-current/local/bin/python3",
-    "/Applications/SageMath-9-4.app/Contents/Frameworks/Sage.framework/Versions/Current/local/bin/python3"
-  ],
   "editor.accessibilitySupport": "off",
   "python.formatting.provider": "black",
   "editor.defaultFormatter": "esbenp.prettier-vscode",
@@ -48,5 +40,6 @@
   "database-client.autoSync": true,
   "telemetry.telemetryLevel": "off",
   "claudeCode.preferredLocation": "panel",
-  "claudeCode.selectedModel": "default"
+  "claudeCode.selectedModel": "default",
+  "git.replaceTagsWhenPull": true
 }
