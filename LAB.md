@@ -286,6 +286,52 @@ first run with the password cloudbase-init set, writes the key to
 `administrators_authorized_keys` with the right ACL, and every run after that uses the key.
 The password stays a bootstrap credential rather than becoming a standing one.
 
+## The pet lifecycle
+
+Declared guests share one shape, whichever OS they run: **deploy, configure, snapshot,
+work, revert, occasionally rebuild.** Only the Ansible role differs between them.
+
+```bash
+just lab-snapshot kali01          # take the golden restore point
+just lab-revert   kali01          # rewind to it, discarding everything since
+just lab-rebuild  kali01          # destroy, redeploy on the current template, reconfigure, re-snapshot
+```
+
+`golden` is the convention: the state a machine is in once its role has converged and
+before you start breaking it. `lab-snapshot` replaces an existing snapshot of the same name
+rather than accumulating `golden-1`, `golden-2`, because the moment there are two, "revert
+to fresh" becomes "work out which one". `lab-rebuild` ends by re-taking it, since that is
+the step that is easy to forget and the one that makes the *next* revert possible.
+
+**Revert is not rebuild.** Revert rewinds the machine you have and keeps everything the
+image gave it. Rebuild throws the machine away and clones the template again, which is how
+you pick up a newer base image -- a rebuilt Kali is a newer Kali, a reverted one is not.
+
+**Snapshots are recipes, not OpenTofu resources**, and that is a judgement rather than a
+workaround for the provider lacking one. A snapshot is a point in time, not a desired
+state; declaring one would have OpenTofu forever comparing the snapshot that exists against
+the snapshot that should exist and re-taking it.
+
+## Throwaway guests
+
+```bash
+just lab-spawn tpl-win11-pro test01    # clone, cloud-init to DHCP, start
+just lab-despawn test01                # stop and destroy
+```
+
+These are deliberately outside OpenTofu, for the reason in the ownership table above. They
+land in the `lab` pool on VLAN 90, take a lease from technitium's `.100`-`.199` range with
+the `lab.internal` suffix, and carry the lab password and the Ansible key from first boot,
+so they are reachable by name immediately.
+
+**They are not domain-joined.** Joining is the thing most often worth *testing*, so it is a
+play you run rather than something that has already happened to the box.
+
+`lab-despawn` refuses anything tagged `terraform` or `template`. OpenTofu tags everything it
+declares, and templates are tagged as such, so a slip of the finger cannot destroy the
+domain controller or the image everything else is cloned from. That is the whole difference
+between a pet and a throwaway, enforced rather than remembered.
+
 ## Backups
 
 Reproducibility is the backup for most of this. Range VMs rebuild from the playbook and
