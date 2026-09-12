@@ -75,36 +75,83 @@ module "dc01" {
   # for boot resources, nor come back automatically after a host reboot.
 }
 
-# The lab's Linux box, built straight from Kali's cloud image.
+# The Kali template, built from the downloaded cloud image.
 #
-# No Packer template and no tag lookup: the image already carries cloud-init and the QEMU
-# guest agent, which is the entire content of a Windows build, so the downloaded image is
-# the artifact. `just lab-cloud-image kali` puts it on the node.
+# This exists so that every guest in the lab is the same kind of thing: a full clone of a
+# template. Windows needs a template because Microsoft ships no usable image and one has to
+# be installed; Kali ships a finished, cloud-init-ready disk, so there is nothing to install
+# and no Packer stage. That difference belongs to the vendors, and it is allowed to show up
+# in how a template is *made* -- but not in how a guest is *deployed*, which is why this is
+# a template rather than an image each guest imports for itself.
 #
 # Kali rather than Parrot, and that was a real choice: Parrot publishes no cloud image at
 # all -- only live ISOs that install through Calamares, and ~10GB desktop appliances. See
 # LAB.md for the options if Parrot itself is ever wanted.
+#
+# Note the image filename is stable, so re-running `just lab-image kali` replaces the file
+# without OpenTofu seeing any change here. That is deliberate: moving to a newer Kali is an
+# explicit rebuild of this template, not something that happens under a guest during an
+# unrelated apply.
+resource "proxmox_virtual_environment_vm" "kali_template" {
+  node_name   = var.pve_node_name
+  name        = "tpl-kali"
+  description = "Kali Linux cloud image. Rebuilt by tainting this resource; do not edit in place."
+  tags        = ["terraform", "template", "kali"]
+  pool_id     = "lab"
+  template    = true
+  started     = false
+
+  operating_system { type = "l26" }
+
+  # seabios, not the ovmf the Windows templates use: OVMF needs an EFI vars disk, which
+  # Packer creates for those. The cloud image boots BIOS perfectly well.
+  bios    = "seabios"
+  machine = "q35"
+
+  cpu { type = "host" }
+
+  # Sized to match what clones ask for, so cloning never has to resize.
+  scsi_hardware = "virtio-scsi-single"
+  disk {
+    datastore_id = "local-zfs"
+    file_id      = "local:iso/kali-cloud-amd64.img"
+    interface    = "scsi0"
+    size         = 60
+    file_format  = "raw"
+    cache        = "writeback"
+    iothread     = true
+    ssd          = true
+  }
+
+  # A template holds no cloud-init drive and no address. Clones get their own, from the
+  # module, which is the whole point of the split.
+  network_device {
+    bridge   = "vmbr0"
+    model    = "virtio"
+    vlan_id  = 90
+    firewall = false
+  }
+
+  agent { enabled = true }
+}
+
 module "kali01" {
   source        = "./modules/qemu-vm"
   pve_node_name = var.pve_node_name
 
-  vm_name              = "kali01"
-  vm_description       = "Kali Linux attack box, from the official cloud image (Terraform)"
-  source_image_file_id = "local:iso/kali-cloud-amd64.img"
+  vm_name        = "kali01"
+  vm_description = "Kali Linux attack box (Terraform)"
+  template_vm_id = proxmox_virtual_environment_vm.kali_template.vm_id
 
   os_type = "l26"
 
-  # seabios, not the ovmf the Windows guests use. OVMF needs an EFI vars disk, and the
-  # Windows guests get theirs from the template Packer built with one; a guest built from a
-  # bare cloud image has no such inheritance, and this module deliberately declares no
-  # efi_disk of its own. The image boots BIOS perfectly well, so there is nothing to gain.
+  # Matches the template it is cloned from; see the comment there.
   bios    = "seabios"
   machine = "q35"
 
   num_cpu_cores  = 4
   memory_size_mb = 8192
-  # Must be at least the image's virtual size (25GiB) or the import is refused.
-  disk_size_gb = 60
+  disk_size_gb   = 60
 
   network_interfaces = { eth0 = 90 }
   ipv4_settings      = "10.0.90.50/24;10.0.90.1"

@@ -29,40 +29,12 @@ resource "proxmox_virtual_environment_vm" "vm" {
     type = var.os_type
   }
 
-  # Two ways to come into existence, and a guest uses exactly one.
-  #
-  # clone: from a Packer-built template, which is the Windows path, because Microsoft
-  # publishes no cloud image and one has to be built.
-  #
-  # disk.file_id below: straight from a downloaded cloud image, which is the Linux path.
-  # That image already carries cloud-init and the guest agent, so a Packer stage would add
-  # nothing -- there is no template to build, rebuild or find by tag.
-  #
-  # The precondition is worth the four lines: with neither set the provider creates a
-  # blank VM that boots to firmware and looks like a broken image, and with both set the
-  # clone silently wins and the image is ignored.
-  # Rebuilding a template must not destroy the VMs already cloned from it, and re-fetching a
-  # cloud image must not destroy the guests built from it. Same reasoning as the nixos-lxc
-  # module ignoring template_file_id: the source matters at creation and is meaningless
-  # afterwards.
-  lifecycle {
-    ignore_changes = [clone, disk[0].file_id]
-
-    precondition {
-      condition     = (var.template_vm_id != null) != (var.source_image_file_id != null)
-      error_message = "Set exactly one of template_vm_id (clone a template) or source_image_file_id (build from a cloud image)."
-    }
-  }
-
-  dynamic "clone" {
-    for_each = var.template_vm_id != null ? [var.template_vm_id] : []
-    content {
-      vm_id = clone.value
-      # A full clone, not a linked one. Linked clones stay tethered to the template, so a
-      # template rebuild would be blocked by its own children and a range reset could not
-      # outlive the image it came from.
-      full = true
-    }
+  clone {
+    vm_id = var.template_vm_id
+    # A full clone, not a linked one. Linked clones stay tethered to the template, so a
+    # template rebuild would be blocked by its own children and a range reset could not
+    # outlive the image it came from.
+    full = true
   }
 
   # No efi_disk or tpm_state block here on purpose: both are cloned from the template, which
@@ -95,16 +67,12 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   disk {
     datastore_id = var.vm_disk_datastore
-    # Null when cloning, since the clone brings its own disk. Set, it imports that image
-    # into a fresh disk -- a copy, so the image can be replaced later without touching any
-    # guest already built from it.
-    file_id     = var.source_image_file_id
-    interface   = "scsi0"
-    size        = var.disk_size_gb
-    file_format = "raw"
-    cache       = "writeback"
-    iothread    = true
-    ssd         = true
+    interface    = "scsi0"
+    size         = var.disk_size_gb
+    file_format  = "raw"
+    cache        = "writeback"
+    iothread     = true
+    ssd          = true
   }
 
   scsi_hardware = "virtio-scsi-single"

@@ -238,42 +238,50 @@ packer-token:
     sops set secrets/msaxena.yaml '["proxmox"]["packer-token-secret"]' "\"${value}\""
     echo "wrote proxmox/packer-token-id and proxmox/packer-token-secret to secrets/msaxena.yaml"
 
-# Most Linux distributions need no Packer template at all -- their cloud image already
-# carries cloud-init and the guest agent, which is the entire content of a Windows build.
-# What they do need is unpacking, because essentially none of them publish a bare disk
-# image: `proxmox_virtual_environment_download_file` can decompress gz, lzo, zst and bz2,
-# and the images come as .tar.xz (Kali) or .zip (Parrot's appliance). One tar is cheaper
-# than a second build pipeline.
+# The lab's base images, and how each one is made.
 #
-# Runs on the node rather than the Mac, so the image is fetched once over the internet
-# instead of being pulled down and pushed back up again.
+# One verb, because "produce the base image for X" is one idea. How it gets produced is not
+# a distinction worth making at the command line:
 #
-# No version is pinned here. The name and the checksum both come from the published
+#   Windows  ->  Packer installs the OS from an ISO, because Microsoft ships no usable
+#                image, and converts the result to a template.
+#   Linux    ->  download the distribution's cloud image, which already carries cloud-init
+#                and the guest agent. There is nothing to install, so there is no build.
+#                `tofu apply` turns the downloaded image into a template.
+#
+# Cloud images need unpacking, which is the one thing OpenTofu cannot do for itself:
+# `download_file` decompresses gz, lzo, zst and bz2, and the images ship as .tar.xz or
+# .zip. Fetching runs on the node, so the image crosses the internet once rather than being
+# pulled to the Mac and pushed back.
+#
+# No version is pinned. The archive name and its checksum both come from the published
 # SHA256SUMS of the `current` release, so this fetches whatever is current and verifies it,
-# and the file lands under a stable name that provisioning/vms.tf can refer to forever.
-# Re-running it upgrades the image; guests already built from it are untouched, since their
-# disks were copied at creation.
+# and writes a stable filename that provisioning/vms.tf can refer to forever. Re-running it
+# replaces the image; nothing rebuilds until you taint the template, which is deliberate --
+# moving to a newer Kali should not happen under a guest during an unrelated apply.
 
-# Fetch a Linux cloud image onto the node: `just lab-cloud-image kali`.
-lab-cloud-image name:
+# Produce a base image: `just lab-image win11-pro`, `just lab-image kali`.
+lab-image name:
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{name}}" in
+      ws2025|win11-pro)
+        exec just packer-build windows "{{name}}"
+        ;;
       kali)
         base="https://kali.download/cloud-images/current"
-        # The file inside the tar, and the name to publish it under.
-        member="disk.raw"
+        member="disk.raw"   # what is inside the tar
         out="kali-cloud-amd64.img"
         ;;
       *)
-        echo "unknown image '{{name}}'. Known: kali" >&2
+        echo "unknown image '{{name}}'. Known: ws2025, win11-pro, kali" >&2
         exit 1
         ;;
     esac
 
-    # .img rather than .qcow2, and the ISO datastore rather than a PVE 9 "import" one:
-    # PVE lists .iso and .img as ISO content, so this needs no storage reconfiguration on
-    # the node, and the provider imports a disk from that volume id perfectly well.
+    # .img rather than .qcow2, and the ISO datastore rather than a PVE 9 "import" one: PVE
+    # lists .iso and .img as ISO content, so this needs no storage reconfiguration on the
+    # node, and the provider imports a disk from that volume id perfectly well.
     iso_dir="/var/lib/vz/template/iso"
 
     ssh root@10.0.10.3 bash -seu <<REMOTE
@@ -293,7 +301,7 @@ lab-cloud-image name:
     echo "\$line" | sha256sum -c -
 
     # -S writes the file sparsely; these images are mostly holes, so this is the difference
-    # between a few gigabytes and the image's full apparent size.
+    # between a couple of hundred megabytes and the image's full apparent size.
     tar -xSJf "\$archive" "\$member"
     mv -f "\$member" "\$iso_dir/\$out"
     echo "wrote \$iso_dir/\$out  (\$(du -h --apparent-size "\$iso_dir/\$out" | cut -f1) apparent, \$(du -h "\$iso_dir/\$out" | cut -f1) on disk)"
