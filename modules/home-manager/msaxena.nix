@@ -39,7 +39,7 @@
       age
       age-plugin-yubikey
       sops
-      ykman
+      yubikey-manager
     ];
 
     # Set the home directory differently based on platform
