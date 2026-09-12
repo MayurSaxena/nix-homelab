@@ -126,8 +126,13 @@ lab-cred key="":
 # .pkrvars file, so nothing lands on disk and nothing lands in shell history. PKR_VAR_ is
 # Packer's own convention for populating an input variable from the environment.
 
-# Build a golden VM template with Packer: `just packer-build ws2025`.
-packer-build template *args:
+# Build a golden VM template with Packer: `just packer-build windows ws2025`.
+#
+# `family` is a directory under packer/ -- one Packer configuration per class of guest,
+# because the builder itself differs (Windows installs from an ISO and an answer file;
+# a Linux cloud image is cloned from a disk image and configured by cloud-init). `target`
+# is a key of that configuration's catalog, and names the template it produces.
+packer-build family target *args:
     #!/usr/bin/env bash
     set -euo pipefail
     export PKR_VAR_proxmox_username=$(sops -d --extract '["proxmox"]["packer-token-id"]' secrets/msaxena.yaml)
@@ -169,7 +174,7 @@ packer-build template *args:
     # never a moment with zero.
     export PKR_VAR_proxmox_url="${PKR_VAR_proxmox_url:-https://10.0.10.3:8006/api2/json}"
     auth=(-H "Authorization: PVEAPIToken=${PKR_VAR_proxmox_username}=${PKR_VAR_proxmox_token}")
-    tmpl_tag="{{template}}"
+    tmpl_tag="{{target}}"
     templates_with_tag() {
         curl -sk "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu" \
           | jq -r --arg t "$tmpl_tag" '.data[] | select(.template==1) | select((.tags // "") | split(";") | index($t)) | .vmid'
@@ -177,7 +182,7 @@ packer-build template *args:
     before=$(templates_with_tag | sort -n | tr '\n' ' ')
     echo "existing ${tmpl_tag} templates before this build: ${before:-none}"
 
-    (cd packer/{{template}} && packer init . && packer build {{args}} .)
+    (cd packer/{{family}} && packer init . && packer build -var target={{target}} {{args}} .)
 
     after=$(templates_with_tag | sort -n | tr '\n' ' ')
     echo "after: ${after:-none}"

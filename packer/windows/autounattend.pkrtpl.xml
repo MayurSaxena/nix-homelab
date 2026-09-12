@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Unattended install answer file for the Server 2025 template build.
+  Unattended install answer file, shared by every Windows template.
 
-  Two things in here are the usual reason a first Packer run fails, and both are called
-  out below: the VirtIO driver paths in the windowsPE pass, and the /IMAGE/NAME value
-  that selects an edition out of install.wim.
+  Everything that differs between one Windows edition and the next is a template
+  variable, filled in from the catalog at the top of build.pkr.hcl: image_name, virtio_dir
+  and product_key. Adding a Windows version should not mean touching this file.
+
+  Those first two are also the usual reason a first build of a new version fails, and
+  both fail the same silent way: a screen that never advances, until a communicator
+  timeout an hour later reports it as a connection problem. Read both off the real media
+  rather than assuming; the comment at each one says how.
 -->
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
 
@@ -27,24 +32,30 @@
         installer shows "no drives were found" and the build hangs at that screen forever.
 
         The drive letter of the virtio-win ISO is not predictable in WinPE, so every likely
-        letter is listed and the ones that do not exist are ignored. 2k25 is the correct
-        directory for Server 2025; a wrong OS directory fails exactly like a missing one.
+        letter is listed and the ones that do not exist are ignored.
+
+        virtio_dir is the per-Windows-version directory inside the virtio-win ISO, and a
+        wrong one fails exactly like a missing one: the same "no drives were found"
+        screen,
+        no hint as to which. Do not guess it. List what the ISO actually carries:
+          ssh root@proxmox 'mount -o loop,ro /var/lib/vz/template/iso/virtio-win.iso /mnt \
+            && ls /mnt/vioscsi && umount /mnt'
       -->
       <DriverPaths>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="1"><Path>D:\vioscsi\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="2"><Path>E:\vioscsi\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="3"><Path>F:\vioscsi\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="4"><Path>D:\NetKVM\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="5"><Path>E:\NetKVM\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="6"><Path>F:\NetKVM\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="7"><Path>D:\Balloon\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="8"><Path>E:\Balloon\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="9"><Path>F:\Balloon\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1"><Path>D:\vioscsi\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="2"><Path>E:\vioscsi\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="3"><Path>F:\vioscsi\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="4"><Path>D:\NetKVM\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="5"><Path>E:\NetKVM\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="6"><Path>F:\NetKVM\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="7"><Path>D:\Balloon\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="8"><Path>E:\Balloon\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="9"><Path>F:\Balloon\${virtio_dir}\amd64</Path></PathAndCredentials>
         <!-- vioserial is the channel the QEMU guest agent uses to reach the host. Without it
              the agent runs, looks healthy, and is invisible to Proxmox. -->
-        <PathAndCredentials wcm:action="add" wcm:keyValue="10"><Path>D:\vioserial\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="11"><Path>E:\vioserial\2k25\amd64</Path></PathAndCredentials>
-        <PathAndCredentials wcm:action="add" wcm:keyValue="12"><Path>F:\vioserial\2k25\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="10"><Path>D:\vioserial\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="11"><Path>E:\vioserial\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="12"><Path>F:\vioserial\${virtio_dir}\amd64</Path></PathAndCredentials>
       </DriverPaths>
     </component>
 
@@ -89,7 +100,7 @@
             -->
             <MetaData wcm:action="add">
               <Key>/IMAGE/NAME</Key>
-              <Value>Windows Server 2025 Standard Evaluation (Desktop Experience)</Value>
+              <Value>${image_name}</Value>
             </MetaData>
           </InstallFrom>
           <InstallTo><DiskID>0</DiskID><PartitionID>3</PartitionID></InstallTo>
@@ -98,7 +109,21 @@
       </ImageInstall>
 
       <UserData>
-        <!-- No ProductKey element at all: evaluation media activates its own 180-day term. -->
+        <!--
+          Evaluation media needs no key: it activates its own 180-day term, and the
+          /IMAGE/NAME above is what picks the edition, so setup never shows a key page.
+          The same is true of retail media, which is why product_key is empty for every
+          template today and this element is omitted entirely.
+
+          It exists because that is media-dependent rather than certain. If a build ever
+          stops on the "Activate Windows" page, put the published KMS client setup key for
+          that edition in the catalog in build.pkr.hcl and it will be filled in here. Such
+          a key selects an edition and activates nothing on its own, which is exactly the
+          unactivated install this lab wants.
+        -->
+%{ if product_key != "" ~}
+        <ProductKey><Key>${product_key}</Key><WillShowUI>OnError</WillShowUI></ProductKey>
+%{ endif ~}
         <AcceptEula>true</AcceptEula>
         <FullName>Administrator</FullName>
         <Organization>lab.internal</Organization>
