@@ -73,6 +73,15 @@ plan *args:
     # Linux guests are built from a stock cloud image with no key baked in, so cloud-init
     # has to authorise one. The Windows templates carry it already.
     export TF_VAR_lab_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
+    # Some operations go over SSH to the node rather than through the API, because PVE has
+    # no API for them: uploading a snippet, and importing a disk image. The provider reads
+    # the ssh-agent for those and explicitly ignores ~/.ssh/config, so the key your own ssh
+    # uses is invisible to it -- which surfaces as "attempted methods [none password]", a
+    # message that looks like a credential problem rather than an empty agent.
+    #
+    # This is the sops-decrypted Mac key, not one of the YubiKey sk keys, so it needs no
+    # touch and the apply stays unattended. Re-adding an already-loaded key is a no-op.
+    ssh-add -q ~/.ssh/id_ed25519 2>/dev/null || echo "warning: could not load ~/.ssh/id_ed25519 into ssh-agent; operations that go over SSH to the node will fail" >&2
     cd provisioning && tofu plan {{args}}
 
 # Apply OpenTofu changes; scope to one host with `just apply -target=module.<name>`.
@@ -84,6 +93,15 @@ apply *args:
     # Linux guests are built from a stock cloud image with no key baked in, so cloud-init
     # has to authorise one. The Windows templates carry it already.
     export TF_VAR_lab_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
+    # Some operations go over SSH to the node rather than through the API, because PVE has
+    # no API for them: uploading a snippet, and importing a disk image. The provider reads
+    # the ssh-agent for those and explicitly ignores ~/.ssh/config, so the key your own ssh
+    # uses is invisible to it -- which surfaces as "attempted methods [none password]", a
+    # message that looks like a credential problem rather than an empty agent.
+    #
+    # This is the sops-decrypted Mac key, not one of the YubiKey sk keys, so it needs no
+    # touch and the apply stays unattended. Re-adding an already-loaded key is a no-op.
+    ssh-add -q ~/.ssh/id_ed25519 2>/dev/null || echo "warning: could not load ~/.ssh/id_ed25519 into ssh-agent; operations that go over SSH to the node will fail" >&2
     cd provisioning && tofu apply {{args}}
 
 # Delete old system generations, keeping the last five.
