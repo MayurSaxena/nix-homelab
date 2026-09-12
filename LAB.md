@@ -86,18 +86,53 @@ Windows is that case, and essentially the only one: Microsoft ships no cloud ima
 usable Windows guest has to be built. That build is why `packer/` exists.
 
 Most Linux distributions publish a cloud image that already carries cloud-init and the QEMU
-guest agent, which is the entire content of a Packer build. Kali and Parrot both do. For
-those, download the image with a `proxmox_virtual_environment_download_file` resource next to
-the ISOs in `provisioning/images.tf`, clone it with `qemu-vm`, and configure it with Ansible
-if it needs anything at all. That is less work to write and nothing to maintain, and it is
-what "works out of the box" actually looks like.
+guest agent, which is the entire content of a Packer build. For those there is no template
+step at all: `proxmox_virtual_environment_download_file` with `content_type = "import"`
+fetches the qcow2, a `disk { import_from = ... }` builds the guest straight from it, and
+Ansible does the rest. Less to write than a Packer template, and nothing to maintain.
+
+**Check that the distribution you want actually publishes one; do not assume.** Kali does.
+**Parrot does not** -- as of 7.3 its download directory carries live ISOs and desktop
+appliances (ova, qcow2, vmdk, libvirt box) and no cloud image, and the appliance qcow2 is
+zipped, which `decompression_algorithm` cannot handle (it takes gz, lzo, zst and bz2). Its
+ISOs install through Calamares rather than the Debian installer, so there is no preseed
+either. A distribution in that position needs a deliberate decision rather than a template:
+see the note in the Parrot section below.
 
 Build a Linux template only when something must exist *before first boot* that cloud-init
 cannot do at boot time. That is rare. A slow package install is not a reason on its own;
 a snapshot after first configuration gets you the same speed without a second pipeline.
 
 The `qemu-vm` module does not care which kind of thing it is cloning, so this is a decision
-per image rather than an architectural fork.
+per image rather than an architectural fork. It does care whether the guest can read a
+cloud-init drive: `enable_cloud_init = false` stops it attaching one, for an image that has
+no cloud-init agent at all. Attaching a drive such a guest ignores would leave OpenTofu
+declaring an address nothing reads, with a clean plan and a wrong answer.
+
+### Parrot, and images with no cloud-init
+
+Parrot is the case the paragraph above is about, and it is worth writing down because the
+obvious assumption is wrong. Checked against its own mirror at 7.3: **there is no Parrot
+cloud image.** What it publishes is live ISOs and full desktop appliances, around 10GB each.
+The ISOs install through Calamares, so there is no preseed; the appliance qcow2 is zipped,
+which `download_file` cannot decompress.
+
+That leaves three routes, and they differ enough to be a real decision rather than a
+detail:
+
+- **The official appliance.** Genuine Parrot, but the image has to be unzipped on the node
+  by hand before OpenTofu can import it, and it almost certainly ships without cloud-init.
+  Something has to put an address on it before first boot, because **VLAN 90 has no DHCP
+  server** -- so a guest that cannot be configured before it boots cannot be reached at all.
+- **A Debian cloud image plus Parrot's repositories** (`deb.parrot.sh`, `parrot-core` and
+  the `parrot-tools-*` metapackages). Fully declarative, native cloud-init, and identical
+  in shape to every other Linux guest here. It is Parrot's tooling on Debian rather than
+  Parrot itself, and mixing the two package sets is the usual way to break a system.
+- **Kali instead**, which does publish a cloud image and needs none of this.
+
+Nothing is committed yet. Whichever wins, the no-DHCP constraint is the thing to design
+against: on this VLAN, cloud-init is not a convenience, it is how a guest becomes
+reachable.
 
 ## Which edition goes where, and why
 
@@ -122,10 +157,10 @@ and works more simply, since Credential Guard is not silently blocking the lesso
 
 If Credential Guard ever becomes the point, add a `tpl-win11-ent` template from the standard
 Enterprise 90-day [evaluation][eval] (**not** LTSC, which omits the Store, the UWP stack,
-Edge, Copilot and Teams, and so removes the very surface a real endpoint has). It is a copy
-of the Pro Packer config with a different ISO and edition string. `provisioning/rbac.tf`
-already grants `packer@pve` on `/vms/9101`, deliberately left unused, so no permission
-change is needed when that day comes.
+Edge, Copilot and Teams, and so removes the very surface a real endpoint has). That is an
+entry in the catalog at the top of `packer/windows/build.pkr.hcl` and nothing else -- an
+ISO, an edition string and a virtio directory. No permission change either: the grant is on
+the `lab` pool, not on a list of VMIDs.
 
 **The servers are the only expiry to track.** Server 2025 evaluation runs 180 days, and
 `sysprep /generalize` rearms that clock, so each clone starts its own full term from first
