@@ -64,3 +64,36 @@
     name: netplan-configure.service
     enabled: true
   become: true
+
+- name: Allow password authentication over SSH
+  # A drop-in rather than an edit to sshd_config: the cloud image sets this under
+  # /etc/ssh/sshd_config.d/ and the last matching file wins, so editing the main file has no
+  # effect and looks like the setting was simply ignored.
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-lab.conf
+    mode: "0644"
+    content: |
+      # Managed by Ansible (linux_baseline). See LAB.md, "Getting into a guest".
+      PasswordAuthentication {{ 'yes' if linux_ssh_password_auth else 'no' }}
+  become: true
+  notify: Reload sshd
+
+- name: Apply any pending sshd reload before checking it
+  ansible.builtin.meta: flush_handlers
+
+- name: Read sshd's effective configuration
+  # sshd -T is the configuration after every drop-in has been applied, which is the only
+  # thing that actually answers "will a password work".
+  ansible.builtin.command: sshd -T
+  become: true
+  changed_when: false
+  register: sshd_effective
+
+- name: Fail if password authentication did not take effect
+  ansible.builtin.assert:
+    that:
+      - "'passwordauthentication ' ~ ('yes' if linux_ssh_password_auth else 'no') in sshd_effective.stdout"
+    fail_msg: >-
+      sshd's effective PasswordAuthentication is not what linux_ssh_password_auth asked for.
+      Another drop-in in /etc/ssh/sshd_config.d/ is probably overriding 99-lab.conf.
+    success_msg: "sshd password authentication is {{ 'on' if linux_ssh_password_auth else 'off' }}"
