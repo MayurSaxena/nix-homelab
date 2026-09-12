@@ -28,7 +28,7 @@ data "proxmox_virtual_environment_vms" "ws2025_template" {
   lifecycle {
     postcondition {
       condition     = length(self.vms) == 1
-      error_message = "Expected exactly one template tagged ws2025, found ${length(self.vms)}. None means it has not been built yet: run `just packer-build ws2025`. More than one means a build is in flight, or a retirement did not finish."
+      error_message = "Expected exactly one template tagged ws2025, found ${length(self.vms)}. None means it has not been built yet: run `just packer-build windows ws2025`. More than one means a build is in flight, or a retirement did not finish."
     }
   }
 }
