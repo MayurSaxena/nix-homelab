@@ -10,7 +10,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = ">= 0.80.0"
+      version = ">= 0.113.1" # see provisioning/provider.tf for why this floor
     }
   }
 }

@@ -1,7 +1,7 @@
 variable "lab_admin_password" {
-  type      = string
-  nullable  = false
-  sensitive = true
+  type        = string
+  nullable    = false
+  sensitive   = true
   description = <<-EOT
     Local Administrator password cloud-init sets on each lab guest at first boot, so
     Ansible has something to authenticate with before it installs its key. Exported as
