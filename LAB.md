@@ -292,16 +292,27 @@ Declared guests share one shape, whichever OS they run: **deploy, configure, sna
 work, revert, occasionally rebuild.** Only the Ansible role differs between them.
 
 ```bash
-just lab-snapshot kali01          # take the golden restore point
-just lab-revert   kali01          # rewind to it, discarding everything since
-just lab-rebuild  kali01          # destroy, redeploy on the current template, reconfigure, re-snapshot
+just lab-snapshot  kali01                  # take/replace the golden restore point
+just lab-snapshot  kali01 before-exploit   # take an ad-hoc one, alongside golden
+just lab-snapshots kali01                  # what restore points exist
+just lab-revert    kali01 [name]           # rewind, discarding everything since
+just lab-rebuild   kali01                  # destroy, redeploy on the current template, reconfigure, re-snapshot
 ```
 
-`golden` is the convention: the state a machine is in once its role has converged and
-before you start breaking it. `lab-snapshot` replaces an existing snapshot of the same name
-rather than accumulating `golden-1`, `golden-2`, because the moment there are two, "revert
-to fresh" becomes "work out which one". `lab-rebuild` ends by re-taking it, since that is
-the step that is easy to forget and the one that makes the *next* revert possible.
+**`golden` is the only reserved name, and the only one this tooling will ever overwrite.**
+It means: the state a machine is in once its role has converged and before you start
+breaking it. `lab-rebuild` re-takes it every time, which is the step that is easy to forget
+and the one that makes the *next* revert possible, and letting it accumulate as `golden-1`,
+`golden-2` would turn "revert to fresh" into "work out which one".
+
+**Every other snapshot is yours, and nothing here will touch it.** Re-taking a name that
+already exists is refused rather than silently replaced.
+
+**So there is nothing to remember about which tool to use.** The Proxmox UI, `qm snapshot`
+and `just lab-snapshot` are the same mechanism, and no part of this repo tracks snapshots,
+so there is no state to desync. Take ad-hoc snapshots wherever is convenient. The recipes
+exist for the two things the UI cannot do for you: keeping `golden` single, and re-taking
+it as the last step of a rebuild.
 
 **Revert is not rebuild.** Revert rewinds the machine you have and keeps everything the
 image gave it. Rebuild throws the machine away and clones the template again, which is how

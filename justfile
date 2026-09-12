@@ -328,13 +328,26 @@ lab-snapshot guest name="golden":
           -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
     api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
     vmid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{guest}}" '.data[] | select(.name==$n) | .vmid')
-    # Re-taking a name means replacing it. PVE refuses a duplicate, and the alternative --
-    # accumulating golden-1, golden-2 -- turns "revert to fresh" into "work out which one".
+    # Only `golden` is replaced on a re-take; anything else is yours and is never clobbered.
+    #
+    # golden is the managed baseline -- lab-rebuild re-takes it every time, and letting it
+    # accumulate as golden-1, golden-2 would turn "revert to fresh" into "work out which
+    # one". Every other name is a snapshot you took for your own reasons, and this command
+    # has no business deleting it just because you reused a word.
+    #
+    # The practical effect: you never have to remember which tool to use. Take snapshots
+    # from the Proxmox UI, from `qm snapshot`, or from here -- they are the same mechanism,
+    # nothing in this repo tracks them, and the only reserved name is golden.
     if curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -e --arg s "{{name}}" '.data[] | select(.name==$s)' >/dev/null; then
-        echo "replacing existing snapshot {{name}} on {{guest}} ($vmid)"
-        curl -sk -X DELETE "${auth[@]}" "$api/$vmid/snapshot/{{name}}" >/dev/null
+        if [ "{{name}}" != "golden" ]; then
+            echo "{{guest}} already has a snapshot named {{name}}, and only 'golden' is replaced automatically." >&2
+            echo "Pick another name, or delete that one first (Proxmox UI, or qm delsnapshot $vmid {{name}})." >&2
+            exit 1
+        fi
+        echo "replacing the existing golden snapshot on {{guest}} ($vmid)"
+        curl -sk -X DELETE "${auth[@]}" "$api/$vmid/snapshot/golden" >/dev/null
         # DELETE returns as soon as the task is queued, so the create below can race it.
-        until ! curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -e --arg s "{{name}}" '.data[] | select(.name==$s)' >/dev/null; do sleep 2; done
+        until ! curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -e '.data[] | select(.name=="golden")' >/dev/null; do sleep 2; done
     fi
     # No vmstate: a restore point wants a clean boot, not a resumed one, and RAM would add
     # the guest's memory size to every snapshot for nothing.
@@ -495,3 +508,16 @@ lab-despawn name:
     until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.status')" = "stopped" ]; do sleep 2; done
     curl -sk -X DELETE "${auth[@]}" --data-urlencode 'purge=1' --data-urlencode 'destroy-unreferenced-disks=1' "$api/$vmid" >/dev/null
     echo "{{name}} destroyed"
+
+# What restore points a guest has: `just lab-snapshots kali01`.
+lab-snapshots guest:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source util/pve-auth.sh
+    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}")
+    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
+    vmid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{guest}}" '.data[] | select(.name==$n) | .vmid')
+    curl -sk "${auth[@]}" "$api/$vmid/snapshot" \
+      | jq -r '.data[] | select(.name != "current")
+               | "\(.name)\t\(.snaptime | strftime("%Y-%m-%d %H:%M"))\t\(.description // "")"' \
+      | sort -k2 | column -t -s $'\t'
