@@ -1,0 +1,33 @@
+---
+# Everything a Linux lab guest needs that its cloud image did not already provide.
+#
+# The list is deliberately short. A distribution cloud image arrives with cloud-init, a
+# working network and a sane user, which is most of what a Packer template would have been
+# built to supply -- so this role exists to close the gaps, not to build a machine.
+
+- name: Install the QEMU guest agent
+  # Not supplied by the image, despite it being a cloud image: Kali's genericcloud build
+  # ships without qemu-guest-agent, so Proxmox attaches the virtio port and nothing ever
+  # answers on it. The visible symptoms are a guest that reports no IP in the Proxmox
+  # summary and takes the full timeout on every shutdown.
+  #
+  # This is deliberately here rather than in cloud-init's `packages:`. Adding packages
+  # would mean a custom user-data snippet, and Proxmox's cicustom REPLACES the user-data it
+  # generates rather than adding to it -- taking the administrator password and the SSH
+  # keys with it. One package is not worth re-implementing cloud-init's user handling and
+  # putting a password in a snippet on the node.
+  ansible.builtin.apt:
+    name: qemu-guest-agent
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  notify: Start the guest agent
+
+- name: Ensure the guest agent is enabled and running
+  ansible.builtin.systemd_service:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
+  become: true
+

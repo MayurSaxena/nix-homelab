@@ -245,9 +245,10 @@ packer-token:
 #
 #   Windows  ->  Packer installs the OS from an ISO, because Microsoft ships no usable
 #                image, and converts the result to a template.
-#   Linux    ->  download the distribution's cloud image, which already carries cloud-init
-#                and the guest agent. There is nothing to install, so there is no build.
-#                `tofu apply` turns the downloaded image into a template.
+#   Linux    ->  download the distribution's cloud image, which already carries cloud-init.
+#                There is no OS to install, so there is no build; `tofu apply` turns the
+#                downloaded image into a template. The guest agent is not always in the
+#                image -- Kali's is not -- so Ansible installs it.
 #
 # Cloud images need unpacking, which is the one thing OpenTofu cannot do for itself:
 # `download_file` decompresses gz, lzo, zst and bz2, and the images ship as .tar.xz or
@@ -306,3 +307,64 @@ lab-image name:
     mv -f "\$member" "\$iso_dir/\$out"
     echo "wrote \$iso_dir/\$out  (\$(du -h --apparent-size "\$iso_dir/\$out" | cut -f1) apparent, \$(du -h "\$iso_dir/\$out" | cut -f1) on disk)"
     REMOTE
+
+# The pet lifecycle: deploy, configure, snapshot, work, revert, occasionally rebuild.
+#
+# Snapshots are recipes rather than OpenTofu resources, and that is a judgement rather than
+# a workaround for the provider lacking one. A snapshot is a point in time, not a desired
+# state: declaring it would have OpenTofu forever comparing "the snapshot that exists" with
+# "the snapshot that should exist" and re-taking it, which is the opposite of what a restore
+# point is for.
+#
+# `golden` is the convention: the state a machine is in once its Ansible role has converged
+# and before you start breaking it. Take one after every rebuild, revert to it after a CTF.
+
+# Take a restore point: `just lab-snapshot kali01 [name]`.
+lab-snapshot guest name="golden":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source util/pve-auth.sh
+    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
+          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
+    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
+    vmid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{guest}}" '.data[] | select(.name==$n) | .vmid')
+    # Re-taking a name means replacing it. PVE refuses a duplicate, and the alternative --
+    # accumulating golden-1, golden-2 -- turns "revert to fresh" into "work out which one".
+    if curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -e --arg s "{{name}}" '.data[] | select(.name==$s)' >/dev/null; then
+        echo "replacing existing snapshot {{name}} on {{guest}} ($vmid)"
+        curl -sk -X DELETE "${auth[@]}" "$api/$vmid/snapshot/{{name}}" >/dev/null
+        # DELETE returns as soon as the task is queued, so the create below can race it.
+        until ! curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -e --arg s "{{name}}" '.data[] | select(.name==$s)' >/dev/null; do sleep 2; done
+    fi
+    # No vmstate: a restore point wants a clean boot, not a resumed one, and RAM would add
+    # the guest's memory size to every snapshot for nothing.
+    curl -sk -X POST "${auth[@]}" --data-urlencode 'snapname={{name}}' \
+        --data-urlencode 'description=Taken by `just lab-snapshot`. Safe to roll back to.' \
+        "$api/$vmid/snapshot" >/dev/null
+    echo "snapshot {{name}} taken on {{guest}} ($vmid)"
+
+# Roll a guest back to a restore point: `just lab-revert kali01 [name]`.
+lab-revert guest name="golden":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source util/pve-auth.sh
+    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
+          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
+    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
+    vmid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{guest}}" '.data[] | select(.name==$n) | .vmid')
+    curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -er --arg s "{{name}}" '.data[] | select(.name==$s)' >/dev/null \
+        || { echo 'no snapshot named {{name}} on {{guest}}; `just lab-snapshot {{guest}}` takes one' >&2; exit 1; }
+    # A rollback of a running guest is refused, so stop it first rather than making the
+    # caller discover that. Pull the plug: the point of reverting is that this guest's
+    # current state is being discarded, so a clean shutdown would only be slower.
+    if [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.status')" = "running" ]; then
+        echo "stopping {{guest}}"
+        curl -sk -X POST "${auth[@]}" "$api/$vmid/status/stop" >/dev/null
+        until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.status')" = "stopped" ]; do sleep 2; done
+    fi
+    echo "rolling {{guest}} back to {{name}}"
+    curl -sk -X POST "${auth[@]}" "$api/$vmid/snapshot/{{name}}/rollback" >/dev/null
+    # Rollback is a task; starting before it finishes fails.
+    until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.lock // "none"')" = "none" ]; do sleep 3; done
+    curl -sk -X POST "${auth[@]}" "$api/$vmid/status/start" >/dev/null
+    echo "{{guest}} reverted to {{name}} and starting"

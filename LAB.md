@@ -92,13 +92,22 @@ Upload*. The file name matters, because `provisioning/vms.tf` refers to it:
 Windows is that case, and essentially the only one: Microsoft ships no cloud image, so a
 usable Windows guest has to be built. That build is why `packer/` exists.
 
-Most Linux distributions publish a cloud image that already carries cloud-init and the QEMU
-guest agent, which is the entire content of a Packer build. For those there is no template
-step at all: `proxmox_virtual_environment_download_file` with `content_type = "import"`
+Most Linux distributions publish a cloud image that already carries cloud-init, which is the
+bulk of what a Packer build would add. For those there is no build step at all: `proxmox_virtual_environment_download_file` with `content_type = "import"`
 fetches the qcow2, a `disk { import_from = ... }` builds the guest straight from it, and
 Ansible does the rest. Less to write than a Packer template, and nothing to maintain.
 
-**Check that the distribution you want actually publishes one; do not assume.** Kali does.
+**The guest agent is the one thing not to assume.** Kali's genericcloud image ships without
+`qemu-guest-agent`, so Proxmox attaches the virtio port and nothing answers on it: the guest
+reports no address in the summary and takes the full timeout on every shutdown. The
+`linux_baseline` Ansible role installs it. It is deliberately not done through cloud-init's
+`packages:`, because that needs a custom user-data snippet and Proxmox's `cicustom`
+*replaces* the user-data it generates rather than adding to it -- taking the administrator
+password and the SSH keys with it. One package is not worth re-implementing cloud-init's
+user handling.
+
+**Check that the distribution you want actually publishes an image at all; do not assume.**
+Kali does.
 **Parrot does not** -- as of 7.3 its download directory carries live ISOs and desktop
 appliances (ova, qcow2, vmdk, libvirt box) and no cloud image, and the appliance qcow2 is
 zipped, which `decompression_algorithm` cannot handle (it takes gz, lzo, zst and bz2). Its
