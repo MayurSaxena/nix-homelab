@@ -19,7 +19,6 @@ windows_tools_packages:
   - ilspy
   # Network.
   - wireshark
-  - nmap
   - openvpn            # HTB, THM and anything else behind a tunnel
   # General.
   - 7zip
@@ -29,6 +28,12 @@ windows_tools_packages:
   - vscode
   - putty
   - winscp
+  - GoogleChrome
 
 # Chocolatey will happily sit for an hour on a package that wants input. Fail instead.
 windows_tools_timeout: 1800
+
+# The community nmap package drives an interactive installer with AutoHotkey and hangs
+# over SSH. Use upstream's supported /S installer instead; Npcap is a separate prerequisite.
+windows_tools_nmap_version: "7.991"
+windows_tools_nmap_checksum: 93bfd37bdb31a7adfd932beb5dbce06025da691d01a0939e806ea704f7367657
