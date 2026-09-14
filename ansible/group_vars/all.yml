@@ -1,6 +1,6 @@
 ---
-lab_domain: lab.internal
-lab_netbios: LAB
+lab_domain: ad.lab.internal
+lab_netbios: ADLAB
 lab_subnet: 10.0.90.0/24
 lab_gateway: 10.0.90.1
 
@@ -8,8 +8,9 @@ lab_gateway: 10.0.90.1
 # the rest of the homelab without a second resolver.
 lab_upstream_dns: 10.0.10.2
 
-# Where the forest lives. Domain members are pointed here and nowhere else; everything that
-# is not a member resolves through technitium, which conditionally forwards lab.internal.
+# Where the forest lives. Domain members point their DNS here; the DC forwards non-forest
+# queries to technitium. Non-domain hosts (Kali, disposable guests) point at technitium
+# directly and resolve lab hosts from the technitium-owned lab.internal zone.
 lab_dc_ip: 10.0.90.10
 
 # Credentials are read at run time with the community.sops lookup rather than being stored

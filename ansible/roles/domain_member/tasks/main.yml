@@ -1,5 +1,5 @@
 ---
-# Join a Windows guest to lab.internal. Opt-in, never automatic.
+# Join a Windows guest to the AD domain. Opt-in, never automatic.
 #
 # Run it deliberately:
 #     just lab-play join.yml -e targets=test01 -i '10.0.90.123,'
