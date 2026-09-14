@@ -8,10 +8,11 @@ builds and temporary guests. Keep this document current during work. Nothing has
 committed or pushed; pushing main can deploy the Nix fleet. Preserve the working tree and
 user's encrypted `secrets/lab.yaml` edits. Never print passwords, keys, metadata or secret logs.
 
-Keep stock Windows templates available. Separate CTF and FLARE templates should supply
-both disposable and persistent full clones. Persistent workstations retain their disks and
-golden snapshots until explicitly reverted/rebuilt. The eventual DC is periodically rebuilt;
-Kali, CTF and FLARE are persistent, with disposable Windows/Linux guests available on demand.
+Keep stock Windows templates available. Tools are installed on running guests via Ansible
+playbooks (`tools-ctf.yml`, `tools-flare.yml`), not baked into separate Packer templates.
+Persistent workstations retain their disks and golden snapshots until explicitly
+reverted/rebuilt. The eventual DC is periodically rebuilt; Kali, CTF and FLARE are
+persistent, with disposable Windows/Linux guests available on demand.
 Read `CLAUDE.md` for repo guardrails and `LAB.md` for operating details; validate against code.
 
 ## Live checkpoint — CTF validated, FLARE next
@@ -102,15 +103,16 @@ All checks passed via QEMU Guest Agent exec and SSH:
 
 ## Current implementation
 
-`packer/workstations/build.pkr.hcl` full-clones the unique `template;win11-pro` base, uses
-Ansible `playbooks/tool-image.yml`, records `C:\ProgramData\Lab\image.json`, then invokes
-the existing Sysprep/network-finalization capture steps. Base OS installs remain in
-`packer/windows`. Derived builds inherit the 80 GB disk, EFI and TPM; they never modify the base.
+**Architecture simplified:** the Packer workstation builder (`packer/workstations/`) and
+`tool-image.yml` have been removed. Only base OS templates are built by Packer (under
+`packer/windows/`). Tools are installed on running guests via separate Ansible playbooks:
 
-`provisioning/vms.tf` now selects `template;ctf` and `template;flare` for persistent guests,
-requiring exactly one of each. `site.yml` no longer installs toolsets on running guests.
+- `tools-ctf.yml` — CTF tools (Chocolatey packages, Nmap extraction, Npcap staging)
+- `tools-flare.yml` — FLARE-VM (Defender disable, async installer, monitor via RDP)
+
+`provisioning/vms.tf` clones `ctf01` and `flare01` from the base `tpl-win11-pro` template.
 Clone-source changes are ignored for existing persistent guests; adoption requires explicit
-rebuild. An unscoped plan cannot succeed until the required tool templates exist.
+rebuild.
 
 Two Packer discovery fixes are in code and were exercised:
 
@@ -127,20 +129,18 @@ Windows images do not get Npcap.
 
 ## FLARE status — implementation only
 
-No FLARE image has been built or tested. The role is restricted to the standalone Packer
-image inventory. It uses pinned/checksummed official installer and config revision
+No FLARE installation has been run or tested. The `tools-flare.yml` playbook uses
+pinned/checksummed official installer and config revision
 `4f8769522bda53ab53da2de85def532efaa033ee`; package versions still follow upstream feeds.
 It checks Tamper Protection, applies Defender policy and reboots, then requires Defender
 stopped. The observed stock clone had TamperProtection=1 and Defender running; the policy
 transition has not been tested.
 
 Upstream `-noGui` still calls `Read-Host`, including a snapshot prompt. The role validates
-prerequisites then supplies `-noChecks -noGui -noWait`; it runs on a disposable full clone.
-Boxstarter owns reboots. Packer's wait requires the final `[*] Install Complete!` log marker,
-an empty `C:\ProgramData\_VM\failed_packages.txt`, and completed auto-logon cleanup. An async
-job ID or a package directory is not proof of completion. The whole wait is bounded by an
-on-disk two-hour start time. Reboot survival, package success, credential cleanup, GUI/Npcap
-needs, disk capacity and recapture remain unproven.
+prerequisites then supplies `-noChecks -noGui -noWait`; it fires the installer async and
+drops the SSH connection. Boxstarter owns reboots. Monitor progress via RDP; check
+`C:\ProgramData\_VM\failed_packages.txt` when finished. Reboot survival, package success,
+credential cleanup, GUI/Npcap needs, and disk capacity remain unproven.
 
 ## Earlier DC evidence and remaining operating gaps
 
@@ -164,28 +164,24 @@ AD weakness toggles and GPO seeding are proposals, not implemented.
 
 ## Next actions, in order
 
-1. Discuss the CTF results with the user before proceeding — they explicitly wanted this.
-2. Build/test FLARE separately, with its own fresh-clone check and cleanup. Keep both tool
-   templates for persistent or disposable guests; do not deploy the persistent fleet yet.
-3. Consider integrating the Npcap QEMU sendkey automation into the Packer build pipeline
-   (currently run as a separate manual step alongside the build).
-4. Finish remaining DNS/DC/Kali/rollback operating checks when needed for the next claim.
+1. Test the FLARE playbook on a running guest and validate the full workflow.
+2. Finish remaining DNS/DC/Kali/rollback operating checks when needed for the next claim.
 
 ## Commands and safeguards
 
 ```bash
 nix develop
 just lab-check
-just packer-build workstations ctf
-just packer-build workstations flare
-# Stock guests remain supported:
+just packer-build windows win11-pro
+just packer-build windows ws2025
+# Spawn guests from base templates:
 just lab-spawn tpl-win11-pro test01
 just lab-spawn tpl-ws2025 server-test
 just lab-despawn test01
 just lab-despawn server-test
-# After a validated tool template exists:
-just lab-spawn tpl-ctf ctf-check
-just lab-despawn ctf-check
+# Install tools on running guests:
+just lab-play tools-ctf.yml -e targets=ctf01
+just lab-play tools-flare.yml -e targets=flare01
 ```
 
 Use scoped, reviewed plans for persistent validation guests; delete saved plans afterward

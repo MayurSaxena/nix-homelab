@@ -26,6 +26,6 @@
   roles:
     - domain_controller
 
-# CTF and FLARE tools are installed while building their templates (tool-image.yml).
-# Persistent guests receive only per-guest baseline changes here. Updating a tool image
-# does not mutate existing guests: rebuild the selected guest explicitly when desired.
+# Tools are installed on running guests via separate playbooks:
+#   just lab-play tools-ctf.yml -e targets=ctf01
+#   just lab-play tools-flare.yml -e targets=flare01

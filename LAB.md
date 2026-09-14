@@ -298,49 +298,37 @@ seeded with deliberate weaknesses anyway. It is the wrong pattern for anything h
 data, and the place to change it is `ci_password` in `provisioning/vms.tf`, which is a
 per-guest argument already.
 
-## Reusable CTF and FLARE images
+## CTF and FLARE tool installation
 
-The intended image chain is `tpl-win11-pro` → `tpl-ctf` / `tpl-flare` → full guest clones.
-Stock Windows guests remain available from `tpl-win11-pro` and `tpl-ws2025`, without
-the CTF or FLARE toolsets. Derived builds never modify those base templates.
-Both disposable and persistent workstations use the same tool templates. Templates stay
-stopped; tools are installed during image construction, before Sysprep and capture. Guest
-configuration applies the hostname, network, password and baseline settings afterward.
-See the handoff for live validation status; a configuration passing syntax checks does not
-mean its tool installation has completed successfully.
+Tools are installed on running guests via Ansible playbooks, not baked into separate
+templates. Every Windows guest — CTF, FLARE, or plain — clones from the same base
+`tpl-win11-pro` template. Stock guests from `tpl-ws2025` remain available too.
 
 ```bash
-just packer-build workstations ctf
-just packer-build workstations flare
-just lab-spawn tpl-ctf ctf-test
-just lab-spawn tpl-flare flare-test
-just lab-despawn ctf-test
-just lab-despawn flare-test
+just lab-spawn tpl-win11-pro ctf01
+just lab-play tools-ctf.yml -e targets=ctf01
+just lab-play tools-flare.yml -e targets=flare01
 ```
 
-The workstation Packer builder full-clones the uniquely tagged Windows 11 base, discovers
-its DHCP address through the guest agent, runs `ansible/playbooks/tool-image.yml`, records
-installed package versions in `C:\ProgramData\Lab\image.json`, and generalizes it again.
-FLARE uses the pinned upstream installer and configuration with checksum verification;
-individual package versions still follow their upstream feeds. Its build requires Defender
-and Tamper Protection prerequisites to be satisfied on the dedicated FLARE build guest.
-For CTF, the build stages `C:\Windows\Temp\npcap-setup.exe` and sets the console
-Administrator password from `clone-admin-password`. Open the build VM's Proxmox console,
-log in, run that installer and finish/close the wizard. The capture gate waits up to
-30 minutes for the driver and checks it starts. This free-edition step is repeated when
-rebuilding a tool image from the stock base, not when spawning guests. The Nmap install
-uses a checksum-pinned upstream `/S` installer with a ten-minute timeout; its local SYSTEM
-execution context is under live validation (see handoff).
+**CTF tools** (`tools-ctf.yml`): installs Chocolatey packages (Wireshark, Ghidra, x64dbg,
+etc.), extracts Nmap via 7-Zip (the NSIS installer hangs headless), stages Npcap, and
+configures Sysinternals. After the playbook finishes, RDP or console in and run the staged
+Npcap installer — the free license requires an interactive GUI install.
 
-The FLARE play validates prerequisites itself and uses `-noChecks` to avoid upstream
-`Read-Host` prompts that remain even with `-noGui`. Capture is gated on the upstream
-completion log and an empty failed-package list.
+**FLARE-VM** (`tools-flare.yml`): checks Tamper Protection, disables Defender via policy,
+reboots, verifies Defender is stopped, then fires the pinned FLARE installer async. The
+SSH connection drops because Boxstarter owns reboots. Monitor progress via RDP; it takes
+roughly an hour. When it finishes, check `C:\ProgramData\_VM\failed_packages.txt` and
+take a golden snapshot.
 
-OpenTofu's `ctf01` and `flare01` modules select the `template;ctf` and `template;flare` tags.
-They require exactly one matching template each. Routine `site.yml` runs no longer install
-these toolsets on existing guests. Build a new tool template to update the starting image;
-use an explicit guest rebuild to adopt it. Existing persistent guests retain their disks
-and snapshots when a template is replaced because clone-source changes are ignored.
+**To create a reusable template from a configured guest:** Sysprep it
+(`C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /quit`), then convert to a
+template with `qm template <vmid>` on the Proxmox host. This is entirely optional — the
+playbook workflow means you can always rebuild tools on a fresh clone.
+
+OpenTofu's `ctf01` and `flare01` both clone from the base `tpl-win11-pro` template.
+Existing persistent guests retain their disks and snapshots when a template is replaced
+because clone-source changes are ignored.
 
 ## The pet lifecycle
 

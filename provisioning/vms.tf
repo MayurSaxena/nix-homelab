@@ -33,11 +33,8 @@ data "proxmox_virtual_environment_vms" "ws2025_template" {
   }
 }
 
-# Both persistent and disposable workstations use the same preinstalled tool images.
-# Missing images must fail clearly; never silently clone a stock OS instead.
-data "proxmox_virtual_environment_vms" "tool_templates" {
-  for_each = toset(["ctf", "flare"])
-  tags     = ["template", each.key]
+data "proxmox_virtual_environment_vms" "win11_pro_template" {
+  tags = ["template", "win11-pro"]
   filter {
     name   = "template"
     values = ["true"]
@@ -45,13 +42,14 @@ data "proxmox_virtual_environment_vms" "tool_templates" {
   lifecycle {
     postcondition {
       condition     = length(self.vms) == 1
-      error_message = "Expected one ${each.key} tool template. Build it with just packer-build workstations ${each.key}."
+      error_message = "Expected exactly one template tagged win11-pro, found ${length(self.vms)}. Build it with just packer-build windows win11-pro."
     }
   }
 }
 
 locals {
-  ws2025_template_id = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
+  ws2025_template_id    = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
+  win11_pro_template_id = one(data.proxmox_virtual_environment_vms.win11_pro_template.vms).vm_id
 }
 
 module "dc01" {
@@ -211,11 +209,9 @@ moved {
 
 # The two persistent Windows security boxes.
 #
-# Deliberately two machines rather than one. ctf01 is a stock Windows 11 install with a
-# curated toolset, so it stays representative of a real workstation and can be domain-joined
-# for testing. flare01 runs FLARE-VM, whose installer disables Defender and Windows Update
-# and rewrites enough of Windows that the box stops being representative of anything, which
-# is fine for malware work and the reason it is not the same machine.
+# Both clone from the stock Win11 Pro base. Tools are installed after deployment via Ansible
+# playbooks (just lab-play tools-ctf.yml / tools-flare.yml), not baked into the template.
+# This keeps the template pipeline simple: Packer only builds base OS images.
 #
 # Both take technitium for DNS, for the same reason kali01 does: neither is a domain member
 # by default, and a non-member pointed at the DC cannot resolve anything at all when the DC
@@ -226,7 +222,7 @@ module "ctf01" {
 
   vm_name        = "ctf01"
   vm_description = "CTF and security research workstation (Terraform)"
-  template_vm_id = one(data.proxmox_virtual_environment_vms.tool_templates["ctf"].vms).vm_id
+  template_vm_id = local.win11_pro_template_id
 
   os_type = "win11"
   bios    = "ovmf"
@@ -256,7 +252,7 @@ module "flare01" {
 
   vm_name        = "flare01"
   vm_description = "FLARE-VM malware analysis box (Terraform)"
-  template_vm_id = one(data.proxmox_virtual_environment_vms.tool_templates["flare"].vms).vm_id
+  template_vm_id = local.win11_pro_template_id
 
   os_type = "win11"
   bios    = "ovmf"

@@ -125,11 +125,10 @@ lab-check:
     set -euo pipefail
     python3 -m unittest discover -s tests
     bash -n util/lab-vm.sh packer/common/scripts/wait-for-shutdown.sh
-    packer fmt -check packer/windows packer/workstations
+    packer fmt -check packer/windows
     (cd packer/windows && packer validate -syntax-only .)
-    (cd packer/workstations && packer validate -syntax-only .)
     tofu -chdir=provisioning validate
-    (cd ansible && ansible-playbook --syntax-check playbooks/site.yml playbooks/tool-image.yml)
+    (cd ansible && ansible-playbook --syntax-check playbooks/site.yml playbooks/tools-ctf.yml playbooks/tools-flare.yml)
 
 # Run an Ansible playbook against the lab: `just lab-play` or `just lab-play dc.yml`.
 lab-play playbook="site.yml" *args:
@@ -255,11 +254,6 @@ packer-build family target *args:
         pve_request GET "${node_path}/qemu" \
           | jq -r --arg t "$tmpl_tag" '.[] | select(.template==1) | select((.tags // "") | split(";") | index($t)) | .vmid'
     }
-    if [[ "{{family}}" == workstations ]]; then
-        export PKR_VAR_base_template_id=$(pve_request GET "${node_path}/qemu" | jq -er '
-            [.[] | select(.template==1) | select((.tags // "") | split(";") | index("win11-pro"))] |
-            if length == 1 then .[0].vmid else error("Expected exactly one Windows 11 base template") end')
-    fi
     before=$(templates_with_tag | sort -n | tr '\n' ' ')
     echo "existing ${tmpl_tag} templates before this build: ${before:-none}"
 
