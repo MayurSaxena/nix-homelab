@@ -45,7 +45,7 @@ while ($true) {
 
 $actual = (Get-FileHash -Path $msi -Algorithm SHA256).Hash
 if ($actual -ne $sha256) { throw "cloudbase-init checksum mismatch: expected $sha256, got $actual" }
-Write-Host "Verified cloudbase-init $version
+Write-Host "Verified cloudbase-init $version"
 
 # RUN_SERVICE_AS_LOCAL_SYSTEM because the default creates a dedicated account, and a
 # generalised image should not carry one. No sysprep options are passed: sysprep.ps1 runs it
@@ -111,7 +111,30 @@ default_log_levels=comtypes=INFO,suds=INFO,iso8601=WARN,requests=WARN
 verbose=true
 "@
 $confBody | Set-Content -Path (Join-Path $confDir 'cloudbase-init.conf') -Encoding ASCII
-# The unattend pass reads its own file; give it the same configuration.
-$confBody | Set-Content -Path (Join-Path $confDir 'cloudbase-init-unattend.conf') -Encoding ASCII
+# Specialize is not the normal service run. Keep it to the upstream MTU/hostname plugins,
+# and let Windows Setup own its reboot. Running the entire service configuration here can
+# reboot Setup underneath itself and tries to configure accounts before OOBE has finished.
+#
+# A bare clone deliberately has no metadata drive. Without the empty fallback, discovery
+# fails; the MSI's Unattend.xml maps that failure to exit 2, which tells Setup to reboot and
+# retry the same command forever. The fallback does not set an account or invent a password.
+$unattendBody = @"
+[DEFAULT]
+metadata_services=cloudbaseinit.metadata.services.configdrive.ConfigDriveService,cloudbaseinit.metadata.services.base.EmptyMetadataService
+plugins=cloudbaseinit.plugins.common.mtu.MTUPlugin,cloudbaseinit.plugins.common.sethostname.SetHostNamePlugin
+allow_reboot=false
+stop_service_on_exit=false
+config_drive_raw_hhd=true
+config_drive_cdrom=true
+config_drive_vfat=true
+bsdtar_path=C:\Program Files\Cloudbase Solutions\Cloudbase-Init\bin\bsdtar.exe
+mtools_path=C:\Program Files\Cloudbase Solutions\Cloudbase-Init\bin
+mtu_use_dhcp_config=true
+ntp_use_dhcp_config=false
+logdir=C:\Program Files\Cloudbase Solutions\Cloudbase-Init\log\
+logfile=cloudbase-init-unattend.log
+verbose=true
+"@
+$unattendBody | Set-Content -Path (Join-Path $confDir 'cloudbase-init-unattend.conf') -Encoding ASCII
 
 Write-Host "cloudbase-init installed and configured"

@@ -1,6 +1,6 @@
 # Golden Windows templates, one build configuration for every version.
 #
-# Build with `just packer-build <target>`, where <target> is a key of local.catalog below.
+# Build with `just packer-build windows <target>`, where <target> is a catalog key below.
 # The recipe decrypts the Proxmox token and the local administrator password from sops and
 # exports them as PKR_VAR_*. Nothing here reads a credential from disk, and no credential is
 # written to one.
@@ -22,7 +22,7 @@ packer {
 
 variable "target" {
   type        = string
-  description = "Which catalog entry to build. `just packer-build <target>` sets this."
+  description = "Which catalog entry to build. `just packer-build windows <target>` sets this."
 
   # Fails in a second, with the list, rather than on a raw map-lookup error. The list is
   # spelled out because a Packer validation block may not reference locals.
@@ -296,8 +296,9 @@ source "proxmox-iso" "windows" {
   ssh_username         = "Administrator"
   ssh_host             = var.build_ip
   ssh_private_key_file = var.ansible_private_key_file
-  # Covers the whole unattended install, not just a reboot.
-  ssh_timeout = "45m"
+  # Covers the entire unattended install, OOBE, and FirstLogonCommands.
+  # Leave headroom for slow installation and OOBE; earlier builds exhausted 45 minutes.
+  ssh_timeout = "90m"
 }
 
 build {
@@ -320,9 +321,21 @@ build {
     scripts = ["${path.root}/../common/scripts/windows-update.ps1"]
   }
 
+  provisioner "file" {
+    source      = "${path.root}/../common/scripts/finalize-network.ps1"
+    destination = "C:/Windows/Temp/packer-finalize-network.ps1"
+  }
+
   provisioner "powershell" {
     scripts = ["${path.root}/../common/scripts/sysprep.ps1"]
-    # sysprep shuts the VM down, which looks like a dropped connection to Packer.
-    valid_exit_codes = [0, 2, 259]
+    timeout = "20m"
+    # Only a verified generalisation is success. Do not reinterpret transport errors as
+    # successful Sysprep, and do not reconnect for cleanup after the network handoff.
+    valid_exit_codes = [0]
+    skip_clean       = true
+  }
+
+  provisioner "shell-local" {
+    inline = ["bash '${path.root}/../common/scripts/wait-for-shutdown.sh' '${var.proxmox_url}' '${var.node}' '${local.template_name}'"]
   }
 }

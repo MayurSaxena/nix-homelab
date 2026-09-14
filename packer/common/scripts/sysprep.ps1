@@ -1,11 +1,46 @@
-# Generalise the image. This strips the machine SID, and a clone without a fresh one cannot
-# join a domain, because two members would present the same identity. It also rearms the
-# evaluation clock, so every clone starts its own full term however old the template is.
+# Generalise the image so each clone receives a fresh Windows machine identity at first boot.
 $ErrorActionPreference = 'Stop'
+
+if (Get-Command Get-BitLockerVolume -ErrorAction SilentlyContinue) {
+    $volume = Get-BitLockerVolume -MountPoint $env:SystemDrive
+    if ($volume.VolumeStatus -ne 'FullyDecrypted') {
+        throw "The capture volume is $($volume.VolumeStatus). Fully decrypt it before Sysprep; automatic encryption must be disabled in the installation answer file."
+    }
+}
 
 $cbDir    = Join-Path $env:ProgramFiles 'Cloudbase Solutions\Cloudbase-Init'
 $unattend = Join-Path $cbDir 'conf\Unattend.xml'
 if (-not (Test-Path $unattend)) { throw "cloudbase-init's Unattend.xml is missing at $unattend; did install-cloudbase-init.ps1 run?" }
+
+# Sysprep parses its own command line and does not reliably preserve quotes within the
+# /unattend: argument. Use a path without spaces rather than relying on PowerShell quoting.
+$captureUnattend = 'C:\Windows\Temp\packer-unattend.xml'
+Copy-Item -Path $unattend -Destination $captureUnattend -Force
+
+# Client Windows disables the built-in Administrator during generalisation. Cloudbase's
+# existing-user password update does not re-enable it. Enable the lab account in specialize,
+# after hostname setup, without putting a password or autologon in the answer file.
+[xml]$answer = Get-Content -Raw $captureUnattend
+$ns = New-Object System.Xml.XmlNamespaceManager($answer.NameTable)
+$ns.AddNamespace('u', 'urn:schemas-microsoft-com:unattend')
+$commands = $answer.SelectSingleNode('//u:settings[@pass="specialize"]/u:component[@name="Microsoft-Windows-Deployment"]/u:RunSynchronous', $ns)
+if (-not $commands) { throw 'Cloudbase-Init specialize commands are missing' }
+$command = $answer.CreateElement('RunSynchronousCommand', $answer.DocumentElement.NamespaceURI)
+$command.SetAttribute('action', 'http://schemas.microsoft.com/WMIConfig/2002/State', 'add')
+foreach ($entry in @(@('Order', '2'), @('Path', 'net.exe user Administrator /active:yes'), @('Description', 'Enable the lab Administrator account'))) {
+    $element = $answer.CreateElement($entry[0], $answer.DocumentElement.NamespaceURI)
+    $element.InnerText = $entry[1]
+    [void]$command.AppendChild($element)
+}
+[void]$commands.AppendChild($command)
+$answer.Save($captureUnattend)
+
+$finalizer = 'C:\Windows\Temp\packer-finalize-network.ps1'
+if (-not (Test-Path $finalizer)) { throw "Missing network finaliser: $finalizer" }
+$tokens = $null
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile($finalizer, [ref]$tokens, [ref]$parseErrors) | Out-Null
+if ($parseErrors.Count) { throw "Invalid network finaliser: $parseErrors" }
 
 # No password is set here any more, and that is the point of the detour above.
 #
@@ -23,27 +58,39 @@ if (-not (Test-Path $unattend)) { throw "cloudbase-init's Unattend.xml is missin
 Set-Service -Name cloudbase-init -StartupType Automatic
 Write-Host "cloudbase-init will start on every boot and apply cloud-init config"
 
-# Hand the adapter back to DHCP before generalising.
-#
-# The build gives itself a fixed address (Packer pins ssh_host, because the Proxmox
-# plugin's own address discovery does not resolve here). Sysprep does not undo that, so
-# every clone of this template came up on the build address until cloud-init got around to
-# changing it -- and a clone made *without* cloud-init, which is exactly what an ad-hoc
-# throwaway is, simply sat on it forever. Two of those at once is an address conflict, and
-# one of them is the next Packer build connecting to the wrong machine.
-#
-# Resetting here means the template's resting state is DHCP: a declared guest still gets
-# its static address from cloud-init, and an ad-hoc clone gets a lease and is reachable
-# with no further help.
-$adapter = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1
-if ($adapter) {
-    # -Confirm:$false because this runs unattended and both cmdlets prompt by default.
-    Remove-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue
-    Remove-NetRoute -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Confirm:$false -ErrorAction SilentlyContinue
-    Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -Dhcp Enabled
-    Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ResetServerAddresses
-    Write-Host "Adapter reset to DHCP; the template no longer carries the build address"
-}
+# Sysprep refuses to generalise when per-user Appx packages are not provisioned for all
+# users. Chocolatey's notepadplusplus (and potentially others) registers an MSIX bridge
+# package that triggers this. Remove all per-user-only Appx packages before generalising.
+$provisioned = Get-AppxProvisionedPackage -Online | Select-Object -ExpandProperty PackageName
+Get-AppxPackage | Where-Object {
+    $pkg = $_.PackageFullName
+    -not ($provisioned | Where-Object { $pkg -like "$_*" })
+} | Remove-AppxPackage -ErrorAction SilentlyContinue
+Write-Host "Removed per-user-only Appx packages that would block Sysprep."
 
-Write-Host "Running sysprep; the VM will power off and Packer will convert it to a template."
-& "$env:SystemRoot\System32\Sysprep\Sysprep.exe" /generalize /oobe /shutdown /unattend:"$unattend"
+# Keep the SSH connection until generalisation has actually succeeded. /quit lets Packer
+# inspect both the process exit code and Windows' image state before network finalisation.
+Write-Host "Running sysprep and waiting for generalisation to complete."
+$p = Start-Process -FilePath "$env:SystemRoot\System32\Sysprep\Sysprep.exe" `
+    -ArgumentList '/generalize', '/oobe', '/quit', '/quiet', "/unattend:$captureUnattend" `
+    -Wait -PassThru
+if ($p.ExitCode -ne 0) {
+    Get-Content "$env:SystemRoot\System32\Sysprep\Panther\setuperr.log" -Tail 30 -ErrorAction SilentlyContinue
+    throw "Sysprep exited $($p.ExitCode); see the Sysprep Panther logs."
+}
+$state = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State').ImageState
+if ($state -ne 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE') {
+    Get-Content "$env:SystemRoot\System32\Sysprep\Panther\setupact.log" -Tail 20 -ErrorAction SilentlyContinue
+    throw "Sysprep returned successfully but the image is not ready for capture: $state"
+}
+Write-Host "Sysprep verified: $state"
+
+# Task Scheduler owns the final network change, so it survives losing the SSH transport.
+# The following shell-local provisioner waits for shutdown through the Proxmox API.
+$action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+    -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File $finalizer"
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+Register-ScheduledTask -TaskName 'PackerFinalizeNetwork' -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName 'PackerFinalizeNetwork'
+Write-Host 'Network finalisation handed to Task Scheduler.'
