@@ -43,13 +43,13 @@
   # Focus ring around the active window. AeroSpace (modules/home-manager/aerospace.nix)
   # draws no decoration of its own, so without this it is easy to lose track of which tile
   # has focus. Colours are Catppuccin Mocha mauve / surface1 to match everything else.
-  services.jankyborders = {
-    enable = true;
-    width = 5.0;
-    hidpi = true;
-    active_color = "0xffcba6f7";
-    inactive_color = "0xff45475a";
-  };
+  # services.jankyborders = {
+  #   enable = true;
+  #   width = 5.0;
+  #   hidpi = true;
+  #   active_color = "0xffcba6f7";
+  #   inactive_color = "0xff45475a";
+  # };
 
   # User info
   users.users.msaxena = {
