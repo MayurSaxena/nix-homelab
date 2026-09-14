@@ -1,0 +1,53 @@
+# Static, and covering only the machines OpenTofu declares.
+#
+# Disposable guests -- CTF boxes, research VMs -- are deliberately absent: they take DHCP,
+# they come and go, and one that wants a playbook run can take it with `-i <address>,` and no
+# entry here. If that ever stops being enough, community.general.proxmox provides an
+# inventory plugin that can filter on the `lab` pool. Do not build that until something needs it.
+all:
+  children:
+    linux:
+      hosts:
+        kali01:
+          ansible_host: 10.0.90.50
+      vars:
+        ansible_user: kali
+
+    # Guests that should have a desktop and RDP, which is opt-in: a cloud image ships
+    # without one, and the install is a couple of gigabytes, so it is not something every
+    # Linux guest should quietly acquire.
+    linux_desktop:
+      hosts:
+        kali01:
+
+    windows:
+      vars:
+        ansible_connection: ssh
+        ansible_user: Administrator
+        # Required for Windows targets over SSH. Without it Ansible sends POSIX shell syntax
+        # to PowerShell and every task fails with parse errors that name nothing useful.
+        ansible_shell_type: powershell
+      children:
+        domain_controllers:
+          hosts:
+            dc01:
+              ansible_host: 10.0.90.10
+        domain_members:
+          hosts: {}
+        workstations:
+          hosts: {}
+        # The two persistent Windows security boxes, deliberately separate.
+        #
+        # ctf01 is a normal Windows 11 workstation with a curated toolset, so it stays
+        # representative of a real host and can be domain-joined for testing. flare01 runs
+        # FLARE-VM, whose installer disables Defender and rewrites enough of Windows that
+        # the box stops being representative of anything -- which is fine for malware work
+        # and the reason it is not the same machine.
+        research:
+          hosts:
+            ctf01:
+              ansible_host: 10.0.90.51
+        analysis:
+          hosts:
+            flare01:
+              ansible_host: 10.0.90.52

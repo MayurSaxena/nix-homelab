@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Unattended install answer file, shared by every Windows template.
+
+  Everything that differs between one Windows edition and the next is a template
+  variable, filled in from the catalog at the top of build.pkr.hcl: image_name, virtio_dir
+  and product_key. Adding a Windows version should not mean touching this file.
+
+  Those first two are also the usual reason a first build of a new version fails, and
+  both fail the same silent way: a screen that never advances, until a communicator
+  timeout an hour later reports it as a connection problem. Read both off the real media
+  rather than assuming; the comment at each one says how.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <SetupUILanguage><UILanguage>en-US</UILanguage></SetupUILanguage>
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <!--
+        Setup cannot see a VirtIO SCSI disk or NIC until these load, so without them the
+        installer shows "no drives were found" and the build hangs at that screen forever.
+
+        The drive letter of the virtio-win ISO is not predictable in WinPE, so every likely
+        letter is listed and the ones that do not exist are ignored.
+
+        virtio_dir is the per-Windows-version directory inside the virtio-win ISO, and a
+        wrong one fails exactly like a missing one: the same "no drives were found"
+        screen,
+        no hint as to which. Do not guess it. List what the ISO actually carries:
+          ssh root@proxmox 'mount -o loop,ro /var/lib/vz/template/iso/virtio-win.iso /mnt \
+            && ls /mnt/vioscsi && umount /mnt'
+      -->
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1"><Path>D:\vioscsi\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="2"><Path>E:\vioscsi\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="3"><Path>F:\vioscsi\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="4"><Path>D:\NetKVM\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="5"><Path>E:\NetKVM\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="6"><Path>F:\NetKVM\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="7"><Path>D:\Balloon\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="8"><Path>E:\Balloon\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="9"><Path>F:\Balloon\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <!-- vioserial is the channel the QEMU guest agent uses to reach the host. Without it
+             the agent runs, looks healthy, and is invisible to Proxmox. -->
+        <PathAndCredentials wcm:action="add" wcm:keyValue="10"><Path>D:\vioserial\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="11"><Path>E:\vioserial\${virtio_dir}\amd64</Path></PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="12"><Path>F:\vioserial\${virtio_dir}\amd64</Path></PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <DiskConfiguration>
+        <WillShowUI>OnError</WillShowUI>
+        <!-- GPT layout, because the VM boots OVMF rather than SeaBIOS. -->
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <CreatePartition wcm:action="add"><Order>1</Order><Type>EFI</Type><Size>260</Size></CreatePartition>
+            <CreatePartition wcm:action="add"><Order>2</Order><Type>MSR</Type><Size>128</Size></CreatePartition>
+            <CreatePartition wcm:action="add"><Order>3</Order><Type>Primary</Type><Extend>true</Extend></CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <ModifyPartition wcm:action="add"><Order>1</Order><PartitionID>1</PartitionID><Label>System</Label><Format>FAT32</Format></ModifyPartition>
+            <ModifyPartition wcm:action="add"><Order>2</Order><PartitionID>2</PartitionID></ModifyPartition>
+            <ModifyPartition wcm:action="add"><Order>3</Order><PartitionID>3</PartitionID><Label>Windows</Label><Letter>C</Letter><Format>NTFS</Format></ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+
+      <ImageInstall>
+        <OSImage>
+          <InstallFrom>
+            <!--
+              Must match an image name inside install.wim EXACTLY. Evaluation media names
+              its editions differently from retail or volume media, which is the single
+              most common cause of a first build stopping at the edition-picker screen.
+
+              To read the real list from the mounted ISO in WinPE (shift+F10 for a shell):
+                dism /get-wiminfo /wimfile:D:\sources\install.wim
+              Common values on Server 2025 evaluation media:
+                Windows Server 2025 Standard Evaluation
+                Windows Server 2025 Standard Evaluation (Desktop Experience)
+                Windows Server 2025 Datacenter Evaluation
+                Windows Server 2025 Datacenter Evaluation (Desktop Experience)
+              Desktop Experience is deliberate here: the range wants a GUI to RDP into.
+            -->
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/NAME</Key>
+              <Value>${image_name}</Value>
+            </MetaData>
+          </InstallFrom>
+          <InstallTo><DiskID>0</DiskID><PartitionID>3</PartitionID></InstallTo>
+        </OSImage>
+        <WillShowUI>OnError</WillShowUI>
+      </ImageInstall>
+
+      <UserData>
+        <!--
+          An empty Key is how you install without a product key, and it is required rather
+          than optional: from Windows 20H2 onward, omitting the ProductKey element entirely
+          makes Setup stop on the "Product key" page and wait for a human. Observed exactly
+          that on Windows 11 Pro retail media, two minutes into an otherwise clean build.
+
+          Evaluation media never showed that page, which is why the element was missing
+          here at all. Emitting it unconditionally costs evaluation media nothing and is
+          one code path instead of two.
+
+          WillShowUI Never keeps the page suppressed rather than letting it reappear on a
+          validation warning. Note this is the windowsPE key, whose real job is choosing an
+          edition out of install.wim; the /IMAGE/NAME above already does that, so there is
+          nothing for it to decide. The separate Shell-Setup ProductKey, which is the one
+          that would actually activate Windows, is deliberately absent: these guests are
+          meant to run unactivated.
+
+          If a future template does need a key, put it in the catalog in build.pkr.hcl and
+          it lands here. Prefer the published KMS client setup key for that edition, which
+          selects an edition and activates nothing on its own.
+        -->
+        <ProductKey>
+          <Key>${product_key}</Key>
+          <WillShowUI>Never</WillShowUI>
+        </ProductKey>
+        <AcceptEula>true</AcceptEula>
+        <FullName>Administrator</FullName>
+        <Organization>lab.internal</Organization>
+      </UserData>
+    </component>
+  </settings>
+
+  <settings pass="specialize">
+    <!-- Capture requires an unencrypted OS volume. Guests can enable BitLocker later. -->
+    <component name="Microsoft-Windows-SecureStartup-FilterDriver" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+      <PreventDeviceEncryption>true</PreventDeviceEncryption>
+    </component>
+  </settings>
+
+  <settings pass="oobeSystem">
+    <!--
+      Locale, again, for a different pass.
+
+      The International-Core-WinPE component above covers Setup's own UI and nothing else.
+      Without this second component OOBE has no locale of its own, so it asks: "Is this the
+      right country or region?", then the keyboard layout, then a second keyboard layout.
+      Those pages wait for a human forever.
+
+      Server 2025 does not ask, which is why this was missing and why the omission survived
+      a working build. Windows 11 does. That difference cost a 45-minute SSH timeout on a
+      guest that had installed perfectly and was simply sitting on the region page.
+
+      Note the component name differs from the WinPE one: Microsoft-Windows-International-
+      Core, with no suffix.
+    -->
+    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+
+      <UserAccounts>
+        <AdministratorPassword><Value>${admin_password}</Value><PlainText>true</PlainText></AdministratorPassword>
+      </UserAccounts>
+
+      <!-- Logging in once is what lets FirstLogonCommands run at all. -->
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <LogonCount>1</LogonCount>
+        <Username>Administrator</Username>
+        <Password><Value>${admin_password}</Value><PlainText>true</PlainText></Password>
+      </AutoLogon>
+
+      <FirstLogonCommands>
+        <!--
+          Bring the machine to a state Packer can drive, using SSH rather than WinRM.
+          Order matters.
+
+          1. The QEMU guest agent, first, because it is how the Proxmox builder learns this
+             VM's address. The build takes a DHCP lease rather than a fixed address: a fixed
+             one seemed safer and was the opposite, because pinning ssh_host meant Packer
+             connected to whatever sat at that address, and once a clone inherited it from
+             the image a build SSH'd into that clone and provisioned it by mistake. Installing it from a provisioner is too late: Packer must connect in
+             order to run that provisioner. The loop covers the virtio ISO's unpredictable
+             drive letter, the same way the driver paths above do.
+          2. OpenSSH, with the Ansible key. This replaces the four commands that used to
+             enable WinRM with basic authentication over unencrypted HTTP: Packer connects
+             by key over the same transport Ansible will use afterwards, so the build needs
+             no password on the wire and the image needs no second remote-management stack.
+             The key is on the same generated CD as this file, and sshd will only read it
+             from ProgramData with inheritance stripped.
+        -->
+        <SynchronousCommand wcm:action="add"><Order>1</Order>
+          <CommandLine>cmd.exe /c for %i in (D E F G H) do @if exist %i:\virtio-win-guest-tools.exe %i:\virtio-win-guest-tools.exe /install /quiet /norestart</CommandLine>
+          <Description>Install VirtIO guest tools (drivers + agent)</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>2</Order>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$a = Get-NetAdapter | Where-Object Status -eq 'Up' | Select-Object -First 1; New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress ${build_ip} -PrefixLength ${build_prefix} -DefaultGateway ${build_gateway}; Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ${build_dns}"</CommandLine>
+          <Description>Deterministic build address</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>3</Order>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-WindowsCapability -Online -Name (Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Select-Object -First 1 -ExpandProperty Name)"</CommandLine>
+          <Description>Install the OpenSSH server</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>4</Order>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "New-Item -Path 'HKLM:\SOFTWARE\OpenSSH' -Force | Out-Null; New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value \"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe\" -PropertyType String -Force | Out-Null; Set-Service sshd -StartupType Automatic; Start-Service sshd"</CommandLine>
+          <Description>PowerShell as the default shell, then start sshd</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>5</Order>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$src = (Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root 'authorized_keys' } | Where-Object { Test-Path $_ } | Select-Object -First 1); $dst = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'; Copy-Item $src $dst -Force; icacls $dst /inheritance:r /grant 'SYSTEM:F' /grant 'BUILTIN\Administrators:F'"</CommandLine>
+          <Description>Install the Ansible key where Windows sshd will read it</Description></SynchronousCommand>
+        <SynchronousCommand wcm:action="add"><Order>6</Order>
+          <CommandLine>cmd.exe /c netsh advfirewall firewall add rule name="OpenSSH-22" dir=in action=allow protocol=TCP localport=22</CommandLine>
+          <Description>Open SSH in the firewall</Description></SynchronousCommand>
+      </FirstLogonCommands>
+    </component>
+  </settings>
+</unattend>

@@ -1,0 +1,31 @@
+---
+# Everything, in dependency order. Safe to run repeatedly: a second run should report zero
+# changed tasks, and one that does not is a bug rather than noise.
+
+- name: Baseline every Linux guest
+  hosts: linux
+  gather_facts: true
+  roles:
+    - linux_baseline
+
+- name: Install a desktop and RDP where it is wanted
+  hosts: linux_desktop
+  gather_facts: true
+  roles:
+    - linux_remote_desktop
+
+- name: Baseline every Windows guest
+  hosts: windows
+  gather_facts: true
+  roles:
+    - baseline
+
+- name: Build the forest
+  hosts: domain_controllers
+  gather_facts: true
+  roles:
+    - domain_controller
+
+# Tools are installed on running guests via separate playbooks:
+#   just lab-play tools-ctf.yml -e targets=ctf01
+#   just lab-play tools-flare.yml -e targets=flare01

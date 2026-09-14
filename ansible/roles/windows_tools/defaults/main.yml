@@ -1,0 +1,39 @@
+---
+# The toolset, as data. Adding a tool is a line here, not a procedure.
+#
+# Chocolatey rather than hand-rolled installers because it is idempotent, which is what
+# makes this role safe to re-run after every snapshot revert. win_chocolatey bootstraps
+# Chocolatey itself on first use, so there is no separate install step.
+#
+# Kept to packages that are well maintained in the community repository. A package that
+# vanishes or breaks takes the whole play down with it, so prefer adding one and testing it
+# over pasting a wishlist.
+windows_tools_packages:
+  # The reason this box exists.
+  - sysinternals
+  - systeminformer
+  # Reverse engineering and binary inspection.
+  - ghidra
+  - x64dbg.portable
+  - hxd
+  - ilspy
+  # Network.
+  - wireshark
+  - openvpn            # HTB, THM and anything else behind a tunnel
+  # General.
+  - 7zip
+  - notepadplusplus
+  - git
+  - python3
+  - vscode
+  - putty
+  - winscp
+  - GoogleChrome
+
+# Chocolatey will happily sit for an hour on a package that wants input. Fail instead.
+windows_tools_timeout: 1800
+
+# The community nmap package drives an interactive installer with AutoHotkey and hangs
+# over SSH. Use upstream's supported /S installer instead; Npcap is a separate prerequisite.
+windows_tools_nmap_version: "7.991"
+windows_tools_nmap_checksum: 93bfd37bdb31a7adfd932beb5dbce06025da691d01a0939e806ea704f7367657

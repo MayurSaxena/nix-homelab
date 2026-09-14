@@ -1,0 +1,10 @@
+---
+# Allow logging in over SSH with the account password as well as the key.
+#
+# The cloud image ships PasswordAuthentication no, which is right for a server on the
+# internet and wrong here: this is an isolated lab VLAN, the account password is one you
+# hold in sops, and you need it for the console and for RDP regardless. Key auth keeps
+# working and is still what Ansible uses.
+#
+# Turn it off for any lab guest that is ever exposed beyond VLAN 90.
+linux_ssh_password_auth: true

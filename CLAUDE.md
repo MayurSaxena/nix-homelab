@@ -2,6 +2,11 @@
 
 Guide for AI assistants working in this repository.
 
+**Resuming VM automation:** read [LAB.md](LAB.md). The validation log at the end includes
+the checkpoint inventory, tested claims and remaining gaps (DC recovery-path, FLARE testing).
+The user wants minimal validation guests, not a full lab rollout. Preserve the working tree
+and encrypted secret edits; do not repeat completed builds by default.
+
 Read this for the *mental model and the decision procedures*. It deliberately does not
 give you a fill-in-the-blanks host template, because the parts that vary — the
 `services.*` block, what gets persisted, how a secret is consumed — are determined by the
@@ -733,12 +738,17 @@ from `secrets/msaxena.yaml` and computes the current code with `oathtool`, so no
 to be typed in from a phone or authenticator app. Passing a code manually as `$1` still works
 as a fallback (`source util/pve-auth.sh 123456`) if the secret isn't set up yet.
 
-**One source per TOTP window.** The code is only valid for its 30-second window and PVE
-rejects a replay, so sourcing the script twice in quick succession leaves an empty ticket and
-the *next* tofu command fails with `failed to create API client: AuthTicket must include a
-valid username` — which reads like a credential problem and isn't. Wait for the next window
-and source it once. Note also that every shell is separate: source the script and run `tofu`
-in the *same* shell, which is what `just plan`/`just apply` already do.
+**TOTP replay is handled for you, but only when the code is derived.** A code is valid for
+its 30-second window and PVE refuses a replay, answering with a *null ticket rather than an
+error* — which used to surface much later as tofu's `failed to create API client: AuthTicket
+must include a valid username`, reading like a credential problem when it wasn't. The script
+now detects that, waits for the next window and redeems a fresh code, so two commands in a
+row (`just packer-token` then `just apply`) work; expect a pause and a message on stderr.
+A code passed by hand as `$1` can't be regenerated, so that path still fails, and it now
+fails immediately and loudly instead of exporting a ticket that isn't one.
+
+Note also that every shell is separate: source the script and run `tofu` in the *same* shell,
+which is what `just plan`/`just apply` already do.
 
 The script is fully self-contained — `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_USERNAME`/
 `PROXMOX_VE_INSECURE` default inside it and `PROXMOX_VE_PASSWORD` decrypts from
@@ -874,6 +884,57 @@ share the same OOM history and haven't been checked — treat either as a candid
 same fix if their own `nix-optimise` alert ever fires.
 
 ---
+
+## QEMU guests
+
+Containers are the norm here; VMs exist for guests the flake cannot configure, which today
+means the lab on VLAN 90 (see `LAB.md`, which owns everything lab-specific). They are
+declared in `provisioning/vms.tf` through `provisioning/modules/qemu-vm`, built from Packer
+templates under `packer/`, and configured by Ansible under `ansible/`.
+
+Four things about VMs on this provider are counter-intuitive enough to have each cost a
+debugging session, and none of them are Windows-specific:
+
+- **PVE deletes a guest's ACL entries when the guest is destroyed.** An ACL granted on
+  `/vms/<id>` therefore disappears with the guest, so a build that creates and then removes a
+  VM silently revokes its own permission to run again. Grant on a *pool* instead: a pool is
+  not a guest and outlives the guests in it. `provisioning/rbac.tf` does both, and the pool
+  grant is the one that matters.
+
+- **ACLs belong in `proxmox_acl` resources, not in a user's inline `acl` block.** The block
+  on `proxmox_virtual_environment_user` is deprecated, and the reason people reach for it is
+  gone: on providers before 0.107.0 refresh read live ACLs into the user resource, saw a
+  config declaring none, and planned to delete them all — visible in a plan only as an
+  innocuous "1 to change". 0.107.0 stopped populating the block from the cluster and
+  deprecated it in the same release. If you find `ignore_changes = [acl]` or inline blocks
+  anywhere, they are working around that old behaviour and should become `proxmox_acl`.
+
+- **`stop_on_destroy` is read from stored state, not from configuration.** Adding it to the
+  module does nothing for guests that already exist, so a guest whose agent is broken still
+  hangs `tofu destroy` on a graceful shutdown that never completes, with no PVE task in
+  flight to explain the wait. Stop it out of band; guests created afterwards carry the
+  attribute.
+
+- **Verify ACL changes against PVE, not against the apply's exit code.** `GET
+  /access/permissions?userid=<user>!<token>` returns PVE's own computation of a token's
+  effective privileges, and it is the only thing that has reliably told the truth about
+  whether a grant landed.
+
+**Provider deprecations remain.** Local validation reports deprecated resource names. Check
+`provisioning/provider.tf`, the lock file and the installed provider schema before planning
+a migration; earlier claims about what replacement resources support may be stale. Keep
+provider migration separate from VM smoke testing and review any state moves/replacements.
+
+**Diagnosing a guest you cannot reach.** The single most useful tool has been a console
+screenshot, which needs neither the network nor the guest agent:
+
+```bash
+ssh root@<pve-host> 'echo "screendump /tmp/x.ppm" | qm monitor <vmid>' && scp root@<pve-host>:/tmp/x.ppm .
+```
+
+It settles in one look what hours of inference cannot: whether the guest is at a login
+screen, stuck in an installer, or sitting at firmware. Pair it with a port sweep, since the
+set of *open* ports says a great deal about a Windows guest's firewall profile.
 
 ## Common operations
 

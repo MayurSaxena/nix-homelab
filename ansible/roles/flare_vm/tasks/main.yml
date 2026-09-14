@@ -1,0 +1,93 @@
+---
+# Mandiant's FLARE-VM, on its own machine and nowhere else.
+#
+# This is not a package list. The installer disables Defender and Windows Update, changes
+# Explorer and UAC settings, and reboots several times over the better part of an hour. That
+# is correct for a malware analysis box and unacceptable on a machine you also want to be a
+# representative domain member, which is why ctf01 exists separately with windows_tools.
+#
+# The playbook handles Defender policy and prerequisite checks, then fires the installer
+# async. Boxstarter owns reboots, so the SSH connection will drop. Monitor progress via RDP
+# or reconnect after roughly an hour to check the result.
+#
+# Run with: just lab-play tools-flare.yml -e targets=flare01
+
+- name: Check Defender tamper protection
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $tamper = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Features' -Name TamperProtection -ErrorAction SilentlyContinue).TamperProtection
+      if ($tamper -eq 5) {
+          throw 'Tamper Protection is enabled. Disable it via the Windows Security UI before running this playbook.'
+      }
+
+- name: Disable Defender through policy
+  ansible.windows.win_regedit:
+    path: '{{ item.path }}'
+    name: '{{ item.name }}'
+    data: 1
+    type: dword
+  loop:
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender', name: DisableAntiSpyware}
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection', name: DisableRealtimeMonitoring}
+  register: flare_defender_policy
+
+- name: Reboot after setting Defender policy
+  ansible.windows.win_reboot:
+  when: flare_defender_policy.changed
+
+- name: Verify Defender is stopped
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      if ((Get-Service WinDefend -ErrorAction SilentlyContinue).Status -eq 'Running') {
+          throw 'Defender remains running after policy change and reboot.'
+      }
+
+- name: Check prerequisites
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      if ($PSVersionTable.PSVersion.Major -lt 5) { throw 'FLARE requires PowerShell 5 or newer' }
+      if ((Get-Volume -DriveLetter C).Size -lt 60GB) { throw 'FLARE requires at least a 60 GB system volume' }
+
+- name: Set execution policy for the installer
+  ansible.windows.win_powershell:
+    script: Set-ExecutionPolicy Unrestricted -Scope LocalMachine -Force
+
+- name: Fetch pinned FLARE installer
+  ansible.windows.win_get_url:
+    url: '{{ flare_vm_url }}'
+    dest: C:\Windows\Temp\flare-install.ps1
+    checksum: '{{ flare_vm_checksum }}'
+    checksum_algorithm: sha256
+
+- name: Fetch matching FLARE configuration
+  ansible.windows.win_get_url:
+    url: '{{ flare_vm_config_url }}'
+    dest: C:\Windows\Temp\flare-config.xml
+    checksum: '{{ flare_vm_config_checksum }}'
+    checksum_algorithm: sha256
+
+- name: Launch FLARE installer
+  ansible.windows.win_powershell:
+    sensitive_parameters:
+      - name: Credential
+        username: Administrator
+        password: '{{ lookup("community.sops.sops", lab_secrets_file, extract=''["clone-admin-password"]'') | trim }}'
+    script: |
+      param([PSCredential]$Credential)
+      $ErrorActionPreference = 'Stop'
+      & C:\Windows\Temp\flare-install.ps1 -password ($Credential.GetNetworkCredential().Password) -noWait -noGui -noChecks -customConfig C:\Windows\Temp\flare-config.xml
+      if ($LASTEXITCODE -notin @(0, 3010)) { throw 'Installer returned a failure status' }
+  async: 7200
+  poll: 0
+  no_log: true
+
+- name: FLARE installer is running
+  ansible.builtin.debug:
+    msg: >-
+      The FLARE-VM installer has been launched. It will reboot the guest repeatedly over
+      roughly an hour. Monitor progress via RDP. When it finishes, check
+      C:\ProgramData\_VM\failed_packages.txt is empty and take a golden snapshot with
+      `just lab-snapshot {{ inventory_hostname }}`.

@@ -1,0 +1,2 @@
+---
+# No handlers: the SSH key is baked into the template, so nothing here restarts sshd.

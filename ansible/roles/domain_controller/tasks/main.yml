@@ -1,0 +1,165 @@
+---
+- name: Read the DSRM password
+  ansible.builtin.set_fact:
+    dc_dsrm_password: >-
+      {{ lookup('community.sops.sops', lab_secrets_file, extract='["dsrm-password"]') | trim }}
+  no_log: true
+
+- name: Derive the domain's base DN
+  ansible.builtin.set_fact:
+    dc_base_dn: "{{ lab_domain.split('.') | map('regex_replace', '^', 'DC=') | join(',') }}"
+
+# Creates the forest and installs the DNS role with it. Idempotent: on a host that is already
+# a domain controller this reports no change rather than trying again.
+- name: Promote to the first domain controller of a new forest
+  microsoft.ad.domain:
+    dns_domain_name: "{{ lab_domain }}"
+    domain_netbios_name: "{{ lab_netbios }}"
+    safe_mode_password: "{{ dc_dsrm_password }}"
+    forest_mode: "{{ dc_forest_mode }}"
+    domain_mode: "{{ dc_domain_mode }}"
+    reboot: true
+  no_log: true
+
+# --- Post-promotion readiness ---
+#
+# DFSR can race DNS on first boot as a domain controller: if it tries to locate a DC for
+# SYSVOL replication configuration before DNS has registered the SRV records, it logs
+# event 1202 (error 160) and backs off for 60 minutes. SYSVOL and NETLOGON stay unshared,
+# dcdiag Advertising fails with 1355, and domain logins break.
+#
+# Observed on the lab's first DC deployment; the three-command recovery (restart DFSR,
+# restart Netlogon, nltest /dsregdns) resolved it immediately. This block makes that
+# recovery automatic and bounded: wait for services, ensure DNS is pointed at itself,
+# detect whether DFSR initialized SYSVOL, apply the recovery once if it did not, and
+# gate on dcdiag before continuing.
+
+- name: Wait for core AD services to start
+  ansible.windows.win_shell: |
+    $services = @('NTDS', 'DNS', 'ADWS', 'Netlogon', 'DFSR')
+    $deadline = (Get-Date).AddSeconds(120)
+    do {
+        $notReady = @($services | Where-Object {
+            (Get-Service $_ -ErrorAction SilentlyContinue).Status -ne 'Running'
+        })
+        if ($notReady.Count -eq 0) { break }
+        if ((Get-Date) -gt $deadline) {
+            throw "Timed out after 120s waiting for: $($notReady -join ', ')"
+        }
+        Start-Sleep -Seconds 5
+    } while ($true)
+  changed_when: false
+
+# Promotion makes this host a DNS server, so it must now resolve against itself. Moved
+# before the SYSVOL check so a restarted DFSR queries the local AD DNS, not whatever
+# cloud-init left on the adapter.
+#
+# Set to the DC's own address rather than 127.0.0.1. Both work for a single DC, but a
+# loopback entry is the one Microsoft warns about once a second DC exists, and it costs
+# nothing to be right now.
+#
+# Written as a checked shell step rather than with win_dns_client, which reports "changed"
+# on every run here: `adapter_names: '*'` sweeps in the loopback pseudo-interfaces as well
+# as the real NIC, so its idea of the current state never matches what it just set.
+- name: Point the DC's resolver at itself
+  ansible.windows.win_shell: |
+    $want = @('{{ ansible_host }}')
+    $nic  = Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Select-Object -First 1
+    $have = @((Get-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -AddressFamily IPv4).ServerAddresses)
+    if (Compare-Object $have $want) {
+        Set-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -ServerAddresses $want
+        Write-Output 'changed'
+    }
+  register: dc_resolver
+  changed_when: "'changed' in dc_resolver.stdout"
+
+- name: Check whether SYSVOL is shared
+  ansible.windows.win_shell: |
+    $deadline = (Get-Date).AddSeconds(60)
+    do {
+        if (Get-SmbShare -Name SYSVOL -ErrorAction SilentlyContinue) {
+            Write-Output 'ready'
+            exit 0
+        }
+        if ((Get-Date) -gt $deadline) {
+            Write-Output 'missing'
+            exit 0
+        }
+        Start-Sleep -Seconds 5
+    } while ($true)
+  register: _sysvol_check
+  changed_when: false
+
+- name: Recover DFSR when SYSVOL failed to initialize
+  ansible.windows.win_shell: |
+    Restart-Service DFSR -Force
+    $deadline = (Get-Date).AddSeconds(120)
+    do {
+        if (Get-SmbShare -Name SYSVOL -ErrorAction SilentlyContinue) {
+            Restart-Service Netlogon -Force
+            & nltest /dsregdns 2>&1 | Out-Null
+            Write-Output 'recovered'
+            exit 0
+        }
+        if ((Get-Date) -gt $deadline) {
+            throw 'SYSVOL did not appear within 120s of restarting DFSR'
+        }
+        Start-Sleep -Seconds 5
+    } while ($true)
+  when: "'missing' in _sysvol_check.stdout"
+  changed_when: true
+
+- name: Verify DC is advertising correctly
+  ansible.windows.win_shell: |
+    $out = dcdiag /test:Advertising 2>&1 | Out-String
+    if ($out -match 'failed test Advertising') {
+        throw "dcdiag Advertising failed:`n$out"
+    }
+  changed_when: false
+
+# Anything outside the forest goes to technitium, which is what gives the lab the internet and
+# the rest of the homelab without standing up a second resolver.
+- name: Forward non-forest DNS to technitium
+  ansible.windows.win_shell: |
+    $want = '{{ lab_upstream_dns }}'
+    $have = @((Get-DnsServerForwarder).IPAddress.IPAddressToString)
+    if ($have -notcontains $want) {
+        Set-DnsServerForwarder -IPAddress $want | Out-Null
+        Write-Output 'changed'
+    }
+  register: dc_forwarder
+  changed_when: "'changed' in dc_forwarder.stdout"
+
+- name: Create the root OU
+  microsoft.ad.ou:
+    name: "{{ dc_root_ou }}"
+    path: "{{ dc_base_dn }}"
+    state: present
+
+- name: Create the child OUs
+  microsoft.ad.ou:
+    name: "{{ item }}"
+    path: "OU={{ dc_root_ou }},{{ dc_base_dn }}"
+    state: present
+  loop: "{{ dc_child_ous }}"
+
+- name: Create the user OUs
+  microsoft.ad.ou:
+    name: "{{ item }}"
+    path: "OU=Users,OU={{ dc_root_ou }},{{ dc_base_dn }}"
+    state: present
+  loop: "{{ dc_user_ous }}"
+
+# This is a local setting on the DC, not a domain-wide policy for member computers.
+# See LAB.md for member secure-channel recovery after rollback or forest replacement.
+- name: Disable this DC's machine account password rotation
+  ansible.windows.win_shell: |
+    $p = 'HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters'
+    $cur = (Get-ItemProperty -Path $p -Name DisablePasswordChange -ErrorAction SilentlyContinue).DisablePasswordChange
+    if ($cur -ne 1) {
+        Set-ItemProperty -Path $p -Name DisablePasswordChange -Value 1 -Type DWord
+        Write-Output 'changed'
+    }
+  register: dc_pwrot
+  changed_when: "'changed' in dc_pwrot.stdout"
+  when: dc_disable_machine_password_rotation

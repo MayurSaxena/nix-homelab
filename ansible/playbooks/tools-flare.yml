@@ -1,0 +1,13 @@
+---
+# Install FLARE-VM on a dedicated malware analysis guest.
+#
+#   just lab-play tools-flare.yml -e targets=flare01
+#
+# This disables Defender, launches the installer async, and drops the SSH connection.
+# Monitor progress via RDP; it takes roughly an hour with multiple reboots.
+# When finished, check C:\ProgramData\_VM\failed_packages.txt and take a snapshot.
+- name: Install FLARE-VM
+  hosts: "{{ targets }}"
+  gather_facts: true
+  roles:
+    - flare_vm

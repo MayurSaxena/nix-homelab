@@ -1,0 +1,12 @@
+---
+# Install the CTF security toolset on a Windows guest.
+#
+#   just lab-play tools-ctf.yml -e targets=ctf01
+#   just lab-play tools-ctf.yml -e targets=my-test-vm -i '10.0.90.123,'
+#
+# After completion, RDP/console in to run the Npcap installer if you need packet capture.
+- name: Install CTF tools
+  hosts: "{{ targets }}"
+  gather_facts: true
+  roles:
+    - windows_tools

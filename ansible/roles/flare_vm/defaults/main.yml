@@ -1,0 +1,8 @@
+---
+# Pin the installer and its package-selection configuration together. Individual Chocolatey
+# package versions still follow the upstream repositories; record them in the image manifest.
+flare_vm_revision: 4f8769522bda53ab53da2de85def532efaa033ee
+flare_vm_url: "https://raw.githubusercontent.com/mandiant/flare-vm/{{ flare_vm_revision }}/install.ps1"
+flare_vm_checksum: f5eab16a581d6921678a1ed2664913a9b25182a579d1ac8dcf2df0280007284f
+flare_vm_config_url: "https://raw.githubusercontent.com/mandiant/flare-vm/{{ flare_vm_revision }}/config.xml"
+flare_vm_config_checksum: 98994f91a4245b097ea49255e715f4e80ffb99c879e299c8341fc7e8c1125be7

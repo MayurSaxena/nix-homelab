@@ -1,0 +1,8 @@
+---
+# No ansible_password. The Ansible public key is baked into the template's
+# administrators_authorized_keys, so a clone is reachable by key from its first boot with no
+# bootstrap credential at all.
+#
+# Cloudbase-Init reads the per-VM administrator password from Proxmox's configdrive2
+# metadata. That password is used for console/RDP access and domain operations; Ansible's
+# SSH transport uses the key. There is no SetupComplete.cmd bootstrap step.

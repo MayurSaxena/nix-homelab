@@ -1,0 +1,11 @@
+---
+# XFCE because it is Kali's own default desktop, so the tooling menus and theming are the
+# ones the distribution ships and expects. It is also light enough to be usable over RDP,
+# which GNOME on a VM without acceleration is not.
+linux_desktop_packages:
+  - kali-desktop-xfce
+  - xrdp
+
+# The desktop is a couple of gigabytes. Worth knowing before it runs on a box you thought
+# was minimal, hence its being a separate role rather than part of linux_baseline.
+linux_desktop_timeout: 3600
