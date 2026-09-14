@@ -128,7 +128,7 @@ lab-check:
     packer fmt -check packer/windows
     (cd packer/windows && packer validate -syntax-only .)
     tofu -chdir=provisioning validate
-    (cd ansible && ansible-playbook --syntax-check playbooks/site.yml playbooks/tools-ctf.yml playbooks/tools-flare.yml)
+    just _ansible-playbook --syntax-check -e targets=syntax_check_dummy playbooks/site.yml playbooks/join.yml playbooks/tools-ctf.yml playbooks/tools-flare.yml
 
 # Run an Ansible playbook against the lab: `just lab-play` or `just lab-play dc.yml`.
 lab-play playbook="site.yml" *args:
@@ -137,8 +137,22 @@ lab-play playbook="site.yml" *args:
     key=$(mktemp); trap 'rm -f "$key"' EXIT
     chmod 600 "$key"
     sops -d --extract '["ansible-ssh-private-key"]' secrets/lab.yaml > "$key"
+    ANSIBLE_PRIVATE_KEY_FILE="$key" just _ansible-playbook playbooks/{{playbook}} {{args}}
+
+# Ansible refuses to run when stdout/stderr are non-blocking (O_NONBLOCK), which can happen
+# when invoked through certain tools or piped environments. Clear the flag before exec.
+_ansible-playbook *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
     cd ansible
-    ANSIBLE_PRIVATE_KEY_FILE="$key" ansible-playbook playbooks/{{playbook}} {{args}}
+    python3 -c "
+    import fcntl, os, sys
+    for fd in (sys.stdout, sys.stderr):
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        if flags & os.O_NONBLOCK:
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags & ~os.O_NONBLOCK)
+    os.execvp('ansible-playbook', ['ansible-playbook'] + sys.argv[1:])
+    " {{args}}
 
 # Copies rather than prints, because these are long random strings whose only real use is
 # being pasted into an RDP or console login. `just lab-cred` on its own lists what is there.
