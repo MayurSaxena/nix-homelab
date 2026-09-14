@@ -168,5 +168,10 @@ resource "proxmox_virtual_environment_vm" "vm" {
   # rebuilt from a playbook; there is no state in them worth a clean unmount.
   stop_on_destroy = true
 
-
+  # Publishing a newer template must not replace a persistent workstation during an
+  # unrelated apply. `lab-rebuild` explicitly requests replacement, which uses the current
+  # template configuration when creating the new VM.
+  lifecycle {
+    ignore_changes = [clone]
+  }
 }

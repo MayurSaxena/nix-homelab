@@ -33,25 +33,25 @@ data "proxmox_virtual_environment_vms" "ws2025_template" {
   }
 }
 
-data "proxmox_virtual_environment_vms" "win11_pro_template" {
-  tags = ["template", "win11-pro"]
-
+# Both persistent and disposable workstations use the same preinstalled tool images.
+# Missing images must fail clearly; never silently clone a stock OS instead.
+data "proxmox_virtual_environment_vms" "tool_templates" {
+  for_each = toset(["ctf", "flare"])
+  tags     = ["template", each.key]
   filter {
     name   = "template"
     values = ["true"]
   }
-
   lifecycle {
     postcondition {
       condition     = length(self.vms) == 1
-      error_message = "Expected exactly one template tagged win11-pro, found ${length(self.vms)}. None means it has not been built yet: run `just lab-image win11-pro`. More than one means a build is in flight, or a retirement did not finish."
+      error_message = "Expected one ${each.key} tool template. Build it with just packer-build workstations ${each.key}."
     }
   }
 }
 
 locals {
-  ws2025_template_id    = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
-  win11_pro_template_id = one(data.proxmox_virtual_environment_vms.win11_pro_template.vms).vm_id
+  ws2025_template_id = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
 }
 
 module "dc01" {
@@ -59,7 +59,7 @@ module "dc01" {
   pve_node_name = var.pve_node_name
 
   vm_name        = "dc01"
-  vm_description = "lab.internal domain controller (Terraform)"
+  vm_description = "ad.lab.internal domain controller (Terraform)"
   template_vm_id = local.ws2025_template_id
 
   os_type = "win11" # covers Server 2022/2025 as well as Windows 11
@@ -80,7 +80,7 @@ module "dc01" {
   # not yet a DNS server and still needs to resolve things. Promotion installs the DNS role
   # and repoints the host at itself, with technitium as the forwarder.
   dns_servers = ["10.0.10.2"]
-  domain      = "lab.internal"
+  domain      = "ad.lab.internal"
 
   ci_username = "Administrator"
   ci_password = var.lab_admin_password
@@ -178,7 +178,7 @@ module "kali01" {
   # Only a domain *member* has to resolve against AD DNS, and this is not one. Pointing a
   # non-member at the DC makes it depend on the DC being up to resolve anything at all,
   # including the internet, which is the wrong failure mode for the box you attack the DC
-  # *from*. technitium conditionally forwards lab.internal to the DC, so the forest stays
+  # *from*. technitium conditionally forwards ad.lab.internal to the DC, so the forest stays
   # fully resolvable from here, which is what actually matters.
   #
   # It sits in the pets block at .50, not the workstation block: nothing looks it up at a
@@ -197,7 +197,7 @@ module "kali01" {
 
 # A rename, not a replacement.
 #
-# Guests were prefixed lab- until the whole lab moved under lab.internal, which said it
+# Guests were prefixed lab- until the lab got its own VLAN and DNS zone, which said it
 # twice. Without this, OpenTofu reads a renamed module as "destroy that one, create this
 # one". dc01 needed the same block and no longer does: it was destroyed rather than
 # renamed, so it is simply created under the new name.
@@ -226,7 +226,7 @@ module "ctf01" {
 
   vm_name        = "ctf01"
   vm_description = "CTF and security research workstation (Terraform)"
-  template_vm_id = local.win11_pro_template_id
+  template_vm_id = one(data.proxmox_virtual_environment_vms.tool_templates["ctf"].vms).vm_id
 
   os_type = "win11"
   bios    = "ovmf"
@@ -256,7 +256,7 @@ module "flare01" {
 
   vm_name        = "flare01"
   vm_description = "FLARE-VM malware analysis box (Terraform)"
-  template_vm_id = local.win11_pro_template_id
+  template_vm_id = one(data.proxmox_virtual_environment_vms.tool_templates["flare"].vms).vm_id
 
   os_type = "win11"
   bios    = "ovmf"

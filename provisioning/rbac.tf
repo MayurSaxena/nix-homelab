@@ -15,7 +15,7 @@ resource "proxmox_virtual_environment_role" "packer_build" {
   privileges = [
     "VM.Allocate",     # create the build VM
     "VM.Audit",        # read its config back
-    "VM.Clone",        # unused by proxmox-iso; needed only if a proxmox-clone build is added
+    "VM.Clone",        # derive CTF/FLARE tool images from the Windows base
     "VM.Config.CDROM", # install ISO, virtio-win ISO, and the generated autounattend CD
     "VM.Config.CPU",
     "VM.Config.Cloudinit",
@@ -26,6 +26,7 @@ resource "proxmox_virtual_environment_role" "packer_build" {
     "VM.Config.Options",
     "VM.Console", # Packer answers "press any key to boot from CD" over VNC
     "VM.PowerMgmt",
+    "VM.GuestAgent.Audit",        # discover a clone's DHCP address (PVE 9 split guest-agent privileges)
     "Datastore.Audit",            # locate the ISOs on local
     "Datastore.AllocateSpace",    # the build VM's disks on local-zfs
     "Datastore.AllocateTemplate", # upload the unattend ISO, and convert the finished VM to a template
