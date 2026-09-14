@@ -11,6 +11,10 @@ by hand on a running box, it's a bug.
 > model and the decision procedures — how to pick a persistence shape, where a secret
 > belongs, how to size a container — in more depth than this README.
 
+For the Windows/Kali VM automation work, start with [the current handoff](LAB_HANDOFF.md)
+and [the lab guide](LAB.md). The full lab is not deployed; DC unattended rebuild reliability
+is still being resolved.
+
 ## Repository Structure
 
 ```
@@ -22,7 +26,10 @@ modules/
   macos/               # Base macOS config, packages, remote builds, auto-upgrade
   home-manager/        # The Mac user: packages, shell, git/ssh, window manager
   beszel-agent.nix     # Monitoring agent (NixOS-only, imported by the NixOS base)
-provisioning/          # OpenTofu configs for Proxmox LXC provisioning
+provisioning/          # OpenTofu configs for Proxmox LXC and QEMU guests
+packer/                # Windows golden-image builds
+ansible/               # Lab baseline, DC, workstation and domain-join roles
+tests/                 # Local VM lifecycle and password preflight regressions
 secrets/               # SOPS-encrypted secrets (age + YubiKey)
 assets/                # Committed in the clear — hookscript and public keys only
 util/                  # pve-auth.sh — sourced, not executed, for 2FA against the PVE API

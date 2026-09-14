@@ -2,6 +2,11 @@
 
 Guide for AI assistants working in this repository.
 
+**Resuming VM automation:** read [LAB_HANDOFF.md](LAB_HANDOFF.md) first, then [LAB.md](LAB.md).
+The 13 September 2026 checkpoint includes cleanup state, tested claims and the unresolved DC
+recovery-path validation gap. The user wants minimal validation guests, not a full lab rollout. Preserve
+the uncommitted work and encrypted secret edits; do not repeat completed builds by default.
+
 Read this for the *mental model and the decision procedures*. It deliberately does not
 give you a fill-in-the-blanks host template, because the parts that vary — the
 `services.*` block, what gets persisted, how a secret is consumed — are determined by the
@@ -915,14 +920,10 @@ debugging session, and none of them are Windows-specific:
   effective privileges, and it is the only thing that has reliably told the truth about
   whether a grant landed.
 
-**The provider is mid-rename, and migrating now would be premature.** Every
-`proxmox_virtual_environment_*` resource is deprecated in favour of an un-prefixed name and
-will be removed at v1.0. The rename is only partly done: of the resource types this repo
-uses, only `download_file` and `vm` have replacements today, so moving would leave the repo
-mixing both schemes. The replacement `proxmox_vm` and `proxmox_cloned_vm` are also still
-scaffolding -- neither has a cloud-init, disk, network or agent block -- so they cannot yet
-express what `modules/qemu-vm` does. Revisit when the un-prefixed set is complete, and expect
-`moved` blocks rather than a rewrite.
+**Provider deprecations remain.** Local validation reports deprecated resource names. Check
+`provisioning/provider.tf`, the lock file and the installed provider schema before planning
+a migration; earlier claims about what replacement resources support may be stale. Keep
+provider migration separate from VM smoke testing and review any state moves/replacements.
 
 **Diagnosing a guest you cannot reach.** The single most useful tool has been a console
 screenshot, which needs neither the network nor the guest agent:

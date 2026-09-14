@@ -1,18 +1,23 @@
 # The lab (VLAN 90)
 
-Everything on `10.0.90.0/24`: a proper Active Directory range (domain controller, member
-servers, domain-joined workstations), plus research boxes, CTF machines and tool machines of
-whatever operating system a task needs. Forest `lab.internal`.
+For the current checkpoint, retained templates, test evidence and prioritized next steps,
+read [LAB_HANDOFF.md](LAB_HANDOFF.md) first. This document describes the design and operating
+procedures; declared guests are not necessarily deployed.
+
+The intended lab on `10.0.90.0/24` combines an Active Directory range (`ad.lab.internal`)
+with persistent research workstations and disposable Windows/Linux test guests. The full
+range has not been deployed; see the handoff for what currently exists.
 
 Unlike the NixOS hosts, none of this is configured by the flake. The pipeline is Packer for
 golden images that have to be built, OpenTofu for cloning them into guests, and Ansible for
-turning a clone into a role. Read `CLAUDE.md` for how that sits beside the LXC pipeline; this
+building tool images and configuring guest-specific roles. Read `CLAUDE.md` for how that sits beside the LXC pipeline; this
 file covers the lab's own decisions.
 
 Two standards apply, and they pull in different directions on purpose:
 
-- **The AD range is built properly.** Real forest, real DNS, real GPO, static addressing,
-  reproducible from the playbook.
+- **The AD range should be reproducible.** Forest, DNS and OU creation exist in the
+  playbook. GPO/weakness seeding is future work, and unattended DC rebuild reliability
+  has passed fresh deployments; the recovery branch for a missing SYSVOL still needs a live test.
 - **Everything else works out of the box, or close to it.** A CTF box or a research VM should
   boot, get an address and be usable. If a machine needs a bespoke build to be useful, that is
   a reason to question the machine, not to write more automation.
@@ -33,7 +38,8 @@ disposable guest comes up resolvable by name with nothing configured on it.
 
 **Static only where it earns it.** A machine takes a static address if something must find it
 at a known place: the domain controller, anything domain-joined (which also needs the DC as
-its resolver), and the Packer build. Everything else DHCPs. The `qemu-vm` module accepts
+its resolver), the persistent workstations in the address table, and the Packer build.
+Disposable guests use DHCP. The `qemu-vm` module accepts
 `ipv4_settings = "dhcp"` for exactly this, so it is a choice per guest rather than a policy.
 
 **DHCP hands out technitium, not the domain controller**, and that is deliberate in both
@@ -44,21 +50,33 @@ records it needs and then fails intermittently, in ways that look like AD is bro
 Microsoft's guidance is that domain members resolve only against AD DNS, and the way to
 honour that here is to give them their resolver statically rather than through DHCP.
 
-Technitium conditionally forwards `lab.internal` to the DC, so a disposable box on DHCP can
-still resolve `dc01.lab.internal` in order to attack it. That is the point of keeping the
-whole lab on one flat VLAN rather than separating the AD range: a firewall between your Kali
-box and your domain controller sits in the path of exactly the traffic you care about.
+**DNS is split into two zones by design:**
+
+- **`lab.internal`** is owned by Technitium with static A records for every VLAN 90 host.
+  This zone is always available regardless of DC state, so non-domain hosts (Kali,
+  disposable guests) and the Mac can always resolve lab hosts by name.
+- **`ad.lab.internal`** is the Active Directory forest domain, served by the DC's own DNS.
+  Technitium conditionally forwards this subdomain to the DC (`10.0.90.10`). AD services
+  (SRV records, Kerberos, LDAP) live here and are only available when the DC is up.
+
+Domain members point their DNS at the DC. The DC forwards non-forest queries to Technitium,
+so domain members can still resolve `lab.internal` names and the internet. Non-domain hosts
+point at Technitium directly and never depend on the DC for name resolution.
+
+The Technitium zone and conditional forwarder are runtime configuration in Technitium's web
+UI, not declared in the repository. Keeping the lab on one VLAN allows direct traffic
+between exercise targets and attack stations.
 
 `.99` exists because a Packer build has no OpenTofu behind it. It is deliberately outside
 every other block, so two concurrent builds collide with each other, which is obvious, rather
 than with a range VM, which would not be. It also sits just below the DHCP pool, so it can
 never be handed to anything else.
 
-The address is build-only, but only because the build explicitly gives it back: sysprep does
-*not* undo a static address on its own, so `sysprep.ps1` resets the adapter to DHCP before
-generalising. Without that the template's resting state is the build address, and every
-clone made without cloud-init -- which is exactly what an ad-hoc guest is -- sits on `.99`
-and collides with the next build.
+The address is build-only, but only because the build explicitly gives it back. `sysprep.ps1`
+generalises Windows while SSH is still available, checks the result, then starts a SYSTEM
+scheduled task that resets the adapter to DHCP and shuts down. Packer waits for shutdown
+through the Proxmox API before converting the VM to a template. Resetting the address inside
+the SSH provisioner breaks its own transport and can abort the build before capture.
 
 ## Media
 
@@ -125,71 +143,31 @@ cloud-init drive: `enable_cloud_init = false` stops it attaching one, for an ima
 no cloud-init agent at all. Attaching a drive such a guest ignores would leave OpenTofu
 declaring an address nothing reads, with a clean plan and a wrong answer.
 
-### Parrot, and images with no cloud-init
+### Other images and Windows editions
 
-Parrot is the case the paragraph above is about, and it is worth writing down because the
-obvious assumption is wrong. Checked against its own mirror at 7.3: **there is no Parrot
-cloud image.** What it publishes is live ISOs and full desktop appliances, around 10GB each.
-The ISOs install through Calamares, so there is no preseed; the appliance qcow2 is zipped,
-which `download_file` cannot decompress.
+Kali is the selected Linux attack station in `provisioning/vms.tf`; it uses a downloaded
+cloud image and an OpenTofu-managed template. Parrot VM 200 predates this work and was left
+untouched. Recheck current vendor media before adding another distribution. `lab-spawn`
+requires an existing cloud-init-capable template, and arbitrary Linux templates need the
+correct image username. A live ISO/appliance without cloud-init needs a separate bootstrap
+path; the existing helper does not automate its installation.
 
-That leaves three routes, and they differ enough to be a real decision rather than a
-detail:
+The Windows Packer catalog currently supports `ws2025` (Server 2025 Standard Evaluation,
+Desktop Experience) and `win11-pro`. Both persistent Windows workstations use the Pro
+base. Adding a catalog key also requires updating the explicit `target` validation list;
+it is not only an ISO filename change.
 
-- **The official appliance.** Genuine Parrot, but the image has to be unzipped on the node
-  by hand before OpenTofu can import it, and it probably ships without cloud-init -- not
-  confirmed, since nobody has opened the 10GB image. Without cloud-init it would come up on
-  DHCP with whatever credentials the appliance ships with, and would need configuring by
-  hand before Ansible could take over.
-- **A Debian cloud image plus Parrot's repositories** (`deb.parrot.sh`, `parrot-core` and
-  the `parrot-tools-*` metapackages). Fully declarative, native cloud-init, and identical
-  in shape to every other Linux guest here. It is Parrot's tooling on Debian rather than
-  Parrot itself, and mixing the two package sets is the usual way to break a system.
-- **Kali instead**, which does publish a cloud image and needs none of this.
+Do not infer licensing entitlement or unlimited evaluation renewal from successful builds.
+The previous claim that every clone gets a fresh full evaluation period regardless of
+its template's age was not established and has been removed. Inspect the actual guest's
+activation/evaluation state and remaining rearm count before choosing a rebuild cadence.
+`baseline_rearm_evaluation` is off by default; cloning an aging template is not proof of a
+fresh evaluation. A fresh media build and a forest/member recovery plan may be needed.
 
-Nothing is committed yet. Whichever wins, the no-DHCP constraint is the thing to design
-against: on this VLAN, cloud-init is not a convenience, it is how a guest becomes
-reachable.
+## The forest, and planned weaknesses
 
-## Which edition goes where, and why
-
-**Every Windows client here is Windows 11 Pro, left unactivated.** Both the domain-joined
-range workstations and the FLARE-VM analysis box come from one template. Only the servers
-run evaluation media, because there is no non-evaluation Server 2025 to be had without a
-licence.
-
-That is one Windows 11 template rather than two, one manual ISO rather than two, and no
-expiry to manage on any client. Pro joins a domain (Home cannot), and domain join is not
-gated on activation, so nothing about the range needs Enterprise. Unactivated Windows only
-watermarks the desktop and greys out personalisation settings; an *expired evaluation*, by
-contrast, blacks the desktop and shuts the machine down every hour, which would be ruinous
-on a box holding analysis state and merely annoying on the rest.
-
-**What Pro gives up, and when to revisit.** The one security-relevant gap is **Credential
-Guard**, which is Enterprise and Education only. It is what stops LSASS credential dumping
-on a modern corporate endpoint, so an exercise about *why Mimikatz fails* and how that is
-evaded cannot be staged on Pro. Everything a beginner-to-intermediate AD exercise needs —
-domain join, GPO, Kerberos, delegation, LSASS dumping without VBS in the way — works on Pro,
-and works more simply, since Credential Guard is not silently blocking the lesson.
-
-If Credential Guard ever becomes the point, add a `tpl-win11-ent` template from the standard
-Enterprise 90-day [evaluation][eval] (**not** LTSC, which omits the Store, the UWP stack,
-Edge, Copilot and Teams, and so removes the very surface a real endpoint has). That is an
-entry in the catalog at the top of `packer/windows/build.pkr.hcl` and nothing else -- an
-ISO, an edition string and a virtio directory. No permission change either: the grant is on
-the `lab` pool, not on a list of VMIDs.
-
-**The servers are the only expiry to track.** Server 2025 evaluation runs 180 days, and
-`sysprep /generalize` rearms that clock, so each clone starts its own full term from first
-boot however old the template is, up to three rearms. Treat it as a template rebuild
-cadence rather than a problem to solve — but note that if you ever want the *forest itself*
-to live longer than a couple of rebuild cycles, the DC's evaluation is the binding
-constraint, not the workstations.
-
-The node already carries a Windows 10 22H2 consumer ISO from earlier work. It would also
-serve for `flare01`, but Windows 10 passed end of support in October 2025, so prefer 11.
-
-## The forest, and its deliberate weaknesses
+Implemented today: forest/DNS creation, forwarding and the OU tree below. The weakness
+toggles and AD CS discussed here are design proposals, not existing roles or group vars.
 
 **Structure.** Everything lives under one top-level `LAB` OU rather than in the default
 `Users` and `Computers` containers, for the reason that makes it a good habit rather than a
@@ -198,7 +176,7 @@ preference: **you cannot link a GPO to the default containers.** Anything that s
 so many environments discover this late.
 
 ```
-lab.internal
+ad.lab.internal
 └── LAB
     ├── Servers
     ├── Workstations
@@ -211,8 +189,8 @@ lab.internal
 
 **Weaknesses are declared, not improvised.** A range you cannot attack teaches nothing, but a
 weakness you forget you planted teaches the wrong lesson: you find a path six months later and
-cannot tell whether it is something you built or something you broke. So every deliberate
-misconfiguration is an entry in `group_vars`, toggled by name:
+cannot tell whether it is something you built or something you broke. The proposed interface
+is an entry in `group_vars`, toggled by name; it is not implemented:
 
 ```yaml
 lab_weaknesses:
@@ -242,10 +220,9 @@ it into the DC.
 ## What OpenTofu owns, and what it deliberately does not
 
 The repo's invariant is that any host can be rebuilt from this repository alone. That is
-worth its cost for a machine whose loss would cost you something. A CTF box exists precisely
-because losing it costs nothing, so declaring it in `vms.tf` applies a durability guarantee
-to a thing defined by not needing one, and charges you an HCL edit and a git commit for a
-machine you will delete this evening.
+worth its cost for a machine whose loss would cost you something. The persistent `ctf01`,
+`flare01` and `kali01` workstations belong in OpenTofu. A disposable
+exercise target does not: it can be created and deleted without an HCL edit.
 
 So the line is durability, not technology:
 
@@ -258,8 +235,8 @@ So the line is durability, not technology:
 | **Snapshots** | A `golden` snapshot after Ansible converges; revert to it freely | Take your own, mid-task, and lose them with the guest |
 
 Both land in the `lab` pool and on VLAN 90, so the two kinds can see each other, which is the
-entire point of keeping the lab flat. Ad-hoc guests are cloned straight from a template or a
-downloaded cloud image without going near OpenTofu state.
+entire point of keeping the lab flat. The ad-hoc helper clones existing templates without entering OpenTofu state; preparing a
+new Linux template from a downloaded image is a separate operation.
 
 ## Ansible: inventory and how it authenticates
 
@@ -267,24 +244,22 @@ downloaded cloud image without going near OpenTofu state.
 nothing dynamic is needed. Should that change, `community.general.proxmox` provides an
 inventory plugin that can filter by pool, which is a second reason the `lab` pool earns its
 place. Do not build that until something needs it. An ad-hoc guest that wants a playbook run
-can take one with `-i <address>,` and no inventory entry at all.
+can use a temporary inventory rather than an entry in the committed inventory.
 
-**Key authentication, bootstrapped once over a password.** The public key goes to declared
-guests through cloud-init (`ci_public_keys` on the `qemu-vm` module); the private key lives in
-`secrets/lab.yaml` and is read with the `community.sops` lookup, so playbooks stay
-committable.
+**Ansible uses the lab SSH key from its first connection.** Packer's OpenSSH installation
+writes `C:\ProgramData\ssh\administrators_authorized_keys` with the required ACL for Windows.
+Linux cloud images receive their key through cloud-init. `just lab-play` decrypts the private
+key from SOPS into a temporary mode-0600 file, sets `ANSIBLE_PRIVATE_KEY_FILE`, and removes
+the file on exit. The baseline role does not bootstrap the key using a password.
 
-There is a Windows-specific trap in that, and it is worth knowing before it wastes an
-afternoon. Windows OpenSSH does **not** read `~/.ssh/authorized_keys` for any account in the
-Administrators group. It reads `C:\ProgramData\ssh\administrators_authorized_keys`, and it
-refuses that file unless its ACL grants only SYSTEM and Administrators. Cloudbase-init's key
-plugin writes to the user profile, so a key injected that way is silently ignored and every
-connection falls back to asking for a password.
+The standing login password is separately supplied through cloud-init. A working Ansible
+connection does not prove it was set successfully. Validate password-only login too.
+Windows administrator keys must be in the shared administrators file, not merely the user's
+`~/.ssh/authorized_keys`.
 
-Rather than weaken `sshd_config` to paper over it, the `baseline` role authenticates its
-first run with the password cloudbase-init set, writes the key to
-`administrators_authorized_keys` with the right ACL, and every run after that uses the key.
-The password stays a bootstrap credential rather than becoming a standing one.
+For an ad-hoc playbook run, use a temporary inventory with the appropriate `windows` or
+`linux` group and connection variables. An IP-only inventory does not automatically match
+`hosts: windows` or supply the Windows PowerShell connection settings.
 
 ## Getting into a guest
 
@@ -300,12 +275,11 @@ just lab-cred                         # lists what else is in there
 |---|---|---|---|
 | Windows (`dc01`, `ctf01`, `flare01`) | `Administrator` | enabled by the `baseline` role | key **or** password |
 | Kali (`kali01`) | `kali` | needs the `linux_remote_desktop` role | key **or** password |
-| Ad-hoc guests | as above, by OS | same, once the role has run | key from first boot |
+| Ad-hoc guests | as above, by OS | same, once the role has run | key or password after cloud-init completes |
 
-**Neither protocol works on a brand-new guest until Ansible has run.** cloud-init gets it
-on the network with a password and the SSH key, and that is all: RDP is off by default on
-Windows, and a Linux cloud image has no desktop at all for RDP to show. `just lab-play`
-is what makes a guest usable by a human, not just by Ansible.
+SSH is available after first-boot provisioning completes, including any hostname reboot.
+RDP needs Ansible: it is off by default on Windows, and a Linux cloud image has no desktop
+for RDP to show. Run the baseline or desktop role before attempting an RDP login.
 
 **The SSH key is the same one Ansible uses**, and it is in `secrets/lab.yaml` as
 `ansible-ssh-private-key`. For a guest whose address you know:
@@ -323,6 +297,50 @@ for the console and RDP anyway. Turn it off for anything ever exposed beyond VLA
 seeded with deliberate weaknesses anyway. It is the wrong pattern for anything holding real
 data, and the place to change it is `ci_password` in `provisioning/vms.tf`, which is a
 per-guest argument already.
+
+## Reusable CTF and FLARE images
+
+The intended image chain is `tpl-win11-pro` → `tpl-ctf` / `tpl-flare` → full guest clones.
+Stock Windows guests remain available from `tpl-win11-pro` and `tpl-ws2025`, without
+the CTF or FLARE toolsets. Derived builds never modify those base templates.
+Both disposable and persistent workstations use the same tool templates. Templates stay
+stopped; tools are installed during image construction, before Sysprep and capture. Guest
+configuration applies the hostname, network, password and baseline settings afterward.
+See the handoff for live validation status; a configuration passing syntax checks does not
+mean its tool installation has completed successfully.
+
+```bash
+just packer-build workstations ctf
+just packer-build workstations flare
+just lab-spawn tpl-ctf ctf-test
+just lab-spawn tpl-flare flare-test
+just lab-despawn ctf-test
+just lab-despawn flare-test
+```
+
+The workstation Packer builder full-clones the uniquely tagged Windows 11 base, discovers
+its DHCP address through the guest agent, runs `ansible/playbooks/tool-image.yml`, records
+installed package versions in `C:\ProgramData\Lab\image.json`, and generalizes it again.
+FLARE uses the pinned upstream installer and configuration with checksum verification;
+individual package versions still follow their upstream feeds. Its build requires Defender
+and Tamper Protection prerequisites to be satisfied on the dedicated FLARE build guest.
+For CTF, the build stages `C:\Windows\Temp\npcap-setup.exe` and sets the console
+Administrator password from `clone-admin-password`. Open the build VM's Proxmox console,
+log in, run that installer and finish/close the wizard. The capture gate waits up to
+30 minutes for the driver and checks it starts. This free-edition step is repeated when
+rebuilding a tool image from the stock base, not when spawning guests. The Nmap install
+uses a checksum-pinned upstream `/S` installer with a ten-minute timeout; its local SYSTEM
+execution context is under live validation (see handoff).
+
+The FLARE play validates prerequisites itself and uses `-noChecks` to avoid upstream
+`Read-Host` prompts that remain even with `-noGui`. Capture is gated on the upstream
+completion log and an empty failed-package list.
+
+OpenTofu's `ctf01` and `flare01` modules select the `template;ctf` and `template;flare` tags.
+They require exactly one matching template each. Routine `site.yml` runs no longer install
+these toolsets on existing guests. Build a new tool template to update the starting image;
+use an explicit guest rebuild to adopt it. Existing persistent guests retain their disks
+and snapshots when a template is replaced because clone-source changes are ignored.
 
 ## The pet lifecycle
 
@@ -365,21 +383,25 @@ the snapshot that should exist and re-taking it.
 
 ```bash
 just lab-spawn tpl-win11-pro test01    # clone, cloud-init to DHCP, start
+just lab-spawn tpl-debian test02 debian # other Linux templates need their image username
 just lab-despawn test01                # stop and destroy
 ```
 
 These are deliberately outside OpenTofu, for the reason in the ownership table above. They
 land in the `lab` pool on VLAN 90, take a lease from technitium's `.100`-`.199` range with
 the `lab.internal` suffix, and carry the lab password and the Ansible key from first boot,
-so they are reachable by name immediately.
+once their first-boot configuration finishes. The template must contain Cloudbase-Init
+(Windows) or cloud-init (Linux). The command adds a metadata drive when missing, preserves
+the cloned NIC's MAC/model, and places it on the lab bridge and VLAN. Kali's user is known;
+other Linux images use the template's configured `ciuser` or the explicit third argument.
 
 **They are not domain-joined.** Joining is the thing most often worth *testing*, so it is a
 play you run rather than something that has already happened to the box.
 
-`lab-despawn` refuses anything tagged `terraform` or `template`. OpenTofu tags everything it
-declares, and templates are tagged as such, so a slip of the finger cannot destroy the
-domain controller or the image everything else is cloned from. That is the whole difference
-between a pet and a throwaway, enforced rather than remembered.
+`lab-despawn` requires both `adhoc` and `lab` tags and refuses templates or anything tagged
+`terraform` or `template`. Untagged VMs are not assumed to be disposable. Snapshot, rollback,
+clone and deletion commands wait for the returned Proxmox task to finish successfully;
+API errors, task failures and timeouts stop the command.
 
 ## Linux guests: two things that bite on the second boot
 
@@ -425,46 +447,59 @@ upgrade breaks; do not stop upgrading.
 
 ## Backups
 
-Reproducibility is the backup for most of this. Range VMs rebuild from the playbook and
-templates rebuild from Packer, so backing either up stores a copy of something the repo
-already describes.
-
-`flare01` is the exception, because it accumulates analysis state that exists nowhere else.
-Back that one up, and leave the rest of the `lab` pool out of the job. This is the same
-judgement the LXC side already makes by setting `backup = true` on `/persistent` alone.
+Rebuilding restores declared configuration, not research notes, captures, samples or other
+user data. All three workstations are intended to be persistent. Decide which of their data
+needs backup before rollout; do not assume only FLARE-VM matters. Golden snapshots provide
+local rollback, not an independent backup. No lab-wide backup/restore test was performed.
 
 ## What a bare clone gives you
 
-A template cloned by hand, with no cloud-init drive and no OpenTofu, is already usable.
-Verified on a scratch clone: sshd running, the QEMU guest agent reporting, and the Ansible
-key accepted. Nothing else had to happen.
-
-That is the intended shape, and it is worth stating because it inverts the obvious reading of
-this directory. OpenTofu and cloud-init are not prerequisites for a working guest; they are
-optional layers that add a **fixed address** and a **chosen hostname** on top of one. A
-machine that needs neither -- a CTF box, a throwaway to test something -- can be a right-click
-clone in the Proxmox UI and still be reachable by key.
+A Windows template should also work when cloned without a cloud-init drive or OpenTofu.
+The image carries OpenSSH, the Ansible public key and the QEMU guest agent. The capture
+sequence leaves the adapter configured for DHCP; cloud-init adds a chosen hostname,
+administrator password and optional static address when its drive is attached.
 
 | | Bare clone | Clone through OpenTofu |
 |---|---|---|
 | Reachable by SSH key | yes | yes |
 | Guest agent reporting | yes | yes |
-| Address | **the build's, `10.0.90.99`** | the one in `vms.tf` |
+| Address | DHCP lease | the one in `vms.tf` |
 | Hostname | OOBE-generated, e.g. `ADMINIS-FNNQLK3` | the name in `vms.tf` |
-| Administrator password | the build's | the one in `secrets/lab.yaml` |
+| Administrator password | Not configured by metadata; use the SSH key | the one in `secrets/lab.yaml` |
 | In the `lab` pool, tagged | only if you say so | yes |
 
-**A bare Windows clone inherits the build's address**, because the build sets one in its
-answer file so Packer has a deterministic host to connect to, and that survives into the
-image. It is reachable there, so the clone is usable, but two of them would collide and one
-left running blocks the next build. `just packer-build` refuses to start when anything
-answers on that address, which turns the collision into a message rather than a build that
-silently provisions the wrong machine.
+Templates built before the finalisation fix can still carry `.99`; changing the script does
+not repair existing images. `just packer-build` refuses to start when anything answers on
+that address. Validate a replacement with a bare clone as well as a clone with cloud-init.
 
-Attempts to reset it to DHCP on the clone were abandoned rather than fixed: doing it before
-sysprep drops the connection Packer is using, and the `SetupComplete.cmd` that once did it
-turned out not to run at all. The residue is a Windows-template quirk, not a property of the
-module. A Linux guest cloned from a downloaded cloud image has no baked address to inherit.
+### The capture gate
+
+`sysprep.ps1` uses `/generalize /oobe /quit` and waits for the process. It requires both a
+zero exit code and `IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE`. Sysprep can return zero after
+rejecting its command line, so checking only the exit code can publish an unprepared image.
+The Cloudbase-Init answer file is copied to a path without spaces for this invocation.
+Its specialize pass also enables the built-in Administrator account: client Windows
+disables it during generalisation, and updating an existing account's password does not
+enable it. This command contains no password and does not configure automatic login.
+
+`finalize-network.ps1` runs as SYSTEM through Task Scheduler. It resets IPv4 and DNS to
+DHCP, verifies DHCP is enabled, removes the task, and shuts down only if those steps succeed.
+Its transcript is `C:\Windows\Temp\packer-finalize.log`. The API wait has a timeout and
+rejects failed API calls or an ambiguous build VM instead of treating a lost SSH connection
+as success. Use `-on-error=abort` while diagnosing a build to preserve the VM and its logs.
+
+The installation answer file disables automatic device encryption for capture. Sysprep's
+preflight refuses an encrypted OS volume; suspending BitLocker is insufficient. A retained
+failed build must finish decrypting before capture is retried. This setting follows
+[Microsoft's image-building guidance](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/oem-bitlocker).
+
+The Cloudbase-Init setup pass has its own minimal configuration: MTU and hostname plugins,
+`allow_reboot=false`, and an empty-metadata fallback after ConfigDrive. Account, password
+and network provisioning remain in the normal Windows service. A missing metadata drive
+must not prevent a bare clone from completing Setup: the installer's answer file maps a
+discovery failure to exit 2, which [Windows Setup interprets as reboot and retry](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/unattend/microsoft-windows-deployment-runsynchronous-runsynchronouscommand-willreboot).
+The [empty metadata service](https://cloudbase-init.readthedocs.io/en/1.1.8/services.html)
+provides the supported fallback without generating account credentials.
 
 ## Cloud-init does the whole job, once Proxmox is left alone
 
@@ -488,7 +523,8 @@ that had never once worked.
 So the split is simply:
 
 - **Cloud-init owns hostname, address and the administrator password**, per VM, from
-  `vms.tf`. Nothing is compiled into the image.
+  `vms.tf`. The clone password is not deliberately baked into the image; a bare clone has
+  not received this credential and must not be assumed to have it.
 - **The template owns the SSH key**, baked into `administrators_authorized_keys` with
   inheritance stripped, because Windows sshd ignores the usual file for administrators.
 - **Ansible owns everything after that**, and authenticates by key.
@@ -506,10 +542,11 @@ you, and two need no login.
 | Signal | Cloud-init ran | It did not |
 |---|---|---|
 | Hostname | the name from `vms.tf` | OOBE-generated, e.g. `ADMINIS-SS8OQIO` |
-| Address | the one assigned | the build's `10.0.90.99` |
-| Administrator password | the value in `secrets/lab.yaml` | rejected |
+| Address | the assigned static address or DHCP lease | DHCP from the template; no static metadata applied |
+| Administrator password | a password-only login with `secrets/lab.yaml` succeeds | rejected (also check password policy and whether the account is enabled) |
 
-`qm agent <vmid> network-get-interfaces` answers the first two together.
+`qm agent <vmid> network-get-interfaces` reports addresses; use `hostname` over SSH or the
+guest agent to check the hostname. Each plugin can fail independently, so validate all three.
 
 **The interface name is not a signal.** Under `nocloud` cloudbase-init renames the adapter to
 `eth0`, which makes a tempting tell; under `configdrive2` -- the format Proxmox picks for
@@ -525,16 +562,17 @@ the service starts, reports itself healthy, and is invisible to Proxmox forever:
 ping` times out, the VM reports no address, and OpenTofu waits out its entire timeout on
 every create before declaring success anyway.
 
-The templates therefore install the full `virtio-win-gt-x64.msi` and inject `vioserial`
-alongside the storage and network drivers, then assert the VirtIO Serial device exists rather
-than trusting that it does.
+The templates install `virtio-win-guest-tools.exe`, which includes drivers and the agent.
+`install-guest-tools.ps1` verifies both the VirtIO Serial device and the QEMU-GA service.
+The `virtio-win-gt-x64.msi` alone does not supply the guest agent.
 
 ## Resetting, and what that means for the DC
 
 Snapshots are an optimisation here, not the lifecycle. The forest is built by `microsoft.ad`
 from `ansible/group_vars`, so the source of truth for the domain is the playbook, not a
-snapshot sitting on the node. Rebuilding `dc01` from nothing is a clone, a promotion and
-a reboot. That stays true only under one discipline: **anything worth keeping in the forest
+snapshot sitting on the node. The intended DC rebuild is a clone, promotion and reboot; see
+the handoff for the unresolved first-boot DFSR/domain-discovery failure. Reproducibility
+requires that **anything worth keeping in the forest
 goes into the role, never only into the running DC.** It is the same invariant the NixOS
 hosts run on, and it is what makes a DC safe to throw away.
 
@@ -566,10 +604,12 @@ drops its RID pool and performs a non-authoritative restore rather than silently
 bites with a single DC too. Domain members rotate their computer account password on a
 schedule. Revert the DC past a rotation and the member loses its secure channel, which
 surfaces as "the trust relationship between this workstation and the primary domain failed".
-The `domain_controller` role therefore sets a GPO disabling machine account password changes
-domain-wide. That would be indefensible in production and is exactly right here: it removes
-the whole class of problem and lets the DC and its members be reverted independently of each
-other.
+The current `domain_controller` role sets `DisablePasswordChange` only on the DC itself;
+it does **not** deploy a domain-wide GPO. Domain members can therefore still rotate their
+passwords. Revert an exercise's DC and members together, or repair/rejoin affected members.
+A rebuilt forest also has new identities even when its DNS name is unchanged: persistent
+members need to join the new forest. The standalone Kali, CTF and FLARE workstations do not
+have this dependency unless deliberately joined.
 
 Time skew is a distant third. A reverted DC's clock jumps backwards, Kerberos tolerates only
 a few minutes of drift, and it resyncs on boot.
@@ -580,9 +620,8 @@ The Proxmox OpenTofu provider does not expose `vmgenid`, so VMs created by
 `provisioning/vms.tf` inherit whatever PVE does by default. Every VM already on this node
 carries one, so that default appears to be "generate" — but **whether PVE issues a _new_ one
 on rollback has not been confirmed here**, and a rollback that leaves the ID unchanged is a
-rollback Windows cannot detect. Establish it at the Phase 2 gate rather than assuming it:
-note `qm config <vmid> | grep vmgenid`, snapshot, change something, roll back, compare. This
-only matters once a second DC exists, but it is cheap to settle while the range is small.
+rollback Windows cannot detect. Verify it before relying on DC snapshot recovery:
+note `qm config <vmid> | grep vmgenid`, snapshot, change something, roll back, compare. File rollback alone does not establish AD-safe snapshot recovery, even with one DC.
 
 ## What here is Windows-specific, and what is not
 
@@ -598,7 +637,7 @@ whether generalising it later is free or painful:
 |---|---|---|
 | `provisioning/modules/qemu-vm` | **Yes, from the start** | Holds state. Renaming it later means `moved` blocks or `tofu state mv` against every VM built from it. Costs nothing to name generically today. |
 | `provisioning/vms.tf` | **Yes, from the start** | One file for every QEMU guest, lab and production alike, keeping `main.tf` LXC-only. |
-| `packer@pve` ACL block | **Yes, from the start** | Grants a reserved template VMID range rather than the ids in use, so a new template needs no permission change. |
+| `packer@pve` ACL block | **Yes, from the start** | Grants the lab pool, storage, node audit and bridge use. `VM.GuestAgent.Audit` permits DHCP discovery for clone builds. |
 | `packer/` and `ansible/` layout | **Yes, now** | Held no state, so this was deferred while a second image pipeline was speculative. It stopped being speculative, so they were hoisted to the repo root and `windows/` was retired. The move cost a `git mv` and one path in a recipe, exactly as predicted. |
 | Windows roles and unattend files | **No, and that is fine** | `sysprep`, cloudbase-init, VirtIO driver injection and `microsoft.ad` are Windows by nature. |
 
@@ -613,27 +652,46 @@ they contradict the repo's rebuild-from-this-repo-alone invariant. Once `qemu-vm
 by the lab, importing them is a `tofu import` per VM plus a module block, and the invariant
 holds for the whole node rather than just the containers.
 
-These decisions belong in `CLAUDE.md` eventually, alongside the LXC decision procedures.
-They live here until Phase 5, when there is enough built to describe accurately.
+Keep lab-specific procedures here; `CLAUDE.md` links to the current handoff and this guide.
 
 ## Tooling
 
-`packer` and `ansible` come from the Mac's home-manager profile
-(`modules/home-manager/msaxena.nix`), so `just mac` is all that is needed to get them.
+The provisioning tools come from this repository's Nix development shell, not the Mac's
+home-manager profile. Use `nix develop` (or the repo's direnv configuration).
+
+Start with checks that create no VMs:
+
+```bash
+nix develop --command just lab-check
+```
+
+This runs mocked lifecycle tests, shell syntax checks, Packer formatting/HCL syntax,
+OpenTofu validation and Ansible syntax checking. Provider plugins/modules must already be
+initialised. It does not establish that a Windows installer or an Ansible role works at
+runtime. For that, build a template, test a disposable clone, and configure only the host
+being validated with an explicit Ansible limit. A full `just apply` would deploy all declared
+guests; it is not a smoke test.
+
+`plan`, `apply`, and Windows `lab-spawn` check the clone password before provisioning:
+at least eight characters, three of uppercase/lowercase/digits/punctuation, no account
+name, and no newline or NUL. This is a conservative local preflight, not an implementation
+of every Windows password policy. Windows can still reject a password due to custom policy
+or history. Verify password-only remote login on a fresh clone; SSH key access alone does
+not prove that Cloudbase-Init successfully set `clone-admin-password`.
 
 **There is no `ansible-galaxy install` step.** nixpkgs' `ansible` attribute already ships
-every collection the roles here use, 92 of them in total. Do not be misled by its `pname`,
+the collections the roles here use. Do not be misled by its `pname`,
 which is `ansible-core`: that is the interpreter it is built from, and the community
 collection bundle is layered on top. A real `ansible-core` install would carry none of the
-below. Verified against this flake's pinned build, not the registry's:
+below. Their versions follow the flake lock:
 
-| Collection | Version | Used for |
-|---|---|---|
-| `microsoft.ad` | 1.12.0 | forest creation, DC promotion, domain join |
-| `ansible.windows` | 3.7.0 | features, packages, registry, reboots |
-| `community.windows` | 3.3.0 | the gaps in `ansible.windows` |
-| `chocolatey.chocolatey` | 1.6.0 | workstation and analysis tooling |
-| `community.sops` | 2.4.0 | reading secrets/ from a playbook, so no plaintext vars |
+| Collection | Used for |
+|---|---|
+| `microsoft.ad` | forest creation, DC promotion, domain join |
+| `ansible.windows` | features, packages, registry, reboots |
+| `community.windows` | the gaps in `ansible.windows` |
+| `chocolatey.chocolatey` | workstation and analysis tooling |
+| `community.sops` | reading secrets/ from a playbook, so no plaintext vars |
 
 Pin nothing by hand here. These move with `flake.lock` like everything else, and a
 `requirements.yml` would quietly shadow the versions Nix already provides.
@@ -641,3 +699,9 @@ Pin nothing by hand here. These move with `flake.lock` like everything else, and
 Later, an always-on `lab-controller` LXC can take this role over. Nothing under `packer/` or `ansible/`
 would need to change; it would gain the same two packages and a checkout, and its age key
 would be added to the `secrets/lab.yaml` rule.
+
+
+## Validation and next steps
+
+See [LAB_HANDOFF.md](LAB_HANDOFF.md) for the dated validation record, cleanup inventory,
+remaining failures and the next test sequence.
