@@ -70,6 +70,7 @@ plan *args:
     # Lab guests take their initial Administrator password from here. Decrypted per run
     # rather than kept in a .tfvars file, so it exists only in this process's environment.
     export TF_VAR_lab_admin_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
+    printf '%s' "$TF_VAR_lab_admin_password" | python3 util/check-lab-password.py
     # Linux guests are built from a stock cloud image with no key baked in, so cloud-init
     # has to authorise one. The Windows templates carry it already.
     export TF_VAR_lab_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
@@ -90,6 +91,7 @@ apply *args:
     set -euo pipefail
     source util/pve-auth.sh
     export TF_VAR_lab_admin_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
+    printf '%s' "$TF_VAR_lab_admin_password" | python3 util/check-lab-password.py
     # Linux guests are built from a stock cloud image with no key baked in, so cloud-init
     # has to authorise one. The Windows templates carry it already.
     export TF_VAR_lab_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
@@ -115,9 +117,19 @@ gc:
 
 # The private key is materialised into a mode-0600 file for the length of the run and removed
 # afterwards, because ssh will not take a key on stdin or from an environment variable. The
-# very first run against a fresh clone has no key installed yet and falls back to the
-# bootstrap password from group_vars; the baseline role installs the key, and every run after
-# that uses it.
+# Windows template already carries the public key; Linux receives it through cloud-init.
+
+# Validate provisioning code without creating VMs (providers must already be initialised).
+lab-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 -m unittest discover -s tests
+    bash -n util/lab-vm.sh packer/common/scripts/wait-for-shutdown.sh
+    packer fmt -check packer/windows packer/workstations
+    (cd packer/windows && packer validate -syntax-only .)
+    (cd packer/workstations && packer validate -syntax-only .)
+    tofu -chdir=provisioning validate
+    (cd ansible && ansible-playbook --syntax-check playbooks/site.yml playbooks/tool-image.yml)
 
 # Run an Ansible playbook against the lab: `just lab-play` or `just lab-play dc.yml`.
 lab-play playbook="site.yml" *args:
@@ -200,11 +212,54 @@ packer-build family target *args:
     # never a moment with zero.
     export PKR_VAR_proxmox_url="${PKR_VAR_proxmox_url:-https://10.0.10.3:8006/api2/json}"
     auth=(-H "Authorization: PVEAPIToken=${PKR_VAR_proxmox_username}=${PKR_VAR_proxmox_token}")
+    node_path="nodes/proxmox"
+    poll_interval=2
+    task_timeout=120
+
+    pve_request() {
+        local method=$1 path=$2 response
+        shift 2
+        response=$(curl --silent --show-error --fail --insecure --connect-timeout 10 --max-time 30 \
+            -X "$method" "${auth[@]}" "$@" "${PKR_VAR_proxmox_url}/${path}") || {
+            echo "$method $path failed" >&2; return 1
+        }
+        jq -e 'type == "object" and has("data") and .errors == null' >/dev/null <<<"$response" || {
+            echo "Unexpected response from $method $path" >&2; return 1
+        }
+        jq -c '.data' <<<"$response"
+    }
+
+    pve_wait_task() {
+        local upid=$1 encoded deadline status
+        encoded=$(jq -rn --arg id "$upid" '$id | @uri')
+        deadline=$((SECONDS + task_timeout))
+        while (( SECONDS < deadline )); do
+            status=$(pve_request GET "${node_path}/tasks/${encoded}/status")
+            case "$(jq -er '.status' <<<"$status")" in
+                stopped)
+                    if [[ $(jq -r '.exitstatus' <<<"$status") != OK ]]; then
+                        echo "Proxmox task failed: $(jq -r '.exitstatus' <<<"$status") ($upid)" >&2
+                        return 1
+                    fi
+                    return 0 ;;
+                running) sleep "$poll_interval" ;;
+                *) echo "Unexpected task status for $upid" >&2; return 1 ;;
+            esac
+        done
+        echo "Timed out waiting for task $upid" >&2
+        return 1
+    }
+
     tmpl_tag="{{target}}"
     templates_with_tag() {
-        curl -sk "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu" \
-          | jq -r --arg t "$tmpl_tag" '.data[] | select(.template==1) | select((.tags // "") | split(";") | index($t)) | .vmid'
+        pve_request GET "${node_path}/qemu" \
+          | jq -r --arg t "$tmpl_tag" '.[] | select(.template==1) | select((.tags // "") | split(";") | index($t)) | .vmid'
     }
+    if [[ "{{family}}" == workstations ]]; then
+        export PKR_VAR_base_template_id=$(pve_request GET "${node_path}/qemu" | jq -er '
+            [.[] | select(.template==1) | select((.tags // "") | split(";") | index("win11-pro"))] |
+            if length == 1 then .[0].vmid else error("Expected exactly one Windows 11 base template") end')
+    fi
     before=$(templates_with_tag | sort -n | tr '\n' ' ')
     echo "existing ${tmpl_tag} templates before this build: ${before:-none}"
 
@@ -216,7 +271,10 @@ packer-build family target *args:
         case " $after " in *" $old "*) ;; *) continue ;; esac
         [ "$(echo "$after" | wc -w)" -le 1 ] && { echo "only one template present; nothing to retire"; break; }
         echo "retiring superseded template $old"
-        curl -sk -X DELETE "${auth[@]}" "${PKR_VAR_proxmox_url}/nodes/proxmox/qemu/${old}" >/dev/null
+        upid=$(pve_request DELETE "${node_path}/qemu/${old}?destroy-unreferenced-disks=1&purge=1" \
+            | jq -er 'select(type == "string" and startswith("UPID:"))')
+        pve_wait_task "$upid"
+        echo "template $old retired"
     done
 
 # Mint or rotate the Packer API token into secrets/msaxena.yaml.
@@ -321,66 +379,11 @@ lab-image name:
 
 # Take a restore point: `just lab-snapshot kali01 [name]`.
 lab-snapshot guest name="golden":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source util/pve-auth.sh
-    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
-          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
-    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
-    vmid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{guest}}" '.data[] | select(.name==$n) | .vmid')
-    # Only `golden` is replaced on a re-take; anything else is yours and is never clobbered.
-    #
-    # golden is the managed baseline -- lab-rebuild re-takes it every time, and letting it
-    # accumulate as golden-1, golden-2 would turn "revert to fresh" into "work out which
-    # one". Every other name is a snapshot you took for your own reasons, and this command
-    # has no business deleting it just because you reused a word.
-    #
-    # The practical effect: you never have to remember which tool to use. Take snapshots
-    # from the Proxmox UI, from `qm snapshot`, or from here -- they are the same mechanism,
-    # nothing in this repo tracks them, and the only reserved name is golden.
-    if curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -e --arg s "{{name}}" '.data[] | select(.name==$s)' >/dev/null; then
-        if [ "{{name}}" != "golden" ]; then
-            echo "{{guest}} already has a snapshot named {{name}}, and only 'golden' is replaced automatically." >&2
-            echo "Pick another name, or delete that one first (Proxmox UI, or qm delsnapshot $vmid {{name}})." >&2
-            exit 1
-        fi
-        echo "replacing the existing golden snapshot on {{guest}} ($vmid)"
-        curl -sk -X DELETE "${auth[@]}" "$api/$vmid/snapshot/golden" >/dev/null
-        # DELETE returns as soon as the task is queued, so the create below can race it.
-        until ! curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -e '.data[] | select(.name=="golden")' >/dev/null; do sleep 2; done
-    fi
-    # No vmstate: a restore point wants a clean boot, not a resumed one, and RAM would add
-    # the guest's memory size to every snapshot for nothing.
-    curl -sk -X POST "${auth[@]}" --data-urlencode 'snapname={{name}}' \
-        --data-urlencode 'description=Taken by `just lab-snapshot`. Safe to roll back to.' \
-        "$api/$vmid/snapshot" >/dev/null
-    echo "snapshot {{name}} taken on {{guest}} ($vmid)"
+    bash util/lab-vm.sh snapshot {{quote(guest)}} {{quote(name)}}
 
 # Roll a guest back to a restore point: `just lab-revert kali01 [name]`.
 lab-revert guest name="golden":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source util/pve-auth.sh
-    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
-          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
-    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
-    vmid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{guest}}" '.data[] | select(.name==$n) | .vmid')
-    curl -sk "${auth[@]}" "$api/$vmid/snapshot" | jq -er --arg s "{{name}}" '.data[] | select(.name==$s)' >/dev/null \
-        || { echo 'no snapshot named {{name}} on {{guest}}; `just lab-snapshot {{guest}}` takes one' >&2; exit 1; }
-    # A rollback of a running guest is refused, so stop it first rather than making the
-    # caller discover that. Pull the plug: the point of reverting is that this guest's
-    # current state is being discarded, so a clean shutdown would only be slower.
-    if [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.status')" = "running" ]; then
-        echo "stopping {{guest}}"
-        curl -sk -X POST "${auth[@]}" "$api/$vmid/status/stop" >/dev/null
-        until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.status')" = "stopped" ]; do sleep 2; done
-    fi
-    echo "rolling {{guest}} back to {{name}}"
-    curl -sk -X POST "${auth[@]}" "$api/$vmid/snapshot/{{name}}/rollback" >/dev/null
-    # Rollback is a task; starting before it finishes fails.
-    until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.lock // "none"')" = "none" ]; do sleep 3; done
-    curl -sk -X POST "${auth[@]}" "$api/$vmid/status/start" >/dev/null
-    echo "{{guest}} reverted to {{name}} and starting"
+    bash util/lab-vm.sh revert {{quote(guest)}} {{quote(name)}}
 
 # Redeploy a pet from scratch, on the current template, and re-baseline it.
 #
@@ -399,23 +402,21 @@ lab-revert guest name="golden":
 lab-rebuild guest:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> marking {{guest}} for replacement"
-    (cd provisioning && tofu taint "module.{{guest}}.proxmox_virtual_environment_vm.vm")
-    echo "==> recreating {{guest}}"
-    just apply
-    echo "==> waiting for {{guest}} to answer on SSH"
-    ip=$(cd provisioning && tofu output -raw {{guest}}_ipv4 2>/dev/null || true)
-    if [ -z "$ip" ]; then
-        # No output declared for this guest; fall back to the inventory, which is the other
-        # place its address is written down.
-        ip=$(cd ansible && ansible-inventory --host {{guest}} 2>/dev/null | jq -r '.ansible_host')
-    fi
-    until nc -z -G 3 "$ip" 22 2>/dev/null; do sleep 10; done
-    echo "==> configuring {{guest}}"
-    just lab-play site.yml --limit {{guest}}
-    echo "==> taking the golden snapshot"
-    just lab-snapshot {{guest}}
-    echo "{{guest}} rebuilt, configured and snapshotted"
+    guest={{quote(guest)}}
+    [[ "$guest" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || { echo 'Invalid guest name' >&2; exit 1; }
+    ip=$(cd ansible && ansible-inventory --host "$guest" | jq -er '.ansible_host')
+    # Replacement belongs to this apply, not to a persistent taint in state. Cancelling
+    # the displayed plan leaves the VM and state untouched. Scope it to this pet.
+    just apply "-replace=module.$guest.proxmox_virtual_environment_vm.vm" "-target=module.$guest"
+    echo "waiting for $guest to answer on SSH"
+    deadline=$((SECONDS + 900))
+    until nc -z -w 3 "$ip" 22 2>/dev/null; do
+        (( SECONDS < deadline )) || { echo "SSH did not become ready on $guest ($ip)" >&2; exit 1; }
+        sleep 5
+    done
+    just lab-play site.yml --limit "$guest"
+    just lab-snapshot "$guest"
+    echo "$guest rebuilt, configured and snapshotted"
 
 # Throwaway guests, which are deliberately not OpenTofu's business.
 #
@@ -429,95 +430,13 @@ lab-rebuild guest:
 # play you run, not something that has already happened to the box.
 
 # Clone a throwaway guest: `just lab-spawn tpl-win11-pro test01`.
-lab-spawn template name:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source util/pve-auth.sh
-    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
-          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
-    base="${PROXMOX_VE_ENDPOINT}api2/json"
-    api="$base/nodes/proxmox/qemu"
-
-    tplid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{template}}" '.data[] | select(.name==$n and .template==1) | .vmid') \
-        || { echo "no template named {{template}}. Templates: $(curl -sk "${auth[@]}" "$api" | jq -r '.data[]|select(.template==1)|.name' | tr '\n' ' ')" >&2; exit 1; }
-    if curl -sk "${auth[@]}" "$api" | jq -e --arg n "{{name}}" '.data[] | select(.name==$n)' >/dev/null; then
-        echo "a guest named {{name}} already exists" >&2; exit 1
-    fi
-    newid=$(curl -sk "${auth[@]}" "$base/cluster/nextid" | jq -er '.data')
-
-    echo "cloning {{template}} ($tplid) to {{name}} ($newid)"
-    curl -sk -X POST "${auth[@]}" --data-urlencode "newid=$newid" --data-urlencode 'name={{name}}' \
-        --data-urlencode 'full=1' --data-urlencode 'pool=lab' --data-urlencode 'target=proxmox' \
-        "$api/$tplid/clone" >/dev/null
-    # Cloning is a task and the guest does not exist until it finishes.
-    until curl -sk "${auth[@]}" "$api/$newid/config" 2>/dev/null | jq -e '.data' >/dev/null 2>&1 \
-          && [ "$(curl -sk "${auth[@]}" "$api/$newid/status/current" | jq -r '.data.lock // "none"')" = "none" ]; do sleep 3; done
-
-    # The cloud-init user differs by OS and nothing on the template records which is right,
-    # so it is derived from the template name. Kali's cloud image owns the `kali` account and
-    # its sudo rules; Windows has Administrator.
-    case "{{template}}" in
-      *kali*) ciuser=kali ;;
-      *)      ciuser=Administrator ;;
-    esac
-
-    echo "setting cloud-init: user $ciuser, DHCP, technitium"
-    curl -sk -X POST "${auth[@]}" \
-        --data-urlencode "ciuser=$ciuser" \
-        --data-urlencode "cipassword=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)" \
-        --data-urlencode "sshkeys=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)" \
-        --data-urlencode 'ipconfig0=ip=dhcp' \
-        --data-urlencode 'nameserver=10.0.10.2' \
-        --data-urlencode 'searchdomain=lab.internal' \
-        --data-urlencode 'tags=adhoc;lab' \
-        "$api/$newid/config" >/dev/null
-
-    curl -sk -X POST "${auth[@]}" "$api/$newid/status/start" >/dev/null
-    echo "{{name}} ($newid) started. It will take a DHCP lease; find it with:"
-    echo "    ssh root@10.0.10.3 'qm agent $newid network-get-interfaces'"
+lab-spawn template name user="":
+    bash util/lab-vm.sh spawn {{quote(template)}} {{quote(name)}} {{quote(user)}}
 
 # Destroy a throwaway guest: `just lab-despawn test01`.
 lab-despawn name:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source util/pve-auth.sh
-    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}"
-          -H "CSRFPreventionToken: ${PROXMOX_VE_CSRF_PREVENTION_TOKEN}")
-    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
-    guest=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{name}}" '.data[] | select(.name==$n)') \
-        || { echo "no guest named {{name}}" >&2; exit 1; }
-    vmid=$(echo "$guest" | jq -r '.vmid')
-
-    # The guard that makes this safe to type quickly.
-    #
-    # OpenTofu tags everything it declares `terraform`, and templates are tagged `template`.
-    # Refusing both means a slip of the finger cannot destroy the domain controller or the
-    # image everything else is cloned from -- which is the entire difference between a
-    # throwaway and a pet, enforced rather than remembered.
-    tags=$(echo "$guest" | jq -r '.tags // ""')
-    case ";$tags;" in
-      *';terraform;'*|*';template;'*)
-        echo "{{name}} ($vmid) is tagged '$tags': it is declared in OpenTofu or is a template, not a throwaway." >&2
-        echo 'Destroy a declared guest with tofu, and rebuild it with `just lab-rebuild {{name}}`.' >&2
-        exit 1
-        ;;
-    esac
-
-    echo "stopping and destroying {{name}} ($vmid)"
-    curl -sk -X POST "${auth[@]}" "$api/$vmid/status/stop" >/dev/null 2>&1 || true
-    until [ "$(curl -sk "${auth[@]}" "$api/$vmid/status/current" | jq -r '.data.status')" = "stopped" ]; do sleep 2; done
-    curl -sk -X DELETE "${auth[@]}" --data-urlencode 'purge=1' --data-urlencode 'destroy-unreferenced-disks=1' "$api/$vmid" >/dev/null
-    echo "{{name}} destroyed"
+    bash util/lab-vm.sh despawn {{quote(name)}}
 
 # What restore points a guest has: `just lab-snapshots kali01`.
 lab-snapshots guest:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    source util/pve-auth.sh
-    auth=(-H "Cookie: PVEAuthCookie=${PROXMOX_VE_AUTH_TICKET}")
-    api="${PROXMOX_VE_ENDPOINT}api2/json/nodes/proxmox/qemu"
-    vmid=$(curl -sk "${auth[@]}" "$api" | jq -er --arg n "{{guest}}" '.data[] | select(.name==$n) | .vmid')
-    curl -sk "${auth[@]}" "$api/$vmid/snapshot" \
-      | jq -r '.data[] | select(.name != "current")
-               | "\(.name)\t\(.snaptime | strftime("%Y-%m-%d %H:%M"))\t\(.description // "")"' \
-      | sort -k2 | column -t -s $'\t'
+    bash util/lab-vm.sh snapshots {{quote(guest)}}

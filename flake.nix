@@ -154,6 +154,7 @@
           # tooling belongs to the repo.
           packer # unfree (BSL); see nixpkgs.config below
           ansible
+          python3 # local provisioning tests; no VMs or credentials required
           just
           alejandra
           statix

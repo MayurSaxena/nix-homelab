@@ -32,3 +32,6 @@ override.tf.json
 terraform.rc
 # --- direnv (`use flake` in .envrc) ---
 .direnv/
+
+# --- Python validation helpers ---
+__pycache__/
