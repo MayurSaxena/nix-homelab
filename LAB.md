@@ -1,17 +1,14 @@
 # The lab (VLAN 90)
 
-For the current checkpoint, retained templates, test evidence and prioritized next steps,
-read [LAB_HANDOFF.md](LAB_HANDOFF.md) first. This document describes the design and operating
-procedures; declared guests are not necessarily deployed.
-
 The intended lab on `10.0.90.0/24` combines an Active Directory range (`ad.lab.internal`)
 with persistent research workstations and disposable Windows/Linux test guests. The full
-range has not been deployed; see the handoff for what currently exists.
+range has not been deployed; see the validation log at the end of this document for what
+currently exists.
 
 Unlike the NixOS hosts, none of this is configured by the flake. The pipeline is Packer for
-golden images that have to be built, OpenTofu for cloning them into guests, and Ansible for
-building tool images and configuring guest-specific roles. Read `CLAUDE.md` for how that sits beside the LXC pipeline; this
-file covers the lab's own decisions.
+golden images, OpenTofu for cloning them into guests, and Ansible for configuring
+guest-specific roles and installing tooling. Read `CLAUDE.md` for how that sits beside the
+LXC pipeline; this file covers the lab's own decisions.
 
 Two standards apply, and they pull in different directions on purpose:
 
@@ -21,6 +18,65 @@ Two standards apply, and they pull in different directions on purpose:
 - **Everything else works out of the box, or close to it.** A CTF box or a research VM should
   boot, get an address and be usable. If a machine needs a bespoke build to be useful, that is
   a reason to question the machine, not to write more automation.
+
+## End-to-end workflow
+
+Three layers, each built on the previous one:
+
+**Layer 1 — Base OS templates (Packer).** The slow, expensive step (~20 min). Builds a
+Windows template from an ISO. The result is a stopped Proxmox VM, generalized via Sysprep,
+ready to clone. Linux images are downloaded, not built.
+
+```bash
+just packer-build windows win11-pro    # build from ISO (~20 min)
+just packer-build windows ws2025       # Server 2025
+just lab-image kali                    # downloads cloud image, no Packer needed
+```
+
+The template contains: Windows installed, OpenSSH configured, QEMU guest agent + VirtIO
+drivers, Ansible SSH public key, cloudbase-init ready to apply per-VM hostname/password/address
+on first boot. The adapter is left on DHCP.
+
+**Layer 2 — Guest deployment (OpenTofu).** Clones a template into a named VM with a static
+IP, hostname, and the lab password via cloud-init. Persistent guests (`dc01`, `kali01`,
+`ctf01`, `flare01`) are declared in `provisioning/vms.tf`. Throwaway guests use `lab-spawn`
+and skip OpenTofu.
+
+```bash
+just apply -target=module.ctf01        # deploy a declared persistent guest
+just lab-spawn tpl-win11-pro test01    # throwaway clone, DHCP, no HCL needed
+just lab-despawn test01                # destroy a throwaway
+```
+
+**Layer 3 — Configuration (Ansible).** Configures the running guest over SSH. `site.yml`
+handles baselines (RDP, firewall, etc.). Separate playbooks install tooling or join the
+domain.
+
+```bash
+just lab-play site.yml --limit ctf01              # baseline a guest
+just lab-play tools-ctf.yml -e targets=ctf01      # install CTF tools
+just lab-play tools-flare.yml -e targets=flare01  # install FLARE-VM
+just lab-play join.yml -e targets=ctf01            # join to domain (optional)
+```
+
+**Lifecycle after setup.** Snapshot, work, revert:
+
+```bash
+just lab-snapshot ctf01                # take/replace the golden snapshot
+just lab-revert ctf01                  # rewind to golden
+just lab-rebuild ctf01                 # nuke and pave from template + re-ansible
+```
+
+**Full "new CTF workstation" sequence:**
+
+1. `just packer-build windows win11-pro` (skip if template exists)
+2. `just apply -target=module.ctf01`
+3. Wait for SSH: `just lab-play site.yml --limit ctf01`
+4. `just lab-play tools-ctf.yml -e targets=ctf01`
+5. RDP in, run the staged Npcap installer (free license requires GUI)
+6. `just lab-snapshot ctf01`
+
+After that, `just lab-revert ctf01` restores to step 6 in seconds.
 
 ## Addressing and DNS
 
@@ -164,6 +220,46 @@ activation/evaluation state and remaining rearm count before choosing a rebuild 
 `baseline_rearm_evaluation` is off by default; cloning an aging template is not proof of a
 fresh evaluation. A fresh media build and a forest/member recovery plan may be needed.
 
+## CTF and FLARE tool installation
+
+Tools are installed on running guests via Ansible playbooks, not baked into separate
+templates. Every Windows guest — CTF, FLARE, or plain — clones from the same base
+`tpl-win11-pro` template. Stock guests from `tpl-ws2025` remain available too.
+
+```bash
+just lab-play tools-ctf.yml -e targets=ctf01
+just lab-play tools-flare.yml -e targets=flare01
+```
+
+**CTF tools** (`tools-ctf.yml`): installs Chocolatey packages (Wireshark, Ghidra, x64dbg,
+etc.), extracts Nmap via 7-Zip (the NSIS installer hangs headless), stages Npcap, and
+configures Sysinternals. After the playbook finishes, RDP or console in and run the staged
+Npcap installer — the free license requires an interactive GUI install.
+
+**FLARE-VM** (`tools-flare.yml`): checks Tamper Protection, disables Defender via policy,
+reboots, verifies Defender is stopped, then fires the pinned FLARE installer async. The
+SSH connection drops because Boxstarter owns reboots. Monitor progress via RDP; it takes
+roughly an hour. When it finishes, check `C:\ProgramData\_VM\failed_packages.txt` and
+take a golden snapshot.
+
+**Npcap:** the free interactive installer cannot be silently automated (`/S` is OEM-only).
+The playbook stages the checksum-pinned installer at `C:\Windows\Temp\npcap-setup.exe`.
+RDP or console in and run it. During Packer base template builds, this was automated via
+QEMU sendkey console keystrokes, but that mechanism is not used on running guests.
+
+**Nmap:** the Chocolatey package starts AutoHotkey to drive a GUI (hangs headless), and the
+upstream NSIS installer stalls in Session 0. The fix extracts the NSIS package as an archive
+using 7-Zip, which avoids running the installer entirely.
+
+**To create a reusable template from a configured guest:** Sysprep it
+(`C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /quit`), then convert to a
+template with `qm template <vmid>` on the Proxmox host. This is entirely optional — the
+playbook workflow means you can always rebuild tools on a fresh clone.
+
+OpenTofu's `ctf01` and `flare01` both clone from the base `tpl-win11-pro` template.
+Existing persistent guests retain their disks and snapshots when a template is replaced
+because clone-source changes are ignored.
+
 ## The forest, and planned weaknesses
 
 Implemented today: forest/DNS creation, forwarding and the OU tree below. The weakness
@@ -297,38 +393,6 @@ for the console and RDP anyway. Turn it off for anything ever exposed beyond VLA
 seeded with deliberate weaknesses anyway. It is the wrong pattern for anything holding real
 data, and the place to change it is `ci_password` in `provisioning/vms.tf`, which is a
 per-guest argument already.
-
-## CTF and FLARE tool installation
-
-Tools are installed on running guests via Ansible playbooks, not baked into separate
-templates. Every Windows guest — CTF, FLARE, or plain — clones from the same base
-`tpl-win11-pro` template. Stock guests from `tpl-ws2025` remain available too.
-
-```bash
-just lab-spawn tpl-win11-pro ctf01
-just lab-play tools-ctf.yml -e targets=ctf01
-just lab-play tools-flare.yml -e targets=flare01
-```
-
-**CTF tools** (`tools-ctf.yml`): installs Chocolatey packages (Wireshark, Ghidra, x64dbg,
-etc.), extracts Nmap via 7-Zip (the NSIS installer hangs headless), stages Npcap, and
-configures Sysinternals. After the playbook finishes, RDP or console in and run the staged
-Npcap installer — the free license requires an interactive GUI install.
-
-**FLARE-VM** (`tools-flare.yml`): checks Tamper Protection, disables Defender via policy,
-reboots, verifies Defender is stopped, then fires the pinned FLARE installer async. The
-SSH connection drops because Boxstarter owns reboots. Monitor progress via RDP; it takes
-roughly an hour. When it finishes, check `C:\ProgramData\_VM\failed_packages.txt` and
-take a golden snapshot.
-
-**To create a reusable template from a configured guest:** Sysprep it
-(`C:\Windows\System32\Sysprep\sysprep.exe /generalize /oobe /quit`), then convert to a
-template with `qm template <vmid>` on the Proxmox host. This is entirely optional — the
-playbook workflow means you can always rebuild tools on a fresh clone.
-
-OpenTofu's `ctf01` and `flare01` both clone from the base `tpl-win11-pro` template.
-Existing persistent guests retain their disks and snapshots when a template is replaced
-because clone-source changes are ignored.
 
 ## The pet lifecycle
 
@@ -559,7 +623,7 @@ The `virtio-win-gt-x64.msi` alone does not supply the guest agent.
 Snapshots are an optimisation here, not the lifecycle. The forest is built by `microsoft.ad`
 from `ansible/group_vars`, so the source of truth for the domain is the playbook, not a
 snapshot sitting on the node. The intended DC rebuild is a clone, promotion and reboot; see
-the handoff for the unresolved first-boot DFSR/domain-discovery failure. Reproducibility
+the validation log for the unresolved first-boot DFSR/domain-discovery failure. Reproducibility
 requires that **anything worth keeping in the forest
 goes into the role, never only into the running DC.** It is the same invariant the NixOS
 hosts run on, and it is what makes a DC safe to throw away.
@@ -640,8 +704,6 @@ they contradict the repo's rebuild-from-this-repo-alone invariant. Once `qemu-vm
 by the lab, importing them is a `tofu import` per VM plus a module block, and the invariant
 holds for the whole node rather than just the containers.
 
-Keep lab-specific procedures here; `CLAUDE.md` links to the current handoff and this guide.
-
 ## Tooling
 
 The provisioning tools come from this repository's Nix development shell, not the Mac's
@@ -650,7 +712,7 @@ home-manager profile. Use `nix develop` (or the repo's direnv configuration).
 Start with checks that create no VMs:
 
 ```bash
-nix develop --command just lab-check
+just lab-check
 ```
 
 This runs mocked lifecycle tests, shell syntax checks, Packer formatting/HCL syntax,
@@ -688,8 +750,95 @@ Later, an always-on `lab-controller` LXC can take this role over. Nothing under 
 would need to change; it would gain the same two packages and a checkout, and its age key
 would be added to the `secrets/lab.yaml` rule.
 
+## Validation log
 
-## Validation and next steps
+### Checkpoint — 14 September 2026
 
-See [LAB_HANDOFF.md](LAB_HANDOFF.md) for the dated validation record, cleanup inventory,
-remaining failures and the next test sequence.
+Proxmox `10.0.10.3`, node `proxmox`; storage `local-zfs`, ISO storage `local`.
+VLAN 90: `10.0.90.0/24`, gateway `.1`, DHCP `.100–.199`, DNS `10.0.10.2`.
+
+| VMID | Last observed identity | State / meaning |
+|---|---|---|
+| 109 | tpl-win11-pro | Stopped, verified stock Windows 11 template |
+| 114 | tpl-ctf | **Stopped, validated CTF tool template** (built 14 Sep 2026, 24m19s) |
+| 122 | tpl-ws2025 | Stopped Server template; previous successful build/clone tests |
+| 201 | onion | Pre-existing stopped guest; untouched |
+
+Refresh this inventory before acting: IDs have been reused. No persistent lab fleet was
+deployed. The verification clone (ctf-check, VMID 115) was spawned, verified, and destroyed.
+
+**Verified:**
+
+- Full Windows 11 ISO build using the latest encryption/account fixes succeeded (21m35s),
+  producing template 109. Its generated ISO was removed by Packer.
+- Fresh `base-check` clone reached `IMAGE_STATE_COMPLETE`, remained `FullyDecrypted`,
+  applied its hostname, used DHCP, and accepted password-only SSH. The test clone and
+  superseded template 124 were deleted.
+- `just lab-check` passed all regression tests, shell/Packer syntax and formatting,
+  OpenTofu validation, and Ansible syntax checks.
+- Packer's clone builder connected over DHCP and invoked Ansible after fixing IPv4 discovery
+  and adding the missing API permission.
+- CTF tool template built, captured, and clone-verified end-to-end (see below).
+- Earlier live tests proved disposable spawn/despawn and a regular Windows snapshot rollback.
+
+**CTF template validation:**
+
+`just packer-build workstations ctf` completed in 24 minutes 19 seconds, producing
+template 114. Ansible ran 22 ok, 11 changed, 0 failed. Template conversion succeeded.
+Three fixes validated: Nmap 7-Zip extraction (the Chocolatey package hangs headless),
+Npcap QEMU sendkey console automation (free license requires GUI), and Sysprep Appx
+cleanup (Chocolatey's `notepadplusplus` installs a per-user MSIX that Sysprep rejects).
+Clone verification (ctf-check, VMID 115 — destroyed) confirmed: password-only SSH,
+all Chocolatey packages present, Nmap 7.991 functional, Npcap service running,
+dumpcap enumerating interfaces.
+
+**Note:** the CTF template (114) was built with the old `packer/workstations` pipeline
+before the architecture simplification. It remains valid as a template. New CTF guests
+are now configured via `tools-ctf.yml` on running guests cloned from the base template.
+
+**Cloudbase-init behavior notes:**
+
+- `CreateUserPlugin` "can't sign in" log is cosmetic — Sysprep disables Administrator
+  during generalization; cloudbase-init's CreateUserPlugin runs before the specialize
+  Unattend.xml re-enables it. Password is still set correctly.
+- `UserDataPlugin` "unsupported" for password/ssh_authorized_keys/chpasswd is expected —
+  these are handled by dedicated plugins reading from configdrive2 metadata.
+
+**Packer discovery fixes validated:**
+
+1. With Proxmox plugin 1.2.4, setting `vm_interface` selects the first address even if IPv6.
+   Leaving it unset selects IPv4.
+2. The token returned 403 for guest-agent network queries. `VM.GuestAgent.Audit` was added
+   to `PackerBuild` in `provisioning/rbac.tf`.
+
+**FLARE status:** no FLARE installation has been run or tested. The `tools-flare.yml`
+playbook uses pinned/checksummed official installer and config revision
+`4f8769522bda53ab53da2de85def532efaa033ee`. Upstream `-noGui` still calls `Read-Host`;
+the role supplies `-noChecks -noGui -noWait` and fires async. Reboot survival, package
+success, credential cleanup, GUI/Npcap needs, and disk capacity remain unproven.
+
+**DC evidence:** fresh DC deployment, promotion, readiness and configuration passed; a
+second Ansible run changed zero tasks. The test DC was destroyed. **The DFSR recovery
+branch has not been exercised live.** Technitium zone/forwarder configuration and Kali
+fresh deployment remain unverified.
+
+### Remaining gaps
+
+- FLARE playbook has not been tested on a running guest.
+- DC recovery-path (DFSR/domain-discovery failure on first boot) unexercised.
+- Technitium `lab.internal` zone and `ad.lab.internal` conditional forwarder not configured.
+- Kali fresh deployment, Linux disposable validation, full GUI RDP login not performed.
+- Backup/restore, DC evaluation tracking, VM Generation ID on rollback unverified.
+- AD weakness toggles and GPO seeding are proposals, not implemented.
+
+### Safeguards
+
+Use scoped, reviewed plans for persistent validation guests; delete saved plans afterward
+because they contain sensitive data. The lifecycle helper deletes only owned ad-hoc guests.
+Never use historical IDs without checking identity/tags. Keep the Server/stock Windows
+bases and pre-existing guests. Never print passwords, keys, metadata or secret logs.
+
+**Retirement caveat:** `just packer-build` checks deletion responses and waits for tasks,
+but retires a previous matching template after Packer succeeds, before a fresh-clone test.
+Preserve a known-good predecessor until replacement validation when rebuilding an existing
+image. Only ISO builds use fixed `.99`.

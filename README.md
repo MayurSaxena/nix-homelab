@@ -11,9 +11,8 @@ by hand on a running box, it's a bug.
 > model and the decision procedures — how to pick a persistence shape, where a secret
 > belongs, how to size a container — in more depth than this README.
 
-For the Windows/Kali VM automation work, start with [the current handoff](LAB_HANDOFF.md)
-and [the lab guide](LAB.md). The full lab is not deployed; DC unattended rebuild reliability
-is still being resolved.
+For the Windows/Kali VM automation work, see [the lab guide](LAB.md). The full lab is not
+deployed; DC unattended rebuild reliability is still being resolved.
 
 ## Repository Structure
 

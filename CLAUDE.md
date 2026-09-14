@@ -2,10 +2,10 @@
 
 Guide for AI assistants working in this repository.
 
-**Resuming VM automation:** read [LAB_HANDOFF.md](LAB_HANDOFF.md) first, then [LAB.md](LAB.md).
-The 13 September 2026 checkpoint includes cleanup state, tested claims and the unresolved DC
-recovery-path validation gap. The user wants minimal validation guests, not a full lab rollout. Preserve
-the uncommitted work and encrypted secret edits; do not repeat completed builds by default.
+**Resuming VM automation:** read [LAB.md](LAB.md). The validation log at the end includes
+the checkpoint inventory, tested claims and remaining gaps (DC recovery-path, FLARE testing).
+The user wants minimal validation guests, not a full lab rollout. Preserve the working tree
+and encrypted secret edits; do not repeat completed builds by default.
 
 Read this for the *mental model and the decision procedures*. It deliberately does not
 give you a fill-in-the-blanks host template, because the parts that vary — the
