@@ -1,56 +1,97 @@
 ---
-# Mandiant's FLARE-VM, on its own machine and nowhere else.
-#
-# This is not a package list. The installer disables Defender and Windows Update, changes
-# Explorer and UAC settings, and reboots several times over the better part of an hour. That
-# is correct for a malware analysis box and unacceptable on a machine you also want to be a
-# representative domain member, which is why ctf01 exists separately with windows_tools.
-#
-# It is also not idempotent in any useful sense: it is a one-shot bootstrap. The guard below
-# is what keeps this role safe to leave in site.yml, and the reason the real "put it back how
-# it was" mechanism for this box is `just lab-revert flare01` rather than re-running Ansible.
+# Image-build only. Boxstarter owns installer reboots; Packer's retryable, read-only
+# wait-tool-image.ps1 owns the completion gate. An async job ID is never installation success.
+- name: Require an isolated FLARE image build
+  ansible.builtin.assert:
+    that:
+      - tool_image | default('') == 'flare'
+      - inventory_hostname == 'tool-image'
+    fail_msg: Build FLARE with the workstation Packer pipeline, not on a persistent guest.
 
-- name: Read the local administrator password
-  # Read at run time rather than stored in group_vars, so nothing here is a credential.
-  # FLARE-VM's installer needs it to set up its own autologon across the reboots it does.
-  ansible.builtin.set_fact:
-    flare_admin_password: >-
-      {{ lookup('community.sops.sops', lab_secrets_file, extract='["clone-admin-password"]') | trim }}
+- name: Check Defender tamper protection before changing the FLARE image
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      $tamper = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Features' -Name TamperProtection -ErrorAction SilentlyContinue).TamperProtection
+      if ($tamper -eq 5) {
+          throw 'Tamper Protection is enabled. Disable it on this dedicated FLARE build VM before installing; do not weaken the shared Windows base or CTF image.'
+      }
+
+- name: Disable Defender through policy on the FLARE build only
+  ansible.windows.win_regedit:
+    path: '{{ item.path }}'
+    name: '{{ item.name }}'
+    data: 1
+    type: dword
+  loop:
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender', name: DisableAntiSpyware}
+    - {path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection', name: DisableRealtimeMonitoring}
+  register: flare_defender_policy
+
+- name: Reboot after setting FLARE Defender policy
+  ansible.windows.win_reboot:
+  when: flare_defender_policy.changed
+
+- name: Verify Defender is stopped before launching upstream installer
+  ansible.windows.win_powershell:
+    script: |
+      $Ansible.Changed = $false
+      if ((Get-Service WinDefend -ErrorAction SilentlyContinue).Status -eq 'Running') {
+          throw 'Defender remains running; FLARE prerequisites are not met.'
+      }
+
+- name: Create image build status directory
+  ansible.windows.win_file:
+    path: C:\ProgramData\Lab
+    state: directory
+
+- name: Fetch pinned FLARE installer
+  ansible.windows.win_get_url:
+    url: '{{ flare_vm_url }}'
+    dest: C:\Windows\Temp\flare-install.ps1
+    checksum: '{{ flare_vm_checksum }}'
+    checksum_algorithm: sha256
+
+- name: Fetch matching FLARE configuration
+  ansible.windows.win_get_url:
+    url: '{{ flare_vm_config_url }}'
+    dest: C:\Windows\Temp\flare-config.xml
+    checksum: '{{ flare_vm_config_checksum }}'
+    checksum_algorithm: sha256
+
+- name: Initialize the bounded FLARE installation status
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+      foreach ($path in @('C:\ProgramData\_VM\failed_packages.txt', 'C:\ProgramData\Lab\flare-started.txt')) {
+          if (Test-Path $path) { throw 'This is not a clean FLARE build. Start from a new base clone.' }
+      }
+      [DateTime]::UtcNow.ToString('o') | Set-Content C:\ProgramData\Lab\flare-started.txt
+      if ($PSVersionTable.PSVersion.Major -lt 5) { throw 'FLARE requires PowerShell 5 or newer' }
+      if ((Get-Volume -DriveLetter C).Size -lt 60GB) { throw 'FLARE requires at least a 60 GB system volume' }
+      Set-ExecutionPolicy Unrestricted -Scope LocalMachine -Force
+
+- name: Launch the reboot-resilient upstream installer
+  ansible.windows.win_powershell:
+    sensitive_parameters:
+      - name: Credential
+        username: Administrator
+        password: '{{ lookup("community.sops.sops", lab_secrets_file, extract=''["clone-admin-password"]'') | trim }}'
+    script: |
+      param([PSCredential]$Credential)
+      $ErrorActionPreference = 'Stop'
+      try {
+          # This is a bare Packer clone, so there is no per-guest metadata password yet.
+          Set-LocalUser -Name Administrator -Password $Credential.Password
+          # The upstream check UI still calls Read-Host with -noGui (including its
+          # snapshot prompt). Packer supplies a disposable full clone, and the play
+          # validates Windows/workstation, PowerShell, disk and Defender prerequisites.
+          & C:\Windows\Temp\flare-install.ps1 -password ($Credential.GetNetworkCredential().Password) -noWait -noGui -noChecks -customConfig C:\Windows\Temp\flare-config.xml
+          if ($LASTEXITCODE -notin @(0, 3010)) { throw 'Installer returned a failure status' }
+      } catch {
+          'FLARE installer failed; inspect guest installer logs.' | Set-Content C:\ProgramData\Lab\flare-failed.txt
+          throw
+      }
+  async: 7200
+  poll: 0
   no_log: true
-
-- name: Check whether FLARE-VM is already installed
-  ansible.windows.win_stat:
-    path: 'C:\ProgramData\chocolatey\lib\flarevm.installer.vm'
-  register: flare_marker
-
-- name: Warn that Defender will be disabled
-  ansible.builtin.debug:
-    msg: >-
-      Installing FLARE-VM on {{ inventory_hostname }}. This disables Defender and Windows
-      Update, reboots several times, and takes roughly an hour. Take a golden snapshot
-      afterwards with `just lab-snapshot {{ inventory_hostname }}`.
-  when: not flare_marker.stat.exists or flare_vm_force
-
-- name: Install FLARE-VM
-  when: not flare_marker.stat.exists or flare_vm_force
-  block:
-    - name: Fetch the installer
-      ansible.windows.win_get_url:
-        url: "{{ flare_vm_url }}"
-        dest: 'C:\Windows\Temp\flare-install.ps1'
-
-    - name: Run the installer unattended
-      # -noWait is deliberately NOT used: the play should own the install rather than
-      # detaching and reporting success while it is still going.
-      ansible.windows.win_shell: >-
-        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\flare-install.ps1
-        -password '{{ flare_admin_password }}' -noWait:$false -noGui
-      args:
-        creates: 'C:\ProgramData\chocolatey\lib\flarevm.installer.vm'
-      # The installer reboots the box out from under us more than once.
-      async: 7200
-      poll: 60
-      register: flare_install
-      failed_when:
-        - flare_install.rc is defined
-        - flare_install.rc not in [0, 3010]
