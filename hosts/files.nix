@@ -95,10 +95,6 @@
           "recycle:keeptree" = "yes";
           "recycle:versions" = "yes";
           "recycle:exclude_dir" = "tmp quarantine";
-
-          "unix password sync" = "yes";
-          "passwd program" = "/run/wrappers/bin/passwd %u";
-          "passwd chat" = "*Enter\snew\s*\spassword:* %n\n *Retype\snew\s*\spassword:* %n\n *password\supdated\ssuccessfully* .";
         };
         "TimeCapsule" = {
           "writeable" = "yes";
