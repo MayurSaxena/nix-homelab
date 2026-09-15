@@ -1011,13 +1011,11 @@ copy them as precedent:
   its own out-of-band passdb, not because it's the better pattern.
 - `minecraft`'s two disabled toggles and `nix-builder`'s remote-builds and root-password
   carry no explanatory comment, unlike `nix-builder`'s impermanence. Comment yours anyway.
-- **The builder key rotation is half-landed.** The key every host uses now comes from
-  `secrets/common.yaml` (`remote-builder/private-key`) and logs in as the forced-command
-  `nix-ssh` account. Until every host and the Mac have switched past that commit,
-  `hosts/remote-builder.nix` still carries the *old* public key and the old `nix` user
-  (shell, trusted) under `TRANSITIONAL` comments. Remove both once a full autoUpgrade
-  cycle has passed; the old private key is still in git history, which is why it was
-  rotated rather than moved. Never commit a private key under `assets/` again.
+- **The builder key was rotated.** Every host now uses `secrets/common.yaml`
+  (`remote-builder/private-key`) and the forced-command `nix-ssh` account. The old
+  shell-bearing `nix` user and its public key have been removed. The old private key
+  is still in git history, which is why it was rotated rather than moved. Never commit
+  a private key under `assets/` again.
 - **Both YubiKey age identities are PIN=never/touch=never, and `secrets/msaxena.yaml`
   holds the Proxmox root password together with its TOTP seed.** Deliberate, so login-time
   decryption and `just apply` run unattended — but it means a plugged-in YubiKey is a single

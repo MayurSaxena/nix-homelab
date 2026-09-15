@@ -31,24 +31,6 @@
     trusted = true;
     keys = [
       (builtins.readFile ./../assets/remote-builder.pub)
-      # TRANSITIONAL -- remove with the `nix` user below once every host and
-      # the Mac have switched to the rotated key (one autoUpgrade cycle after
-      # this lands). Hosts still on the old config connect with this key.
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIId8MHk0je00VbyRtjvTfHIIvXPyMi93SuU30rNi5d5N"
     ];
   };
-
-  # TRANSITIONAL -- the account the old key logged in as, kept only so hosts
-  # that haven't yet upgraded past the key rotation can still build tonight.
-  # It has a shell and is a trusted user, which is exactly the problem the
-  # rotation fixes; delete this block and the trusted-users line together
-  # with the old key above.
-  users.users.nix = {
-    createHome = true;
-    isNormalUser = true;
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIId8MHk0je00VbyRtjvTfHIIvXPyMi93SuU30rNi5d5N"
-    ];
-  };
-  nix.settings.trusted-users = ["nix"];
 }
