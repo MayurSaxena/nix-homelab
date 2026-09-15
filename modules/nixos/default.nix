@@ -70,17 +70,21 @@
         "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIPRoNwOsZ2aVCvntOlrVKxVku+kXu8UigYvpEblIYqooAAAABHNzaDo= YubiBlack"
       ];
     };
-    # system wide packages
-    environment.systemPackages = with pkgs; [
-      age
-      age-plugin-yubikey
-      sops
-      git
-    ];
 
-    environment.shellAliases = {
-      ll = "ls -al";
-      ".." = "cd ..";
+    environment = {
+      systemPackages = with pkgs; [
+        age
+        age-plugin-yubikey
+        sops
+        git
+      ];
+
+      shellAliases = {
+        ll = "ls -al";
+        ".." = "cd ..";
+      };
+
+      enableAllTerminfo = true;
     };
 
     # Configure SSH to be allowed through firewall, only allow key-based root access
