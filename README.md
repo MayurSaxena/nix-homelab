@@ -21,10 +21,9 @@ flake.nix              # Entry point — inputs, both config builders, every hos
 justfile               # `just` recipes for the commands with flags worth not retyping
 hosts/                 # Per-host NixOS and macOS configurations
 modules/
-  nixos/               # Base NixOS module + the custom.* capability modules
+  nixos/               # Base NixOS module + the custom.* capability modules + beszel agent
   macos/               # Base macOS config, packages, remote builds, auto-upgrade
   home-manager/        # The Mac user: packages, shell, git/ssh, window manager
-  beszel-agent.nix     # Monitoring agent (NixOS-only, imported by the NixOS base)
 provisioning/          # OpenTofu configs for Proxmox LXC and QEMU guests
 packer/                # Windows golden-image builds
 ansible/               # Lab baseline, DC, workstation and domain-join roles
@@ -105,8 +104,7 @@ Both deploy recipes build on `nix-builder` explicitly (`--build-host`/`--target-
 LXCs get only as much RAM as their service needs, so building on the container itself can hit
 the OOM killer. Root SSH is YubiKey-hardware-key-only on every host, so both need someone at
 the keyboard — run them yourself, or ask Claude to. `<flake-host-key>` is the attribute name
-in `nixosConfigurations`, which isn't always the module name in `provisioning/main.tf`
-(`dns-server` → `dns`, `plex-server` → `plex`, `fileserver` → `files`).
+in `nixosConfigurations`, which matches the module name in `provisioning/main.tf`.
 
 ### Base Images
 

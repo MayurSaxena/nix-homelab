@@ -2,8 +2,8 @@ output "nix-builder" {
   value = "${module.nix-builder.ct_id}: ${module.nix-builder.ct_address.v4[0]} ${module.nix-builder.ct_address.v6[0]}"
 }
 
-output "dns-server" {
-  value = "${module.dns-server.ct_id}: ${module.dns-server.ct_address.v4[0]} ${module.dns-server.ct_address.v6[0]}"
+output "dns" {
+  value = "${module.dns.ct_id}: ${module.dns.ct_address.v4[0]} ${module.dns.ct_address.v6[0]}"
 }
 
 output "actualbudget" {
@@ -18,8 +18,8 @@ output "homepage" {
   value = "${module.homepage.ct_id}: ${module.homepage.ct_address.v4[0]} ${module.homepage.ct_address.v6[0]}"
 }
 
-output "plex-server" {
-  value = "${module.plex-server.ct_id}: ${module.plex-server.ct_address.v4[0]} ${module.plex-server.ct_address.v6[0]}"
+output "plex" {
+  value = "${module.plex.ct_id}: ${module.plex.ct_address.v4[0]} ${module.plex.ct_address.v6[0]}"
 }
 
 output "overseerr" {
@@ -34,8 +34,8 @@ output "minecraft" {
   value = "${module.minecraft.ct_id}: ${module.minecraft.ct_address.v4[0]} ${module.minecraft.ct_address.v6[0]}"
 }
 
-output "fileserver" {
-  value = "${module.fileserver.ct_id}: ${module.fileserver.ct_address.v4[0]} ${module.fileserver.ct_address.v6[0]}"
+output "files" {
+  value = "${module.files.ct_id}: ${module.files.ct_address.v4[0]} ${module.files.ct_address.v6[0]}"
 }
 
 output "caddy" {

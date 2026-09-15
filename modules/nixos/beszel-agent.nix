@@ -36,7 +36,7 @@ in {
 
     sops.secrets."beszel-agent-secrets" = {
       format = "dotenv";
-      sopsFile = ./../secrets/beszel-agent.env;
+      sopsFile = ./../../secrets/beszel-agent.env;
       restartUnits = ["beszel-agent.service"];
     };
 

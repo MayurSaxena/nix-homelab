@@ -19,7 +19,7 @@
     ./remote-builds.nix
     ./root-password.nix
     ./failure-notifications.nix
-    ../beszel-agent.nix
+    ./beszel-agent.nix
   ];
 
   config = {

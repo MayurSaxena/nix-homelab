@@ -171,7 +171,7 @@
 
     # All NixOS builds go here, where key is hostname and value is the config file
     nixosConfigurations = let
-      baseLxc = ./hosts/base-nixos-lxc-proxmox.nix;
+      baseLxc = ./hosts/base-lxc.nix;
     in {
       # CI image — one base file, no variants. Impermanence isn't pre-baked
       # (OpenTofu creates the persistent mounts, and the host's own flake
@@ -180,12 +180,12 @@
       # --build-host/--target-host explicitly (see provisioning/onboard-host.sh).
       "base-lxc" = mkNixOSConfig baseLxc;
 
-      "nix-builder" = mkNixOSConfig ./hosts/remote-builder.nix;
-      "dns" = mkNixOSConfig ./hosts/dns-server.nix;
+      "nix-builder" = mkNixOSConfig ./hosts/nix-builder.nix;
+      "dns" = mkNixOSConfig ./hosts/dns.nix;
       "actualbudget" = mkNixOSConfig ./hosts/actualbudget.nix;
       "sabnzbd" = mkNixOSConfig ./hosts/sabnzbd.nix;
-      "homepage" = mkNixOSConfig ./hosts/homepage-dashboard.nix;
-      "plex" = mkNixOSConfig ./hosts/plex-server.nix;
+      "homepage" = mkNixOSConfig ./hosts/homepage.nix;
+      "plex" = mkNixOSConfig ./hosts/plex.nix;
       "overseerr" = mkNixOSConfig ./hosts/overseerr.nix;
       "paperless" = mkNixOSConfig ./hosts/paperless.nix;
       "minecraft" = mkNixOSConfig [

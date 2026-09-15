@@ -27,9 +27,7 @@
 # whatever's on GitHub the next time it runs, since nothing was committed.
 #
 # <flake-host-key> is the attribute name under `nixosConfigurations` in
-# flake.nix — NOT necessarily the module/output name in provisioning/main.tf
-# or outputs.tf. Three hosts differ: module dns-server -> flake key dns,
-# module plex-server -> flake key plex, module fileserver -> flake key files.
+# flake.nix, which now matches the module name in provisioning/main.tf.
 #
 # <container-ip> is whatever tofu apply / tofu output just printed.
 #
@@ -68,8 +66,7 @@ cd "${repo_root}"
 
 if ! nix eval ".#nixosConfigurations.${host}.config.system.stateVersion" >/dev/null 2>&1; then
   echo "ERROR: no nixosConfigurations.\"${host}\" in flake.nix." >&2
-  echo "Check the flake key, not the provisioning/main.tf module name — e.g. the" >&2
-  echo "dns-server module is flake key 'dns', plex-server is 'plex', fileserver is 'files'." >&2
+  echo "Check the flake key — it matches the module name in provisioning/main.tf." >&2
   exit 1
 fi
 

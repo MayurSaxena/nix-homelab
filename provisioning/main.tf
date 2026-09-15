@@ -44,7 +44,12 @@ module "nix-builder" {
   tags               = ["terraform", "builder"]
 }
 
-module "dns-server" {
+moved {
+  from = module.dns-server
+  to   = module.dns
+}
+
+module "dns" {
   source                = "./modules/nixos-lxc"
   pve_node_name         = var.pve_node_name
   ct_description        = "Technitium DNS Server (Terraform)"
@@ -137,7 +142,12 @@ module "homepage" {
   tags                  = ["terraform", "access", "visualisation"]
 }
 
-module "plex-server" {
+moved {
+  from = module.plex-server
+  to   = module.plex
+}
+
+module "plex" {
   source                = "./modules/nixos-lxc"
   pve_node_name         = var.pve_node_name
   ct_description        = "Plex Media Server (Terraform)"
@@ -229,7 +239,12 @@ module "minecraft" {
   tags                = ["terraform", "games"]
 }
 
-module "fileserver" {
+moved {
+  from = module.fileserver
+  to   = module.files
+}
+
+module "files" {
   source                = "./modules/nixos-lxc"
   pve_node_name         = var.pve_node_name
   ct_description        = "File Server (Terraform)"

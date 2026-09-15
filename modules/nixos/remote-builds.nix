@@ -44,7 +44,7 @@ in {
           # nix-ssh is the account nix.sshServe creates on the builder. sshd
           # forces `nix-store --serve --write` for it and denies TTY, port
           # forwarding and tunnels, so the key buys store access and nothing
-          # else -- see hosts/remote-builder.nix.
+          # else -- see hosts/nix-builder.nix.
           sshUser = "nix-ssh";
           sshKey = key;
           maxJobs = 3;

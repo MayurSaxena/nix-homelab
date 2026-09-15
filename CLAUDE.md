@@ -119,7 +119,7 @@ modules/macos/         nix-darwin equivalents (deliberately not shared with NixO
 modules/home-manager/  The Mac user. msaxena.nix (packages, secrets, theme) imports
                        shell.nix, git.nix and aerospace.nix; vscode/settings.json is
                        symlinked out-of-store so VS Code can still write it
-modules/beszel-agent.nix   Monitoring agent (NixOS-only despite the location; imported by the NixOS base)
+modules/nixos/beszel-agent.nix   Monitoring agent (NixOS-only; imported by the NixOS base)
 provisioning/          OpenTofu: container definitions and base-image downloads
 secrets/               SOPS-encrypted files
 assets/                Files committed in the clear — hookscript and public keys. Anything
@@ -309,7 +309,7 @@ The base module already persists `/var/log`, `/var/lib/nixos`, `/var/lib/systemd
 ### Step 1 — is a block needed at all?
 
 If `custom.impermanence.enable = false`, write nothing. If true, it still might be nothing:
-`homepage-dashboard.nix` is 300+ lines, impermanent, and has no persistence block, because
+`homepage.nix` is 300+ lines, impermanent, and has no persistence block, because
 its config is fully generated from Nix and its secrets are re-decrypted from SOPS each boot.
 Decide from whether the service writes state *you care about surviving*, not from the toggle.
 
@@ -836,9 +836,8 @@ first avoids the trap entirely rather than working around it.
    deployed reveals it. This applies to *any* manual switch against a `github:` ref for this
    repo, not just onboarding (e.g. redeploying `caddy` right after pushing a fix).
 
-   `<flake-host-key>` is the `nixosConfigurations` attribute name, which isn't always the
-   `provisioning/main.tf` module name (`dns-server` → `dns`, `plex-server` → `plex`,
-   `fileserver` → `files`). Root SSH is YubiKey-hardware-key-only on every host, so both steps
+   `<flake-host-key>` is the `nixosConfigurations` attribute name, which matches the
+   `provisioning/main.tf` module name. Root SSH is YubiKey-hardware-key-only on every host, so both steps
    6 and 8 need someone at the keyboard — for *both* legs: `root@nix-builder` reuses the same
    YubiKey-gated identity already required for `root@<container-ip>`, rather than the
    `nix-ssh@nix-builder` account, whose key (`/etc/nix/remote-builder-key` on the Mac,
