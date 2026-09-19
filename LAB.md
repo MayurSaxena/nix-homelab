@@ -208,10 +208,12 @@ requires an existing cloud-init-capable template, and arbitrary Linux templates 
 correct image username. A live ISO/appliance without cloud-init needs a separate bootstrap
 path; the existing helper does not automate its installation.
 
-The Windows Packer catalog currently supports `ws2025` (Server 2025 Standard Evaluation,
-Desktop Experience) and `win11-pro`. Both persistent Windows workstations use the Pro
-base. Adding a catalog key also requires updating the explicit `target` validation list;
-it is not only an ISO filename change.
+The Windows Packer catalog (`packer/windows/build.pkr.hcl`) defines every supported
+version. Adding a modern Windows version (Win10+) is a catalog entry and nothing else:
+add the entry with `iso`, `image_name` (from `dism /get-wiminfo`), `virtio_dir` (from
+the virtio-win ISO), `product_key`, sizing, and `os` (PVE ostype), then run
+`just lab-image <key>`. The validation and justfile dispatch derive from the catalog
+automatically.
 
 Do not infer licensing entitlement or unlimited evaluation renewal from successful builds.
 The previous claim that every clone gets a fresh full evaluation period regardless of

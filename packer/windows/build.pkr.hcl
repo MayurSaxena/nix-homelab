@@ -24,12 +24,8 @@ variable "target" {
   type        = string
   description = "Which catalog entry to build. `just packer-build windows <target>` sets this."
 
-  # Fails in a second, with the list, rather than on a raw map-lookup error. The list is
-  # spelled out because a Packer validation block may not reference locals.
-  validation {
-    condition     = contains(["ws2025", "win11-pro"], var.target)
-    error_message = "Target must be one of: ws2025, win11-pro."
-  }
+  # Validated by the check block below, which can reference locals and auto-lists the
+  # catalog keys in its error message. No manual sync needed when adding an entry.
 }
 
 locals {
@@ -46,6 +42,10 @@ locals {
   #
   # product_key is empty for both and is expected to stay that way; see the UserData
   # comment in the answer file for when it would not be.
+  #
+  # os is the PVE ostype. win11 covers Win11 and Server 2022/2025; a Win10 entry would
+  # use win10. All win* types generate configdrive2 for cloud-init, so cloudbase-init's
+  # metadata path is unaffected. See LAB.md for what changing it would break.
   catalog = {
     ws2025 = {
       iso         = "local:iso/windows-server-2025-eval.iso"
@@ -56,6 +56,7 @@ locals {
       cores       = 4
       memory      = 4096
       disk_size   = "60G"
+      os          = "win11"
     }
     win11-pro = {
       iso         = "local:iso/windows-11-pro.iso"
@@ -66,16 +67,24 @@ locals {
       cores       = 4
       memory      = 4096
       disk_size   = "80G"
+      os          = "win11"
     }
   }
 
-  t = local.catalog[var.target]
+  t = lookup(local.catalog, var.target, null)
 
   # Every template is named and tagged after its catalog key, so OpenTofu finds it by tag
   # (see provisioning/vms.tf) and the build recipe knows which older template to retire.
   # PVE joins tags with semicolons.
   template_name = "tpl-${var.target}"
   tags          = "template;${var.target}"
+}
+
+check "target_exists" {
+  assert {
+    condition     = local.t != null
+    error_message = "Unknown target '${var.target}'. Known: ${join(", ", keys(local.catalog))}."
+  }
 }
 
 variable "proxmox_url" {
@@ -206,11 +215,10 @@ source "proxmox-iso" "windows" {
   cores    = local.t.cores
   memory   = local.t.memory
 
-  # win11 is PVE's newest Windows ostype and is correct for Server 2025 as well. It is
-  # also what makes Proxmox generate a configdrive2 cloud-init drive carrying the
-  # administrator password, which is how a clone gets a password we know. Changing it to
-  # an older type silently breaks that; see LAB.md.
-  os = "win11"
+  # PVE ostype, from the catalog. All win* types generate configdrive2 for cloud-init,
+  # which is how a clone gets a password we know. Changing to a non-win* type silently
+  # breaks that; see LAB.md.
+  os = local.t.os
 
   scsi_controller = "virtio-scsi-single"
   disks {

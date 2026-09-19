@@ -341,17 +341,15 @@ lab-image name:
     #!/usr/bin/env bash
     set -euo pipefail
     case "{{name}}" in
-      ws2025|win11-pro)
-        exec just packer-build windows "{{name}}"
-        ;;
       kali)
         base="https://kali.download/cloud-images/current"
         member="disk.raw"   # what is inside the tar
         out="kali-cloud-amd64.img"
         ;;
       *)
-        echo "unknown image '{{name}}'. Known: ws2025, win11-pro, kali" >&2
-        exit 1
+        # Windows targets are validated by the Packer catalog in build.pkr.hcl, which
+        # lists known targets in its error message. No need to enumerate them here.
+        exec just packer-build windows "{{name}}"
         ;;
     esac
 

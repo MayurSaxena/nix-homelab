@@ -11,45 +11,52 @@
 # built alongside the one it replaces and the old one retired only once the new one exists.
 # Nothing here needs to know a number, and nothing needs a block of ids reserved in advance.
 #
-# `one()` is the assertion, not a convenience: it returns null when no template carries the
-# tag and errors outright when more than one does. Both are worth failing on. Two matches
-# means a build is in flight or a retirement did not complete, and cloning in that window
-# would silently pick an arbitrary one.
-data "proxmox_virtual_environment_vms" "ws2025_template" {
-  tags = ["template", "ws2025"]
+# Add a tag to the set when a new Windows version enters the Packer catalog and a declared
+# VM below needs to clone from it. Templates built by Packer but only used for ad-hoc
+# clones (just lab-spawn) do not need an entry here.
+locals {
+  windows_template_tags = toset(["ws2025", "win11-pro"])
+}
+
+data "proxmox_virtual_environment_vms" "windows_template" {
+  for_each = local.windows_template_tags
+  tags     = ["template", each.value]
 
   filter {
     name   = "template"
     values = ["true"]
   }
 
-  # Without this, "no template" surfaces as "Attempt to get attribute from null value",
-  # which names neither the tag nor the fix.
+  # `one()` is the assertion, not a convenience: it returns null when no template carries
+  # the tag and errors outright when more than one does. Both are worth failing on. Two
+  # matches means a build is in flight or a retirement did not complete, and cloning in
+  # that window would silently pick an arbitrary one.
+  #
+  # Without this postcondition, "no template" surfaces as "Attempt to get attribute from
+  # null value", which names neither the tag nor the fix.
   lifecycle {
     postcondition {
       condition     = length(self.vms) == 1
-      error_message = "Expected exactly one template tagged ws2025, found ${length(self.vms)}. None means it has not been built yet: run `just packer-build windows ws2025`. More than one means a build is in flight, or a retirement did not finish."
+      error_message = "Expected exactly one template tagged ${each.value}, found ${length(self.vms)}. Build it with `just lab-image ${each.value}`."
     }
   }
 }
 
-data "proxmox_virtual_environment_vms" "win11_pro_template" {
-  tags = ["template", "win11-pro"]
-  filter {
-    name   = "template"
-    values = ["true"]
-  }
-  lifecycle {
-    postcondition {
-      condition     = length(self.vms) == 1
-      error_message = "Expected exactly one template tagged win11-pro, found ${length(self.vms)}. Build it with just packer-build windows win11-pro."
-    }
-  }
+moved {
+  from = data.proxmox_virtual_environment_vms.ws2025_template
+  to   = data.proxmox_virtual_environment_vms.windows_template["ws2025"]
+}
+
+moved {
+  from = data.proxmox_virtual_environment_vms.win11_pro_template
+  to   = data.proxmox_virtual_environment_vms.windows_template["win11-pro"]
 }
 
 locals {
-  ws2025_template_id    = one(data.proxmox_virtual_environment_vms.ws2025_template.vms).vm_id
-  win11_pro_template_id = one(data.proxmox_virtual_environment_vms.win11_pro_template.vms).vm_id
+  template_id = {
+    for tag in local.windows_template_tags :
+    tag => one(data.proxmox_virtual_environment_vms.windows_template[tag].vms).vm_id
+  }
 }
 
 module "dc01" {
@@ -58,7 +65,7 @@ module "dc01" {
 
   vm_name        = "dc01"
   vm_description = "ad.lab.internal domain controller (Terraform)"
-  template_vm_id = local.ws2025_template_id
+  template_vm_id = local.template_id["ws2025"]
 
   os_type = "win11" # covers Server 2022/2025 as well as Windows 11
   bios    = "ovmf"
@@ -222,7 +229,7 @@ module "ctf01" {
 
   vm_name        = "ctf01"
   vm_description = "CTF and security research workstation (Terraform)"
-  template_vm_id = local.win11_pro_template_id
+  template_vm_id = local.template_id["win11-pro"]
 
   os_type = "win11"
   bios    = "ovmf"
@@ -252,7 +259,7 @@ module "flare01" {
 
   vm_name        = "flare01"
   vm_description = "FLARE-VM malware analysis box (Terraform)"
-  template_vm_id = local.win11_pro_template_id
+  template_vm_id = local.template_id["win11-pro"]
 
   os_type = "win11"
   bios    = "ovmf"
