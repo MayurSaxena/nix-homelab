@@ -168,10 +168,59 @@ resource "proxmox_virtual_environment_vm" "vm" {
   # rebuilt from a playbook; there is no state in them worth a clean unmount.
   stop_on_destroy = true
 
+  # Remove the cloud-init CD-ROM after the guest has consumed it. The drive holds the
+  # bootstrap password in plaintext metadata, and leaving it mounted is leaving a credential
+  # on a virtual disc anyone with console access can read.
+  #
+  # By the time this provisioner fires the provider has already waited for the guest agent
+  # (agent.enabled = true), so cloud-init / cloudbase-init has finished and the drive is no
+  # longer needed. The PVE API credentials are in the environment from `source
+  # util/pve-auth.sh`, which is a prerequisite for any tofu apply in this repo.
+  provisioner "local-exec" {
+    command = <<-EOT
+      endpoint="$PROXMOX_VE_ENDPOINT"
+      ticket="$PROXMOX_VE_AUTH_TICKET"
+      csrf="$PROXMOX_VE_CSRF_PREVENTION_TOKEN"
+      node="${var.pve_node_name}"
+      vmid="${self.vm_id}"
+
+      # Nothing to eject when there was no cloud-init drive.
+      if [ "${var.enable_cloud_init}" != "true" ]; then exit 0; fi
+
+      if [ -z "$endpoint" ] || [ -z "$ticket" ]; then
+        echo "WARN: PVE API credentials not in environment; skipping cloud-init drive removal." >&2
+        echo "Run manually: ssh root@$node qm set $vmid --delete ide2" >&2
+        exit 0
+      fi
+
+      # Strip a trailing slash so the path join is clean.
+      endpoint="$${endpoint%/}"
+
+      result=$(curl -s -k \
+        -H "Cookie: PVEAuthCookie=$ticket" \
+        -H "CSRFPreventionToken: $csrf" \
+        -X PUT \
+        "$endpoint/api2/json/nodes/$node/qemu/$vmid/config" \
+        -d "delete=ide2" 2>&1)
+
+      if echo "$result" | grep -q '"data"'; then
+        echo "cloud-init drive (ide2) removed from vmid $vmid"
+      else
+        echo "WARN: could not remove cloud-init drive from vmid $vmid: $result" >&2
+        echo "Run manually: ssh root@$node qm set $vmid --delete ide2" >&2
+      fi
+    EOT
+  }
+
   # Publishing a newer template must not replace a persistent workstation during an
   # unrelated apply. `lab-rebuild` explicitly requests replacement, which uses the current
   # template configuration when creating the new VM.
+  #
+  # initialization is ignored because the provisioner above removes the cloud-init drive
+  # after the guest consumes it. Without this, the next apply would see "ide2 missing but
+  # declared" and re-attach the drive, undoing the removal. Cloud-init only runs on first
+  # boot, so there is nothing to update afterward.
   lifecycle {
-    ignore_changes = [clone]
+    ignore_changes = [clone, initialization]
   }
 }
