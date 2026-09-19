@@ -13,7 +13,7 @@
 # mount points itself, and the host's own flake turns impermanence on during
 # the first `nixos-rebuild switch`.
 
-resource "proxmox_virtual_environment_download_file" "nixos-standard-nightly" {
+resource "proxmox_download_file" "nixos-standard-nightly" {
   content_type = "vztmpl"
   datastore_id = "local"
   file_name    = "nixos-standard-nightly.tar.xz"
@@ -45,7 +45,7 @@ resource "proxmox_virtual_environment_download_file" "nixos-standard-nightly" {
 # Enterprise template later.
 # ---------------------------------------------------------------------------
 
-resource "proxmox_virtual_environment_download_file" "windows_server_2025_eval" {
+resource "proxmox_download_file" "windows_server_2025_eval" {
   content_type = "iso"
   datastore_id = "local"
   file_name    = "windows-server-2025-eval.iso"
@@ -66,7 +66,7 @@ resource "proxmox_virtual_environment_download_file" "windows_server_2025_eval" 
   overwrite = true
 }
 
-resource "proxmox_virtual_environment_download_file" "virtio_win" {
+resource "proxmox_download_file" "virtio_win" {
   content_type = "iso"
   datastore_id = "local"
   file_name    = "virtio-win.iso"

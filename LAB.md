@@ -167,7 +167,7 @@ Windows is that case, and essentially the only one: Microsoft ships no cloud ima
 usable Windows guest has to be built. That build is why `packer/` exists.
 
 Most Linux distributions publish a cloud image that already carries cloud-init, which is the
-bulk of what a Packer build would add. For those there is no build step at all: `proxmox_virtual_environment_download_file` with `content_type = "import"`
+bulk of what a Packer build would add. For those there is no build step at all: `proxmox_download_file` with `content_type = "import"`
 fetches the qcow2, a `disk { import_from = ... }` builds the guest straight from it, and
 Ansible does the rest. Less to write than a Packer template, and nothing to maintain.
 
