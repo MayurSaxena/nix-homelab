@@ -92,7 +92,7 @@
 - name: Fail if password authentication did not take effect
   ansible.builtin.assert:
     that:
-      - "'passwordauthentication ' ~ ('yes' if linux_ssh_password_auth else 'no') in sshd_effective.stdout"
+      - "'passwordauthentication ' ~ ('yes' if linux_ssh_password_auth else 'no') in sshd_effective.stdout | lower"
     fail_msg: >-
       sshd's effective PasswordAuthentication is not what linux_ssh_password_auth asked for.
       Another drop-in in /etc/ssh/sshd_config.d/ is probably overriding 99-lab.conf.
