@@ -28,7 +28,7 @@ windows_tools_packages:
   - vscode
   - putty
   - winscp
-  - GoogleChrome
+  - chromium
 
 # Chocolatey will happily sit for an hour on a package that wants input. Fail instead.
 windows_tools_timeout: 1800
