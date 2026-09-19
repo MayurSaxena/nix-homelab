@@ -57,3 +57,19 @@ output "yamtrack" {
 output "trek" {
   value = "${module.trek.ct_id}: ${module.trek.ct_address.v4[0]} ${module.trek.ct_address.v6[0]}"
 }
+
+output "dc01" {
+  value = "${module.dc01.vm_id}: ${join(" ", module.dc01.vm_address.v4)}"
+}
+
+output "kali01" {
+  value = "${module.kali01.vm_id}: ${join(" ", module.kali01.vm_address.v4)}"
+}
+
+output "ctf01" {
+  value = "${module.ctf01.vm_id}: ${join(" ", module.ctf01.vm_address.v4)}"
+}
+
+output "flare01" {
+  value = "${module.flare01.vm_id}: ${join(" ", module.flare01.vm_address.v4)}"
+}

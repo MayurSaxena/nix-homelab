@@ -106,6 +106,15 @@ apply *args:
     ssh-add -q ~/.ssh/id_ed25519 2>/dev/null || echo "warning: could not load ~/.ssh/id_ed25519 into ssh-agent; operations that go over SSH to the node will fail" >&2
     cd provisioning && tofu apply {{args}}
 
+# Refresh OpenTofu state from Proxmox (picks up guest-agent-reported IPs, etc.).
+refresh *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source util/pve-auth.sh
+    export TF_VAR_lab_admin_password=$(sops -d --extract '["clone-admin-password"]' secrets/lab.yaml)
+    export TF_VAR_lab_ansible_public_key=$(sops -d --extract '["ansible-ssh-public-key"]' secrets/lab.yaml)
+    cd provisioning && tofu apply -refresh-only {{args}}
+
 # Delete old system generations, keeping the last five.
 gc:
     nh clean all --keep 5
