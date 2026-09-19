@@ -84,6 +84,11 @@ resource "proxmox_acl" "packer" {
   for_each = {
     # Create, configure and destroy the build VM, and the template it becomes.
     "/pool/${proxmox_virtual_environment_pool.lab.pool_id}" = true
+    # VM.Config.* during creation: PVE checks config privileges against /vms/<id>, not
+    # the pool, because the VM isn't a pool member yet when the permission check runs.
+    # VM.Allocate gets special handling (it checks the pool param), but VM.Config.Options
+    # et al. do not, so without this the first "Creating VM" call 403s on agent:1.
+    "/vms" = true
     # Read the install ISOs; upload and remove the generated autounattend ISO.
     "/storage/local" = true
     # Allocate the build VM's disks, EFI vars and TPM state.
