@@ -5,6 +5,7 @@
 linux_desktop_packages:
   - kali-desktop-xfce
   - xrdp
+  - network-manager-openvpn-gnome
 
 # The desktop is a couple of gigabytes. Worth knowing before it runs on a box you thought
 # was minimal, hence its being a separate role rather than part of linux_baseline.

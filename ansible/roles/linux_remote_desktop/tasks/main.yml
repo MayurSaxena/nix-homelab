@@ -6,7 +6,7 @@
 # That is the right default for a cloud image and the wrong one for a box you want to sit in
 # front of, so this role is opt-in per host rather than part of linux_baseline.
 
-- name: Install the desktop and xrdp
+- name: Install the desktop, xrdp and VPN GUI
   ansible.builtin.apt:
     name: "{{ linux_desktop_packages }}"
     state: present
@@ -29,6 +29,20 @@
   loop:
     - xrdp
     - xrdp-sesman
+
+- name: Switch netplan renderer to NetworkManager
+  # The cloud image's netplan defaults to the networkd renderer, which leaves eth0
+  # "unmanaged" from NetworkManager's point of view. NM greys out VPN connections when it has
+  # no active connection it manages, so the OpenVPN GUI applet is unusable until NM owns the
+  # interface. Inserting the renderer line into the existing cloud-init-generated netplan is
+  # simpler than templating the whole file, which would need per-host IP/MAC values that
+  # cloud-init already supplies.
+  ansible.builtin.lineinfile:
+    path: /etc/netplan/50-cloud-init.yaml
+    insertafter: "^\\s+version:\\s+2"
+    line: "  renderer: NetworkManager"
+  become: true
+  notify: Apply netplan
 
 - name: Point xrdp sessions at XFCE
   # Without this xrdp authenticates, shows a grey screen and drops the session, which looks
