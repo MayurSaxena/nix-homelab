@@ -77,14 +77,18 @@
         age-plugin-yubikey
         sops
         git
+        # Ghostty's terminfo, so `ssh <host>` from the Mac gets a working TERM=xterm-ghostty
+        # (ncurses only ships a plain `ghostty` entry). Deliberately not enableAllTerminfo:
+        # that builds every terminal nixpkgs knows about just for its terminfo output, and
+        # any one of them failing to build -- rxvt-unicode under GCC 16, from 2026-09-30 --
+        # fails every host's autoUpgrade and the nightly image along with it.
+        ghostty.terminfo
       ];
 
       shellAliases = {
         ll = "ls -al";
         ".." = "cd ..";
       };
-
-      enableAllTerminfo = true;
     };
 
     # Configure SSH to be allowed through firewall, only allow key-based root access
