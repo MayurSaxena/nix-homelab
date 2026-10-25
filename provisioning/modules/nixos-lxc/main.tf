@@ -161,10 +161,17 @@ if [ -z "$age_key" ]; then
   exit 1
 fi
 echo "derived age key for ${self.initialization[0].hostname}: $age_key"
-sed -i '' -r "/^.+&all-keys.*$/a\\
+# `-i.bak -E`, not `-i '' -r`: the devShell puts GNU sed ahead of macOS's BSD sed, and
+# GNU reads a bare '' as the script, rewrites the file unchanged and exits 2. That
+# silently skipped this splice while apply still reported success, so verify it too.
+sed -i.bak -E "/^.+&all-keys.*$/a\\
     - &${self.initialization[0].hostname} $age_key
-" ../.sops.yaml
-sops updatekeys ../secrets/* -y
+" ../.sops.yaml && rm -f ../.sops.yaml.bak
+if ! grep -q "&${self.initialization[0].hostname} $age_key" ../.sops.yaml; then
+  echo "ERROR: failed to splice the ${self.initialization[0].hostname} anchor into .sops.yaml." >&2
+  exit 1
+fi
+sops updatekeys ../secrets/* -y || exit 1
 # A git push and a multi-minute remote build/switch don't belong in a
 # provisioner that gates `tofu apply`'s success/failure — a slow SSH session
 # or a delayed YubiKey touch would hang or fail the whole apply with no
@@ -175,7 +182,8 @@ EOT
   provisioner "local-exec" {
     when    = destroy
     command = <<EOT
-sed -i '' -r '/^.+[&\*]${self.initialization[0].hostname}( +age.+)?$/d' ../.sops.yaml
+# Portable across GNU and BSD sed; see the create-time provisioner.
+sed -i.bak -E '/^.+[&\*]${self.initialization[0].hostname}( +age.+)?$/d' ../.sops.yaml && rm -f ../.sops.yaml.bak
 sops updatekeys ../secrets/* -y
 echo "Next: git -C .. add .sops.yaml secrets/ && git -C .. commit -m 'Remove ${self.initialization[0].hostname} from .sops.yaml' && git -C .. push"
 EOT
