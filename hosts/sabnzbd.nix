@@ -36,7 +36,7 @@ in {
         host = "::";
         bandwidth_max = "15M";
         inet_exposure = 0;
-        local_ranges = "10.0.0.0/16, 2403:5816:df19::/48";
+        local_ranges = "10.0.0.0/16, 2403:5811:afda::/48";
         permissions = "770";
         download_dir = "/data/incomplete";
         complete_dir = "/data/complete";

@@ -58,7 +58,7 @@ module "dns" {
   dns_servers           = ["127.0.0.1", "::1"]
   network_interfaces    = { "eth0" = 10 }
   ipv4_settings         = "10.0.10.2/24;10.0.10.1"
-  ipv6_settings         = "2403:5816:df19:1::2/64;2403:5816:df19:1::1"
+  ipv6_settings         = "2403:5811:afda:1::2/64;2403:5811:afda:1::1"
   memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 2
