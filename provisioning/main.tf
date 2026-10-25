@@ -336,12 +336,15 @@ module "beszel-hub" {
   memory_size_mb        = 2048
   num_cpu_cores         = 2
   persistent_fs_size_gb = 8
-  ct_template_id        = proxmox_download_file.nixos-standard-nightly.id
-  pool_id               = "production"
-  startup_order         = 2
-  rootfs_impermanence   = true
-  custom_hookscript     = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
-  tags                  = ["terraform", "monitoring"]
+  # Was unset, so it took the 4GB default and filled up: nix-daemon.socket then failed at
+  # boot with "Disk quota exceeded" and autoUpgrade could not run. Grown online to match.
+  nix_fs_size_gb      = 8
+  ct_template_id      = proxmox_download_file.nixos-standard-nightly.id
+  pool_id             = "production"
+  startup_order       = 2
+  rootfs_impermanence = true
+  custom_hookscript   = proxmox_virtual_environment_file.nixos_lxc_impermanence_hookscript.id
+  tags                = ["terraform", "monitoring"]
 }
 
 module "yamtrack" {
